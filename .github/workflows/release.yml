@@ -22,7 +22,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check if version exists
+        id: version_check
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view react-elegant-toasts@$VERSION version >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Publish to npm
+        if: steps.version_check.outputs.exists != 'true'
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
