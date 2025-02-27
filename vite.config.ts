@@ -4,8 +4,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   root: 'demo',
-  base: './',
+  base: '/react-elegant-toasts/',
   build: {
-    outDir: '../demo-dist',
+    outDir: 'dist',
+    sourcemap: true,
   },
 }) 
