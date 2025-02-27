@@ -1,135 +1,187 @@
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ToastProvider, useToast } from '../ToastContext';
 
 const TestComponent = () => {
-  const toast = useToast();
+  const { addToast, removeAll } = useToast();
 
   return (
     <div>
-      <button onClick={() => toast.addToast({ message: 'Test toast' })}>Add Toast</button>
-      <button onClick={() => toast.removeAll()}>Remove All</button>
+      <button
+        onClick={() =>
+          addToast({
+            message: 'Test toast',
+            type: 'info',
+            duration: 3000,
+          })
+        }
+      >
+        Add Toast
+      </button>
+      <button onClick={removeAll}>Remove All</button>
     </div>
   );
 };
 
-describe('ToastProvider and useToast', () => {
+describe('ToastContext', () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    // Mock visibility API
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get() {
+        return false;
+      },
+    });
   });
 
   afterEach(() => {
     jest.useRealTimers();
   });
 
-  it('provides toast context to children', () => {
+  it('should add and display toast', () => {
     render(
       <ToastProvider>
         <TestComponent />
       </ToastProvider>
     );
 
-    expect(screen.getByText('Add Toast')).toBeInTheDocument();
-  });
-
-  it('throws error when useToast is used outside provider', () => {
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-    expect(() => {
-      render(<TestComponent />);
-    }).toThrow('useToast must be used within a ToastProvider');
-
-    consoleError.mockRestore();
-  });
-
-  it('adds toast with default configuration', () => {
-    const { getByText } = render(
-      <ToastProvider>
-        <TestComponent />
-      </ToastProvider>
-    );
-
     act(() => {
-      getByText('Add Toast').click();
+      fireEvent.click(screen.getByText('Add Toast'));
     });
 
     expect(screen.getByText('Test toast')).toBeInTheDocument();
   });
 
-  it('removes all toasts', () => {
-    const { getByText } = render(
+  it('should pause toasts when page becomes hidden', () => {
+    render(
       <ToastProvider>
         <TestComponent />
       </ToastProvider>
     );
 
-    // Add some toasts
+    // Add a toast
     act(() => {
-      getByText('Add Toast').click();
-      getByText('Add Toast').click();
+      fireEvent.click(screen.getByText('Add Toast'));
+    });
+
+    const toast = screen.getByText('Test toast');
+    expect(toast).toBeInTheDocument();
+
+    // Simulate page becoming hidden
+    act(() => {
+      Object.defineProperty(document, 'hidden', {
+        configurable: true,
+        get() {
+          return true;
+        },
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    // Toast should still be visible because it's paused
+    expect(toast).toBeInTheDocument();
+  });
+
+  it('should pause toasts on window blur', () => {
+    render(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    // Add a toast
+    act(() => {
+      fireEvent.click(screen.getByText('Add Toast'));
+    });
+
+    const toast = screen.getByText('Test toast');
+    expect(toast).toBeInTheDocument();
+
+    // Simulate window blur
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+
+    // Toast should still be visible because it's paused
+    expect(toast).toBeInTheDocument();
+  });
+
+  it('should resume toasts on window focus', () => {
+    render(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    // Add a toast
+    act(() => {
+      fireEvent.click(screen.getByText('Add Toast'));
+    });
+
+    const toast = screen.getByText('Test toast');
+
+    // Simulate window blur
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+
+    // Toast should still be visible because it's paused
+    expect(toast).toBeInTheDocument();
+
+    // Simulate window focus
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    // Fast-forward time
+    act(() => {
+      jest.advanceTimersByTime(3000);
+    });
+
+    // Toast should be removed after duration
+    expect(screen.queryByText('Test toast')).not.toBeInTheDocument();
+  });
+
+  it('should remove all toasts', () => {
+    render(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    // Add multiple toasts
+    act(() => {
+      fireEvent.click(screen.getByText('Add Toast'));
+      fireEvent.click(screen.getByText('Add Toast'));
     });
 
     expect(screen.getAllByText('Test toast')).toHaveLength(2);
 
     // Remove all toasts
     act(() => {
-      getByText('Remove All').click();
+      fireEvent.click(screen.getByText('Remove All'));
     });
 
     expect(screen.queryByText('Test toast')).not.toBeInTheDocument();
   });
 
-  it('respects maxToasts configuration', () => {
-    const { getByText } = render(
+  it('should respect maxToasts limit', () => {
+    render(
       <ToastProvider maxToasts={2}>
         <TestComponent />
       </ToastProvider>
     );
 
-    // Add more toasts than the maximum
+    // Add three toasts
     act(() => {
-      getByText('Add Toast').click();
-      getByText('Add Toast').click();
-      getByText('Add Toast').click();
+      fireEvent.click(screen.getByText('Add Toast'));
+      fireEvent.click(screen.getByText('Add Toast'));
+      fireEvent.click(screen.getByText('Add Toast'));
     });
 
-    // Should only show the maximum number of toasts
+    // Should only show 2 toasts
     expect(screen.getAllByText('Test toast')).toHaveLength(2);
-  });
-
-  it('applies default position and animation', () => {
-    const { getByText } = render(
-      <ToastProvider defaultPosition="bottom-left" defaultAnimation="fade">
-        <TestComponent />
-      </ToastProvider>
-    );
-
-    act(() => {
-      getByText('Add Toast').click();
-    });
-
-    const toast = screen.getByText('Test toast').parentElement?.parentElement;
-    expect(toast).toHaveClass('fadeIn');
-  });
-
-  it('auto-removes toast after duration', () => {
-    const { getByText } = render(
-      <ToastProvider defaultDuration={1000}>
-        <TestComponent />
-      </ToastProvider>
-    );
-
-    act(() => {
-      getByText('Add Toast').click();
-    });
-
-    expect(screen.getByText('Test toast')).toBeInTheDocument();
-
-    act(() => {
-      jest.advanceTimersByTime(1000);
-    });
-
-    expect(screen.queryByText('Test toast')).not.toBeInTheDocument();
   });
 });

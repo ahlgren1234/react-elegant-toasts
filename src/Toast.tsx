@@ -23,6 +23,9 @@ const Toast: React.FC<ToastProps> = ({
   const [progress, setProgress] = useState(100);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const progressTimerRef = useRef<ReturnType<typeof requestAnimationFrame> | undefined>(undefined);
+  const shouldClose = useRef(false);
+  const isTimerExpired = useRef(false);
+  const wasClicked = useRef(false);
 
   const getIcon = () => {
     if (icon) return icon;
@@ -55,6 +58,8 @@ const Toast: React.FC<ToastProps> = ({
     pauseTimer();
 
     timerRef.current = setTimeout(() => {
+      isTimerExpired.current = true;
+      shouldClose.current = true;
       setIsVisible(false);
     }, duration);
 
@@ -97,13 +102,19 @@ const Toast: React.FC<ToastProps> = ({
   }, [pauseOnHover, startTimer, isPaused]);
 
   const handleClick = useCallback(() => {
+    wasClicked.current = true;
     if (closeOnClick) {
+      shouldClose.current = true;
+      pauseTimer();
       setIsVisible(false);
+      if (onClose) {
+        onClose();
+      }
     }
-  }, [closeOnClick]);
+  }, [closeOnClick, pauseTimer, onClose]);
 
-  const handleTransitionEnd = useCallback(() => {
-    if (!isVisible && onClose) {
+  useEffect(() => {
+    if (!isVisible && onClose && shouldClose.current && isTimerExpired.current && !wasClicked.current) {
       onClose();
     }
   }, [isVisible, onClose]);
@@ -123,7 +134,6 @@ const Toast: React.FC<ToastProps> = ({
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onTransitionEnd={handleTransitionEnd}
     >
       <div className="toast-content">
         {icon !== null && <div className="toast-icon">{getIcon()}</div>}

@@ -86,15 +86,13 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
   }, []);
 
   useEffect(() => {
-    if (toasts.length > 0) {
-      setToasts(prevToasts =>
-        prevToasts.map(toast => ({
-          ...toast,
-          isPaused,
-        }))
-      );
-    }
-  }, [isPaused]);
+    setToasts(prevToasts =>
+      prevToasts.map(toast => ({
+        ...toast,
+        isPaused,
+      }))
+    );
+  }, [isPaused, toasts.length]);
 
   const contextValue = {
     addToast,
