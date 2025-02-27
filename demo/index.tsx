@@ -236,6 +236,28 @@ const DemoPage = () => {
             </svg>
             npm Package
           </a>
+          <a
+            href="https://peterahlgren.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="demo-link portfolio"
+          >
+            <svg height="24" width="24" viewBox="0 0 24 24" className="demo-icon">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22c-5.523 0-10-4.477-10-10S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm1-11v6h-2v-6H8l4-4 4 4h-3z" fill="currentColor"/>
+            </svg>
+            Portfolio
+          </a>
+          <a
+            href="https://buymeacoffee.com/peterahlgren"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="demo-link coffee"
+          >
+            <svg height="24" width="24" viewBox="0 0 24 24" className="demo-icon">
+              <path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4v-2z" fill="currentColor"/>
+            </svg>
+            Buy me a coffee
+          </a>
         </div>
       </header>
 
