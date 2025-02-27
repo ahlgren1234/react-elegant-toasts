@@ -1,13 +1,13 @@
-import React from 'react'
-import { ToastProps } from './types'
-import Toast from './Toast'
-import { getPositionStyle } from './utils'
+import React from 'react';
+import { ToastProps } from './types';
+import Toast from './Toast';
+import { getPositionStyle } from './utils';
 
 interface ToastContainerProps {
-  toasts: ToastProps[]
-  onRemove: (id: string) => void
-  className?: string
-  style?: React.CSSProperties
+  toasts: ToastProps[];
+  onRemove: (id: string) => void;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 const ToastContainer: React.FC<ToastContainerProps> = ({
@@ -17,13 +17,13 @@ const ToastContainer: React.FC<ToastContainerProps> = ({
   style,
 }) => {
   const positionGroups = toasts.reduce((groups: { [key: string]: ToastProps[] }, toast) => {
-    const position = toast.position || 'top-right'
+    const position = toast.position || 'top-right';
     if (!groups[position]) {
-      groups[position] = []
+      groups[position] = [];
     }
-    groups[position].push(toast)
-    return groups
-  }, {})
+    groups[position].push(toast);
+    return groups;
+  }, {});
 
   return (
     <>
@@ -40,7 +40,7 @@ const ToastContainer: React.FC<ToastContainerProps> = ({
             ...style,
           }}
         >
-          {positionToasts.map((toast) => (
+          {positionToasts.map(toast => (
             <div
               key={toast.id}
               style={{
@@ -54,7 +54,7 @@ const ToastContainer: React.FC<ToastContainerProps> = ({
         </div>
       ))}
     </>
-  )
-}
+  );
+};
 
-export default ToastContainer 
+export default ToastContainer;

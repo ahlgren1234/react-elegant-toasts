@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { ToastProps } from './types'
-import { getAnimationStyle } from './utils'
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { ToastProps } from './types';
+import { getAnimationStyle } from './utils';
 
 const Toast: React.FC<ToastProps> = ({
   type = 'info',
@@ -18,94 +18,94 @@ const Toast: React.FC<ToastProps> = ({
   rtl = false,
   role = 'alert',
 }) => {
-  const [isVisible, setIsVisible] = useState(true)
-  const [progress, setProgress] = useState(100)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const progressTimerRef = useRef<ReturnType<typeof requestAnimationFrame> | undefined>(undefined)
+  const [isVisible, setIsVisible] = useState(true);
+  const [progress, setProgress] = useState(100);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const progressTimerRef = useRef<ReturnType<typeof requestAnimationFrame> | undefined>(undefined);
 
   const getIcon = () => {
-    if (icon) return icon
+    if (icon) return icon;
     switch (type) {
       case 'success':
-        return '✓'
+        return '✓';
       case 'error':
-        return '✕'
+        return '✕';
       case 'warning':
-        return '⚠'
+        return '⚠';
       case 'info':
-        return 'ℹ'
+        return 'ℹ';
       default:
-        return null
+        return null;
     }
-  }
+  };
 
   const pauseTimer = useCallback(() => {
     if (timerRef.current) {
-      clearTimeout(timerRef.current)
+      clearTimeout(timerRef.current);
     }
     if (progressTimerRef.current) {
-      cancelAnimationFrame(progressTimerRef.current)
+      cancelAnimationFrame(progressTimerRef.current);
     }
-  }, [])
+  }, []);
 
   const startTimer = useCallback(() => {
-    if (duration === Infinity) return
+    if (duration === Infinity) return;
 
-    pauseTimer()
+    pauseTimer();
 
     timerRef.current = setTimeout(() => {
-      setIsVisible(false)
-    }, duration)
+      setIsVisible(false);
+    }, duration);
 
     if (progressBar) {
-      const startTime = Date.now()
+      const startTime = Date.now();
       const updateProgress = () => {
-        const elapsed = Date.now() - startTime
-        const remaining = Math.max(0, 100 - (elapsed / duration) * 100)
-        setProgress(remaining)
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
+        setProgress(remaining);
 
         if (remaining > 0) {
-          progressTimerRef.current = requestAnimationFrame(updateProgress)
+          progressTimerRef.current = requestAnimationFrame(updateProgress);
         }
-      }
-      progressTimerRef.current = requestAnimationFrame(updateProgress)
+      };
+      progressTimerRef.current = requestAnimationFrame(updateProgress);
     }
-  }, [duration, progressBar, pauseTimer])
+  }, [duration, progressBar, pauseTimer]);
 
   useEffect(() => {
-    startTimer()
+    startTimer();
     return () => {
-      pauseTimer()
-    }
-  }, [startTimer, pauseTimer])
+      pauseTimer();
+    };
+  }, [startTimer, pauseTimer]);
 
   const handleMouseEnter = useCallback(() => {
     if (pauseOnHover) {
-      pauseTimer()
+      pauseTimer();
     }
-  }, [pauseOnHover, pauseTimer])
+  }, [pauseOnHover, pauseTimer]);
 
   const handleMouseLeave = useCallback(() => {
     if (pauseOnHover) {
-      startTimer()
+      startTimer();
     }
-  }, [pauseOnHover, startTimer])
+  }, [pauseOnHover, startTimer]);
 
   const handleClick = useCallback(() => {
     if (closeOnClick) {
-      setIsVisible(false)
+      setIsVisible(false);
     }
-  }, [closeOnClick])
+  }, [closeOnClick]);
 
   const handleTransitionEnd = useCallback(() => {
     if (!isVisible && onClose) {
-      onClose()
+      onClose();
     }
-  }, [isVisible, onClose])
+  }, [isVisible, onClose]);
 
-  if (!isVisible) return null
+  if (!isVisible) return null;
 
-  const animationClass = getAnimationStyle(animation)
+  const animationClass = getAnimationStyle(animation);
 
   return (
     <div
@@ -128,13 +128,10 @@ const Toast: React.FC<ToastProps> = ({
         </div>
       </div>
       {progressBar && duration !== Infinity && (
-        <div
-          className="toast-progress"
-          style={{ width: `${progress}%` }}
-        />
+        <div className="toast-progress" style={{ width: `${progress}%` }} />
       )}
     </div>
-  )
-}
+  );
+};
 
-export default Toast 
+export default Toast;
