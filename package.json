@@ -22,8 +22,8 @@
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "prepublishOnly": "npm run build",
-    "demo": "vite demo",
-    "build:demo": "vite build demo",
+    "demo": "vite",
+    "build:demo": "vite build",
     "prepare": "npm run build"
   },
   "keywords": [
@@ -76,12 +76,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/toasts.git"
+    "url": "git+https://github.com/ahlgren1234/react-elegant-toasts.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/toasts/issues"
+    "url": "https://github.com/ahlgren1234/react-elegant-toasts/issues"
   },
-  "homepage": "https://github.com/yourusername/toasts#readme",
+  "homepage": "https://github.com/ahlgren1234/react-elegant-toasts#readme",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
