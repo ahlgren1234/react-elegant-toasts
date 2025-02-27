@@ -24,7 +24,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
 
       - name: Install dependencies
         run: |
@@ -62,6 +61,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: './demo-dist'
+          retention-days: 1
 
   deploy:
     needs: build

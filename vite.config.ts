@@ -1,13 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [react()],
   root: 'demo',
   base: '/react-elegant-toasts/',
   build: {
-    outDir: '../demo-dist',
-    sourcemap: true,
+    outDir: resolve(__dirname, 'demo-dist'),
     emptyOutDir: true,
+    sourcemap: true,
   },
 }) 
