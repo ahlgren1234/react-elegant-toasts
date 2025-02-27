@@ -27,10 +27,11 @@ export interface ToastProps {
   progressBar?: boolean;
   rtl?: boolean;
   role?: string;
+  isPaused?: boolean;
 }
 
 export interface ToastContextValue {
-  addToast: (toast: Omit<ToastProps, 'id'>) => string;
+  addToast: (toast: Omit<ToastProps, 'id' | 'isPaused'>) => string;
   removeToast: (id: string) => void;
   removeAll: () => void;
   updateToast: (id: string, toast: Partial<ToastProps>) => void;

@@ -17,6 +17,7 @@ const Toast: React.FC<ToastProps> = ({
   progressBar = true,
   rtl = false,
   role = 'alert',
+  isPaused = false,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [progress, setProgress] = useState(100);
@@ -49,7 +50,7 @@ const Toast: React.FC<ToastProps> = ({
   }, []);
 
   const startTimer = useCallback(() => {
-    if (duration === Infinity) return;
+    if (duration === Infinity || isPaused) return;
 
     pauseTimer();
 
@@ -70,14 +71,18 @@ const Toast: React.FC<ToastProps> = ({
       };
       progressTimerRef.current = requestAnimationFrame(updateProgress);
     }
-  }, [duration, progressBar, pauseTimer]);
+  }, [duration, progressBar, pauseTimer, isPaused]);
 
   useEffect(() => {
-    startTimer();
+    if (!isPaused) {
+      startTimer();
+    } else {
+      pauseTimer();
+    }
     return () => {
       pauseTimer();
     };
-  }, [startTimer, pauseTimer]);
+  }, [startTimer, pauseTimer, isPaused]);
 
   const handleMouseEnter = useCallback(() => {
     if (pauseOnHover) {
@@ -86,10 +91,10 @@ const Toast: React.FC<ToastProps> = ({
   }, [pauseOnHover, pauseTimer]);
 
   const handleMouseLeave = useCallback(() => {
-    if (pauseOnHover) {
+    if (pauseOnHover && !isPaused) {
       startTimer();
     }
-  }, [pauseOnHover, startTimer]);
+  }, [pauseOnHover, startTimer, isPaused]);
 
   const handleClick = useCallback(() => {
     if (closeOnClick) {

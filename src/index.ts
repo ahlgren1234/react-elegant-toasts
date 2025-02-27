@@ -7,10 +7,8 @@ export type {
   ToastType,
   ToastAnimation,
   ToastProviderProps,
+  ToastContextValue,
 } from './types';
 
-// Export a default function for convenience
-import { useToast } from './ToastContext';
-export default function createToast() {
-  return useToast();
-}
+// Re-export useToast as the default export for convenience
+export { useToast as default } from './ToastContext';

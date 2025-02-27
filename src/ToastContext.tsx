@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useState } from 'react';
+import React, { createContext, useContext, useCallback, useState, useEffect } from 'react';
 import { ToastContextValue, ToastProps, ToastProviderProps } from './types';
 import { generateId } from './utils';
 import ToastContainer from './ToastContainer';
@@ -17,6 +17,34 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
   pauseOnFocusLoss = true,
 }) => {
   const [toasts, setToasts] = useState<ToastProps[]>([]);
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (pauseOnPageIdle) {
+      const handleVisibilityChange = () => {
+        setIsPaused(document.hidden);
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
+  }, [pauseOnPageIdle]);
+
+  useEffect(() => {
+    if (pauseOnFocusLoss) {
+      const handleFocus = () => setIsPaused(false);
+      const handleBlur = () => setIsPaused(true);
+
+      window.addEventListener('focus', handleFocus);
+      window.addEventListener('blur', handleBlur);
+
+      return () => {
+        window.removeEventListener('focus', handleFocus);
+        window.removeEventListener('blur', handleBlur);
+      };
+    }
+  }, [pauseOnFocusLoss]);
 
   const addToast = useCallback(
     (toast: Omit<ToastProps, 'id'>) => {
@@ -26,6 +54,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
         position: defaultPosition,
         animation: defaultAnimation,
         duration: defaultDuration,
+        isPaused,
         ...toast,
       };
 
@@ -39,7 +68,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
 
       return id;
     },
-    [defaultPosition, defaultAnimation, defaultDuration, maxToasts]
+    [defaultPosition, defaultAnimation, defaultDuration, maxToasts, isPaused]
   );
 
   const removeToast = useCallback((id: string) => {
@@ -55,6 +84,17 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
   const removeAll = useCallback(() => {
     setToasts([]);
   }, []);
+
+  useEffect(() => {
+    if (toasts.length > 0) {
+      setToasts(prevToasts =>
+        prevToasts.map(toast => ({
+          ...toast,
+          isPaused,
+        }))
+      );
+    }
+  }, [isPaused]);
 
   const contextValue = {
     addToast,
