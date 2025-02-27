@@ -14,7 +14,11 @@ body {
 
 .demo-header {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border-radius: 8px;
 }
 
 .demo-header h1 {
@@ -128,6 +132,33 @@ body {
   text-align: center;
   margin-top: 3rem;
   color: #666;
+}
+
+.demo-links {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.demo-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.demo-link:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.demo-icon {
+  opacity: 0.9;
 }
 
 @media (prefers-color-scheme: dark) {
