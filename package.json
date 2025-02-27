@@ -1,6 +1,6 @@
 {
   "name": "react-elegant-toasts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A highly customizable toast notification component for React",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
