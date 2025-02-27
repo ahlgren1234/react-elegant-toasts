@@ -16,28 +16,46 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: |
-          npm ci
-          npm list || true
+          npm install
+          npm list
+
+      - name: Show workspace contents
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -la
+          echo "Source directory:"
+          ls -la src/
+          echo "Demo directory:"
+          ls -la demo/
 
       - name: Run TypeScript type check
-        run: npm run typecheck
+        run: |
+          echo "Running type check..."
+          npm run typecheck
         continue-on-error: true
 
       - name: Run linting
-        run: npm run lint
+        run: |
+          echo "Running linting..."
+          npm run lint
         continue-on-error: true
 
       - name: Run tests
-        run: npm test
+        run: |
+          echo "Running tests..."
+          npm test
         continue-on-error: true
 
       - name: Build package
-        run: npm run build
+        run: |
+          echo "Building package..."
+          npm run build
+          echo "Build output:"
+          ls -la dist/
 
   publish:
     needs: build
@@ -53,12 +71,16 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build
-        run: npm run build
+        run: |
+          echo "Building for publishing..."
+          npm run build
+          echo "Build output:"
+          ls -la dist/
 
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} 

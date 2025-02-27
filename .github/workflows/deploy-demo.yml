@@ -25,34 +25,65 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Show initial workspace
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -la
+          echo "Node version:"
+          node --version
+          echo "NPM version:"
+          npm --version
+
       - name: Install dependencies
         run: |
-          npm ci
-          npm list || true
+          npm install
+          npm list
+
+      - name: Show workspace after install
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -la
+          echo "Source directory:"
+          ls -la src/
+          echo "Demo directory:"
+          ls -la demo/
 
       - name: Type check
-        run: npm run typecheck
+        run: |
+          echo "Running type check..."
+          npm run typecheck
         continue-on-error: true
 
       - name: Lint
-        run: npm run lint
+        run: |
+          echo "Running linting..."
+          npm run lint
         continue-on-error: true
 
       - name: Test
-        run: npm test
+        run: |
+          echo "Running tests..."
+          npm test
         continue-on-error: true
 
       - name: Build library
-        run: npm run build
+        run: |
+          echo "Building library..."
+          npm run build
+          echo "Build output:"
+          ls -la dist/
 
       - name: Build demo
         run: |
+          echo "Building demo..."
           echo "Current directory: $(pwd)"
           echo "Directory contents:"
           ls -la
           echo "Demo directory contents:"
           ls -la demo/
           npm run build:demo
+          echo "Demo build output:"
+          ls -la demo-dist/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

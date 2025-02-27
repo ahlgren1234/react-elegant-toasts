@@ -4,11 +4,16 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  root: 'demo',
+  root: resolve(__dirname, 'demo'),
   base: '/react-elegant-toasts/',
   build: {
     outDir: resolve(__dirname, 'demo-dist'),
     emptyOutDir: true,
     sourcemap: true,
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'demo/index.html'),
+      },
+    },
   },
 }) 
