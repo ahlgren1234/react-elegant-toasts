@@ -84,7 +84,7 @@
   "bugs": {
     "url": "https://github.com/ahlgren1234/react-elegant-toasts/issues"
   },
-  "homepage": "https://github.com/ahlgren1234/react-elegant-toasts#readme",
+  "homepage": "https://ahlgren1234.github.io/react-elegant-toasts/",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
