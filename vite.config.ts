@@ -6,7 +6,8 @@ export default defineConfig({
   root: 'demo',
   base: '/react-elegant-toasts/',
   build: {
-    outDir: 'dist',
+    outDir: '../demo-dist',
     sourcemap: true,
+    emptyOutDir: true,
   },
 }) 
