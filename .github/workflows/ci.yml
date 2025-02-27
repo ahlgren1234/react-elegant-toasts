@@ -61,32 +61,4 @@ jobs:
           echo "Building package..."
           npm run build
           echo "Build output:"
-          ls -la dist/
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build
-        run: |
-          echo "Building for publishing..."
-          npm run build
-          echo "Build output:"
-          ls -la dist/
-
-      - name: Publish to npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} 
+          ls -la dist/ 
