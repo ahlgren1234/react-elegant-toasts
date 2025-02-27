@@ -32,6 +32,12 @@ jobs:
           echo "Demo directory:"
           ls -la demo/
 
+      - name: Format code
+        run: |
+          echo "Formatting code..."
+          npm run format
+          git diff --exit-code || (echo "Code formatting issues found. Please run 'npm run format' locally and commit the changes." && exit 1)
+
       - name: Run TypeScript type check
         run: |
           echo "Running type check..."
