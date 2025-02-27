@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { ToastProps } from './types'
 import { getAnimationStyle } from './utils'
 
@@ -39,8 +39,19 @@ const Toast: React.FC<ToastProps> = ({
     }
   }
 
-  const startTimer = () => {
+  const pauseTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+    }
+    if (progressTimerRef.current) {
+      cancelAnimationFrame(progressTimerRef.current)
+    }
+  }, [])
+
+  const startTimer = useCallback(() => {
     if (duration === Infinity) return
+
+    pauseTimer()
 
     timerRef.current = setTimeout(() => {
       setIsVisible(false)
@@ -59,47 +70,38 @@ const Toast: React.FC<ToastProps> = ({
       }
       progressTimerRef.current = requestAnimationFrame(updateProgress)
     }
-  }
-
-  const pauseTimer = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
-    }
-    if (progressTimerRef.current) {
-      cancelAnimationFrame(progressTimerRef.current)
-    }
-  }
+  }, [duration, progressBar, pauseTimer])
 
   useEffect(() => {
     startTimer()
     return () => {
       pauseTimer()
     }
-  }, [duration])
+  }, [startTimer, pauseTimer])
 
-  const handleMouseEnter = () => {
+  const handleMouseEnter = useCallback(() => {
     if (pauseOnHover) {
       pauseTimer()
     }
-  }
+  }, [pauseOnHover, pauseTimer])
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     if (pauseOnHover) {
       startTimer()
     }
-  }
+  }, [pauseOnHover, startTimer])
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     if (closeOnClick) {
       setIsVisible(false)
     }
-  }
+  }, [closeOnClick])
 
-  const handleTransitionEnd = () => {
+  const handleTransitionEnd = useCallback(() => {
     if (!isVisible && onClose) {
       onClose()
     }
-  }
+  }, [isVisible, onClose])
 
   if (!isVisible) return null
 
