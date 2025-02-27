@@ -1,0 +1,92 @@
+{
+  "name": "react-elegant-toasts",
+  "version": "0.1.0",
+  "description": "A highly customizable toast notification component for React",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "style": "dist/styles.css",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run build:js && npm run build:css",
+    "build:js": "tsup src/index.ts --format cjs,esm --dts --minify --clean",
+    "build:css": "cp src/styles.css dist/",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "prepublishOnly": "npm run build",
+    "demo": "vite demo",
+    "build:demo": "vite build demo",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "react",
+    "toast",
+    "notification",
+    "alert",
+    "popup",
+    "message",
+    "ui",
+    "component",
+    "typescript",
+    "react-component",
+    "notifications",
+    "toast-notifications"
+  ],
+  "author": {
+    "name": "Peter Ahlgren",
+    "url": "https://github.com/yourusername"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "latest",
+    "@testing-library/react": "latest",
+    "@types/jest": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@typescript-eslint/eslint-plugin": "latest",
+    "@typescript-eslint/parser": "latest",
+    "@vitejs/plugin-react": "latest",
+    "eslint": "latest",
+    "eslint-config-prettier": "latest",
+    "eslint-plugin-prettier": "latest",
+    "eslint-plugin-react": "latest",
+    "eslint-plugin-react-hooks": "latest",
+    "identity-obj-proxy": "latest",
+    "jest": "latest",
+    "jest-environment-jsdom": "latest",
+    "prettier": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "ts-jest": "latest",
+    "tsup": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/toasts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/toasts/issues"
+  },
+  "homepage": "https://github.com/yourusername/toasts#readme",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}
