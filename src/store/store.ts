@@ -6,6 +6,7 @@ import { generateId, resetIds } from './ids';
 import type {
   StoredOptions,
   StoreSnapshot,
+  ToasterConfig,
   ToasterToken,
   ToastInput,
   ToastRecord,
@@ -32,6 +33,8 @@ const POSITIONS: readonly ToastPosition[] = [
 const DEFAULT_POSITION: ToastPosition = 'top-right';
 // While no Toaster is active, the store holds at most this many records (§8.4).
 const NO_TOASTER_CAP = 100;
+// Rendered toasts per position (§11).
+const DEFAULT_MAX_VISIBLE = 4;
 
 function emptySnapshot(): StoreSnapshot {
   const byPosition = {} as Record<ToastPosition, readonly ToastView[]>;
@@ -46,6 +49,8 @@ let nextSeq = 1;
 let active: ToasterToken | null = null;
 let waiting: ToasterToken[] = [];
 let pendingDetach = new Set<ToasterToken>();
+// Each mounted Toaster's resolved configuration. A waiting Toaster's has no effect until it is active.
+let configs = new WeakMap<ToasterToken, ToasterConfig>();
 // Bumped by resetStore so detach microtasks scheduled before a reset never run against new state.
 let generation = 0;
 
@@ -206,15 +211,37 @@ function requeueAt(record: ToastRecord, position: ToastPosition): void {
   put({ ...record, position, seq: nextSeq++, phase: 'queued', exit: undefined });
 }
 
+/** How many rendered toasts each position may hold under the active Toaster (§11). */
+function capacity(): number {
+  return (active === null ? undefined : configs.get(active))?.maxVisible ?? DEFAULT_MAX_VISIBLE;
+}
+
+/** Any value other than a whole number of at least 1, Infinity included, falls back to 4. */
+function resolveMaxVisible(maxVisible: number | undefined): number {
+  return maxVisible !== undefined && Number.isInteger(maxVisible) && maxVisible >= 1
+    ? maxVisible
+    : DEFAULT_MAX_VISIBLE;
+}
+
 /**
- * The P-09/P-10 promotion seam: while a Toaster is active, queued toasts move to `entering`.
- * P-09 has unlimited capacity. P-10 replaces this policy with per-position `maxVisible` and FIFO
- * slot allocation by `seq`.
+ * Moves queued toasts to `entering` while a Toaster is active (§11). Each position has its own
+ * capacity, used by its `entering`, `visible` and `exiting` toasts: an exiting toast keeps its slot
+ * until it leaves the position. Free slots go to the queued toasts with the lowest `seq` (FIFO).
+ * Overflow stays queued. A relocating exit still counts at its old position.
  */
 function promote(): void {
   if (active === null) return;
-  const queued = [...records.values()].filter(record => record.phase === 'queued');
+  const limit = capacity();
+  const occupied = new Map<ToastPosition, number>();
+  const queued: ToastRecord[] = [];
+  for (const record of records.values()) {
+    if (record.phase === 'queued') queued.push(record);
+    else occupied.set(record.position, (occupied.get(record.position) ?? 0) + 1);
+  }
   for (const record of queued.sort((a, b) => a.seq - b.seq)) {
+    const count = occupied.get(record.position) ?? 0;
+    if (count >= limit) continue;
+    occupied.set(record.position, count + 1);
     put({ ...record, phase: 'entering' });
   }
 }
@@ -355,10 +382,11 @@ export function exited(id: ToastId): void {
     if (record?.phase !== 'exiting' || !record.exit) return;
     if (record.exit.reason === 'relocate' && record.exit.relocateTo) {
       requeueAt(record, record.exit.relocateTo);
-      promote();
     } else if (record.exit.reason !== 'relocate') {
       remove(record, record.exit.reason);
     }
+    // Leaving the position frees its slot; the old position and any destination fill it now.
+    promote();
   });
 }
 
@@ -389,6 +417,21 @@ export function attach(token: ToasterToken): () => void {
       command(() => completeDetach(token));
     });
   };
+}
+
+/**
+ * Stores a Toaster's configuration. The active Toaster's applies at once: a higher `maxVisible`
+ * promotes queued toasts, and a lower one removes nothing, so a position may stay above the new
+ * limit until its toasts leave (§11). A waiting Toaster's applies when it takes over.
+ */
+export function configure(
+  token: ToasterToken,
+  config: { readonly maxVisible?: number | undefined }
+): void {
+  command(() => {
+    configs.set(token, Object.freeze({ maxVisible: resolveMaxVisible(config.maxVisible) }));
+    if (token === active) promote();
+  });
 }
 
 function completeDetach(token: ToasterToken): void {
@@ -447,6 +490,7 @@ export function resetStore(): void {
   active = null;
   waiting = [];
   pendingDetach = new Set();
+  configs = new WeakMap();
   generation++;
   listeners = new Set();
   snapshot = SERVER_SNAPSHOT;

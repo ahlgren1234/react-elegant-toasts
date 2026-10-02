@@ -16,6 +16,12 @@ export type ToastPhase = 'queued' | 'entering' | 'visible' | 'exiting';
 /** Identifies one mounted `<Toaster />`. A plain object, so it can be held in a WeakSet. */
 export type ToasterToken = object;
 
+/** A Toaster's resolved configuration. Only the active Toaster's configuration takes effect. */
+export interface ToasterConfig {
+  /** Rendered toasts per position (§11): a whole number of at least 1. */
+  readonly maxVisible: number;
+}
+
 /** The per-toast options the store keeps, copied field by field from the public options (D-02). */
 export interface StoredOptions {
   readonly duration?: number;
