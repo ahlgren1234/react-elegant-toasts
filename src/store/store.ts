@@ -6,6 +6,7 @@ import { generateId, resetIds } from './ids';
 import type {
   StoredOptions,
   StoreSnapshot,
+  ToasterConfig,
   ToasterToken,
   ToastInput,
   ToastRecord,
@@ -48,6 +49,8 @@ let nextSeq = 1;
 let active: ToasterToken | null = null;
 let waiting: ToasterToken[] = [];
 let pendingDetach = new Set<ToasterToken>();
+// Each mounted Toaster's resolved configuration. A waiting Toaster's has no effect until it is active.
+let configs = new WeakMap<ToasterToken, ToasterConfig>();
 // Bumped by resetStore so detach microtasks scheduled before a reset never run against new state.
 let generation = 0;
 
@@ -208,9 +211,16 @@ function requeueAt(record: ToastRecord, position: ToastPosition): void {
   put({ ...record, position, seq: nextSeq++, phase: 'queued', exit: undefined });
 }
 
-/** How many rendered toasts each position may hold (§11). */
+/** How many rendered toasts each position may hold under the active Toaster (§11). */
 function capacity(): number {
-  return DEFAULT_MAX_VISIBLE;
+  return (active === null ? undefined : configs.get(active))?.maxVisible ?? DEFAULT_MAX_VISIBLE;
+}
+
+/** Any value other than a whole number of at least 1, Infinity included, falls back to 4. */
+function resolveMaxVisible(maxVisible: number | undefined): number {
+  return maxVisible !== undefined && Number.isInteger(maxVisible) && maxVisible >= 1
+    ? maxVisible
+    : DEFAULT_MAX_VISIBLE;
 }
 
 /**
@@ -409,6 +419,21 @@ export function attach(token: ToasterToken): () => void {
   };
 }
 
+/**
+ * Stores a Toaster's configuration. The active Toaster's applies at once: a higher `maxVisible`
+ * promotes queued toasts, and a lower one removes nothing, so a position may stay above the new
+ * limit until its toasts leave (§11). A waiting Toaster's applies when it takes over.
+ */
+export function configure(
+  token: ToasterToken,
+  config: { readonly maxVisible?: number | undefined }
+): void {
+  command(() => {
+    configs.set(token, Object.freeze({ maxVisible: resolveMaxVisible(config.maxVisible) }));
+    if (token === active) promote();
+  });
+}
+
 function completeDetach(token: ToasterToken): void {
   if (token !== active) {
     waiting = waiting.filter(candidate => candidate !== token);
@@ -465,6 +490,7 @@ export function resetStore(): void {
   active = null;
   waiting = [];
   pendingDetach = new Set();
+  configs = new WeakMap();
   generation++;
   listeners = new Set();
   snapshot = SERVER_SNAPSHOT;

@@ -121,3 +121,104 @@ describe('<Toaster /> ownership (§8.5)', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 });
+
+describe('<Toaster maxVisible> (§11)', () => {
+  const renderedIds = () => getSnapshot().byPosition['top-right'].map(view => view.id);
+  const createMany = (count: number) => {
+    for (let index = 1; index <= count; index++) create(`t${index}`);
+  };
+
+  it('applies maxVisible from the first mount, without DOM output', () => {
+    createMany(4);
+    const { container } = render(<Toaster maxVisible={2} />);
+    expect(renderedIds()).toEqual(['t1', 't2']);
+    expect(phaseOf('t3')).toBe('queued');
+    expect(container.childNodes).toHaveLength(0);
+  });
+
+  it('applies maxVisible under StrictMode with one notification and no warning', async () => {
+    createMany(4);
+    const notified: StoreSnapshot[] = [];
+    subscribe(() => notified.push(getSnapshot()));
+    render(
+      <StrictMode>
+        <Toaster maxVisible={3} />
+      </StrictMode>
+    );
+    await settle();
+    expect(notified).toHaveLength(1);
+    expect(renderedIds()).toEqual(['t1', 't2', 't3']);
+    expect(phaseOf('t4')).toBe('queued');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('changes the limit at runtime without detaching, re-attaching or re-queueing', async () => {
+    createMany(6);
+    const { rerender } = render(
+      <StrictMode>
+        <Toaster maxVisible={2} />
+      </StrictMode>
+    );
+    await settle();
+    const owner = getSnapshot().active;
+    entered('t1');
+    const notified: StoreSnapshot[] = [];
+    subscribe(() => notified.push(getSnapshot()));
+
+    rerender(
+      <StrictMode>
+        <Toaster maxVisible={4} />
+      </StrictMode>
+    );
+    await settle();
+    expect(notified).toHaveLength(1);
+    expect(getSnapshot().active).toBe(owner);
+    expect(phaseOf('t1')).toBe('visible');
+    expect(renderedIds()).toEqual(['t1', 't2', 't3', 't4']);
+
+    rerender(
+      <StrictMode>
+        <Toaster maxVisible={1} />
+      </StrictMode>
+    );
+    await settle();
+    expect(notified).toHaveLength(1);
+    expect(getSnapshot().active).toBe(owner);
+    expect(phaseOf('t1')).toBe('visible');
+    expect(renderedIds()).toEqual(['t1', 't2', 't3', 't4']);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("keeps a waiting Toaster's maxVisible inert, then uses it on takeover", async () => {
+    createMany(6);
+    const { rerender } = render(
+      <StrictMode>
+        <Toaster key="first" maxVisible={5} />
+        <Toaster key="second" maxVisible={1} />
+      </StrictMode>
+    );
+    await settle();
+    const first = getSnapshot().active;
+    expect(renderedIds()).toHaveLength(5);
+
+    rerender(
+      <StrictMode>
+        <Toaster key="first" maxVisible={5} />
+        <Toaster key="second" maxVisible={2} />
+      </StrictMode>
+    );
+    await settle();
+    expect(getSnapshot().active).toBe(first);
+    expect(renderedIds()).toHaveLength(5);
+
+    rerender(
+      <StrictMode>
+        <Toaster key="second" maxVisible={2} />
+      </StrictMode>
+    );
+    await settle();
+    expect(getSnapshot().active).not.toBe(first);
+    expect(renderedIds()).toEqual(['t1', 't2']);
+    expect(phaseOf('t3')).toBe('queued');
+  });
+});

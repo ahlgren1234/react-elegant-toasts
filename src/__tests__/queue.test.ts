@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   attach,
+  configure,
   dismiss,
   entered,
   exited,
@@ -387,6 +388,143 @@ describe('detach and takeover with a queue', () => {
     await settle();
     expect(rendered()).toEqual(['t1', 't3', 't4', 't5']);
     expect(queued()).toEqual(['t6']);
+  });
+});
+
+describe('Toaster configuration', () => {
+  /** Attaches a Toaster configured with `maxVisible` first, as the Toaster component does. */
+  function activateConfigured(maxVisible: number | undefined) {
+    const token = {};
+    configure(token, { maxVisible });
+    return { token, detach: attach(token) };
+  }
+
+  it('applies a configured maxVisible from the first promotion', () => {
+    createMany('t', 4);
+    activateConfigured(2);
+    expect(rendered()).toEqual(['t1', 't2']);
+    createMany('b', 3, 'bottom-left');
+    expect(rendered('bottom-left')).toEqual(['b1', 'b2']);
+  });
+
+  it.each([
+    [1, 1],
+    [7, 7],
+    [2.0, 2],
+    [undefined, 4],
+    [0, 4],
+    [-1, 4],
+    [Number.NaN, 4],
+    [2.5, 4],
+    [Infinity, 4],
+    [-Infinity, 4],
+  ])('resolves maxVisible %s to %s', (maxVisible, expected) => {
+    activateConfigured(maxVisible);
+    createMany('t', 10);
+    expect(rendered()).toHaveLength(expected);
+    expect(inspectRecords()).toHaveLength(10);
+  });
+
+  it('promotes FIFO at every position at once when the active limit rises', () => {
+    const { token } = activateConfigured(2);
+    createMany('t', 6);
+    createMany('b', 3, 'bottom-left');
+    createMany('c', 1, 'top-center');
+    const seen: [ToastId[], ToastId[], ToastId[]][] = [];
+    subscribe(() => seen.push([rendered(), rendered('bottom-left'), rendered('top-center')]));
+    configure(token, { maxVisible: 5 });
+    expect(seen).toEqual([[['t1', 't2', 't3', 't4', 't5'], ['b1', 'b2', 'b3'], ['c1']]]);
+    expect(queued()).toEqual(['t6']);
+  });
+
+  it('removes nothing when the active limit falls, and promotes again only below the new limit', () => {
+    const { token } = activateConfigured(4);
+    const onDismiss = vi.fn();
+    for (let index = 1; index <= 6; index++) create(`t${index}`, { onDismiss });
+    entered('t1');
+    dismiss('t2');
+    const before = inspectRecords();
+    const listener = vi.fn();
+    subscribe(listener);
+
+    configure(token, { maxVisible: 2 });
+    expect(listener).not.toHaveBeenCalled();
+    expect(inspectRecords()).toEqual(before);
+    expect(rendered()).toEqual(['t1', 't2', 't3', 't4']);
+
+    // Occupancy 4 → 3 → 2: still at or above the limit, so nothing is promoted.
+    exited('t2');
+    dismiss('t3');
+    exited('t3');
+    expect(rendered()).toEqual(['t1', 't4']);
+    expect(queued()).toEqual(['t5', 't6']);
+
+    // Occupancy 1: one slot is free under the new limit.
+    dismiss('t1');
+    exited('t1');
+    expect(rendered()).toEqual(['t4', 't5']);
+    expect(queued()).toEqual(['t6']);
+    expect(onDismiss).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not notify when the configuration changes nothing rendered', () => {
+    const { token } = activateConfigured(4);
+    createMany('t', 3);
+    const listener = vi.fn();
+    subscribe(listener);
+    configure(token, { maxVisible: 4 });
+    configure(token, { maxVisible: undefined });
+    configure(token, { maxVisible: 6 });
+    configure(token, { maxVisible: 3 });
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("keeps a waiting Toaster's configuration inert until it takes over", async () => {
+    const first = activateConfigured(5);
+    const second = activateConfigured(2);
+    createMany('t', 6);
+    expect(rendered()).toHaveLength(5);
+
+    const listener = vi.fn();
+    subscribe(listener);
+    configure(second.token, { maxVisible: 1 });
+    configure({}, { maxVisible: 1 });
+    expect(listener).not.toHaveBeenCalled();
+    expect(rendered()).toHaveLength(5);
+
+    first.detach();
+    await settle();
+    expect(getSnapshot().active).toBe(second.token);
+    expect(rendered()).toEqual(['t1']);
+    expect(queued()).toEqual(['t2', 't3', 't4', 't5', 't6']);
+  });
+
+  it("promotes under the new owner's limit on takeover, never the departing owner's", async () => {
+    const first = activateConfigured(2);
+    activateConfigured(5);
+    createMany('t', 6);
+    expect(rendered()).toEqual(['t1', 't2']);
+    first.detach();
+    await settle();
+    expect(rendered()).toEqual(['t1', 't2', 't3', 't4', 't5']);
+  });
+
+  it('uses the default of 4 for a Toaster that takes over without a configuration', async () => {
+    const first = activateConfigured(1);
+    activateToaster();
+    createMany('t', 6);
+    first.detach();
+    await settle();
+    expect(rendered()).toHaveLength(4);
+  });
+
+  it('leaves every record queued when the configured owner detaches with no successor', async () => {
+    const { detach } = activateConfigured(6);
+    createMany('t', 8);
+    detach();
+    await settle();
+    expect(inspectRecords().every(candidate => candidate.phase === 'queued')).toBe(true);
+    expect(inspectRecords()).toHaveLength(8);
   });
 });
 
