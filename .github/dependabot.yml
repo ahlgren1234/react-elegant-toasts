@@ -41,6 +41,28 @@ updates:
       # Pinned exactly to a prerelease (P-04).
       - dependency-name: vitest-axe
 
+  # The packed-package consumer fixture (P-07).
+  - package-ecosystem: npm
+    directory: /fixtures/consumer-vite
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      consumer-vite:
+        update-types: [minor, patch]
+    ignore:
+      # TypeScript 5.0.4 is the documented minimum (§24); the latest-TypeScript leg is P-23.
+      - dependency-name: typescript
+      # React 19 belongs to the P-23 compatibility matrix.
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+
   - package-ecosystem: github-actions
     directory: /
     target-branch: v2
