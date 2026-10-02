@@ -1,13 +1,14 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, fireEvent, act } from '@testing-library/react';
 import Toast from '../Toast';
 
 describe('Toast', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   const getToastElement = (container: HTMLElement) => {
@@ -28,7 +29,7 @@ describe('Toast', () => {
   });
 
   it('calls onClose when clicked and closeOnClick is true', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     const { container } = render(
       <Toast message="Test message" id="1" onClose={onClose} closeOnClick={true} />
     );
@@ -42,7 +43,7 @@ describe('Toast', () => {
 
     // Wait for the next frame to ensure the state has been updated
     act(() => {
-      jest.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
     });
 
     // Trigger the opacity transition end
@@ -56,7 +57,7 @@ describe('Toast', () => {
   });
 
   it('does not call onClose when clicked and closeOnClick is false', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     const { container } = render(
       <Toast message="Test message" id="1" onClose={onClose} closeOnClick={false} />
     );
@@ -68,7 +69,7 @@ describe('Toast', () => {
     });
 
     act(() => {
-      jest.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
     });
 
     act(() => {
@@ -81,7 +82,7 @@ describe('Toast', () => {
   });
 
   it('pauses timer on hover when pauseOnHover is true', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     const { container } = render(
       <Toast message="Test message" id="1" onClose={onClose} pauseOnHover={true} duration={1000} />
     );
@@ -95,7 +96,7 @@ describe('Toast', () => {
 
     // Advance timer while hovering
     act(() => {
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
     });
 
     // Toast should not be closed while hovering
@@ -108,12 +109,12 @@ describe('Toast', () => {
 
     // Advance timer after mouse leave
     act(() => {
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
     });
 
     // Wait for the next frame
     act(() => {
-      jest.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
     });
 
     // Trigger the opacity transition end
@@ -145,7 +146,7 @@ describe('Toast', () => {
   });
 
   it('respects isPaused prop', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     const { container } = render(
       <Toast message="Test message" id="1" onClose={onClose} duration={1000} isPaused={true} />
     );
@@ -155,7 +156,7 @@ describe('Toast', () => {
 
     // Advance timer while paused
     act(() => {
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
     });
 
     // Toast should not be closed while paused

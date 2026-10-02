@@ -1101,6 +1101,13 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - remove Jest, ts-jest and identity-obj-proxy
   - remove the temporary `verbatimModuleSyntax: false` override from `tsconfig.test.json` (added in P-02)
   - port the 0.x tests mechanically only if needed to keep the gate green until P-08
+- Decisions made in P-04:
+  - **Vitest 3.2.x** (with `@vitest/coverage-v8` at the same version) was chosen on purpose. Vitest 4 and later declare `vite` ≥6 as a peer, so using them would have turned P-04 into a migration of the root Vite. Vite 4 and `@vitejs/plugin-react` 4 are therefore unchanged in P-04. Vitest 3 brings its own nested Vite, and P-25 evaluates the upgrade.
+  - `vitest-axe` is pinned exactly to `1.0.0-pre.5`. The stable `0.1.0` extends the obsolete global `Vi` namespace, so `toHaveNoViolations` does not type-check with current Vitest. The pinned prerelease augments the `vitest` module correctly and was verified to run and type-check.
+  - The standalone `vitest.config.ts` uses jsdom and no globals: tests import from `vitest` explicitly. The setup file runs Testing Library's `cleanup()` and `vi.useRealTimers()` after every test.
+  - The fake-timer setup is this: a test opts in with `vi.useFakeTimers()`, and the shared `afterEach` always restores real timers.
+  - The 0.x `requestAnimationFrame` mock is removed and not replaced (§26). The 0.x tests pass without it.
+  - `@types/node` is now a direct dev dependency. Before P-04 it came only through Jest's dependency tree.
 - Not in scope: new behaviour tests.
 
 **P-05 Lint and format modernisation**
@@ -1247,7 +1254,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 **P-23 Compatibility and SSR verification**
 - Scope:
-  - the full React 18/19 matrix
+  - the full React 18/19 matrix. This requires upgrading `@testing-library/react` from 14 (React 18 only) to 16, and adding `@testing-library/dom` (kept at 14 in P-04).
   - declarations type-checked under both `@types` versions and under TypeScript 5.0 and the latest TypeScript
   - the Node ESM `renderToString` smoke test on the packed package
   - the **Next.js App Router fixture** with its Playwright check
@@ -1257,7 +1264,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 ### Track F: Documentation and release
 
-**P-25 Demo rebuild** (§31). It deploys only at 2.0.0.
+**P-25 Demo rebuild** (§31). It deploys only at 2.0.0. After P-04 the demo still builds with Vite 4 and `@vitejs/plugin-react` 4, which were kept on purpose (see P-04). P-25 evaluates upgrading them, together with whether Vitest can then move past 3.x.
 
 **P-26 README and reference docs** (§31), including the accessibility boundary and the ESM-only guidance. Defects: D-22, D-35.
 

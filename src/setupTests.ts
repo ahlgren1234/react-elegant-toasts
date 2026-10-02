@@ -1,10 +1,9 @@
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
+import 'vitest-axe/extend-expect';
+import { cleanup } from '@testing-library/react';
+import { afterEach, vi } from 'vitest';
 
-// Mock requestAnimationFrame and cancelAnimationFrame
-global.requestAnimationFrame = (callback: FrameRequestCallback): number => {
-  return setTimeout(callback, 0);
-};
-
-global.cancelAnimationFrame = (id: number): void => {
-  clearTimeout(id);
-}; 
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});

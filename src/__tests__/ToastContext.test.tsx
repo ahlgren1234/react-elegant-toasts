@@ -1,5 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
-import '@testing-library/jest-dom';
 import { ToastProvider, useToast } from '../ToastContext';
 
 const TestComponent = () => {
@@ -25,7 +25,7 @@ const TestComponent = () => {
 
 describe('ToastContext', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     // Mock visibility API
     Object.defineProperty(document, 'hidden', {
       configurable: true,
@@ -36,7 +36,7 @@ describe('ToastContext', () => {
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('should add and display toast', () => {
@@ -136,7 +136,7 @@ describe('ToastContext', () => {
 
     // Fast-forward time
     act(() => {
-      jest.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(3000);
     });
 
     // Toast should be removed after duration
