@@ -1,0 +1,51 @@
+# Dependabot reads this file only from the default branch (main). Until v2 is merged,
+# these version updates stay inactive (see V2_PLAN.md, P-06).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Major upgrades of deliberately pinned tooling belong to later phases.
+      # ESLint 10: blocked by plugin peer ranges (P-05).
+      - dependency-name: eslint
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@eslint/js'
+        update-types: ['version-update:semver-major']
+      # Vite, plugin-react and Vitest: evaluated with the demo rebuild (P-04, P-25).
+      - dependency-name: vite
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitejs/plugin-react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: vitest
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitest/coverage-v8'
+        update-types: ['version-update:semver-major']
+      # React 19 and Testing Library 16: the React 18/19 matrix (P-23).
+      - dependency-name: '@testing-library/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+      # Pinned exactly to a prerelease (P-04).
+      - dependency-name: vitest-axe
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']
