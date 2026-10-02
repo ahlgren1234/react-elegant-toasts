@@ -47,3 +47,20 @@ const withDescription: Pick<ToastOptions, 'id' | 'description'> = {
 };
 // @ts-expect-error -- rejected for a non-literal value too
 export const rejectedValue: CustomToastOptions = withDescription;
+
+// The rest of the normal content model is rejected the same way, in literals and values.
+// @ts-expect-error -- icon
+export const rejectedIcon: CustomToastOptions = { icon: null };
+// @ts-expect-error -- action
+export const rejectedAction: CustomToastOptions = { action };
+// @ts-expect-error -- progress
+export const rejectedProgress: CustomToastOptions = { progress: true };
+const withIcon: Pick<ToastOptions, 'id' | 'icon'> = { id, icon: null };
+const withAction: Pick<ToastOptions, 'id' | 'action'> = { id, action };
+const withProgress: Pick<ToastOptions, 'id' | 'progress'> = { id, progress: true };
+// @ts-expect-error -- icon, for a non-literal value
+export const rejectedIconValue: CustomToastOptions = withIcon;
+// @ts-expect-error -- action, for a non-literal value
+export const rejectedActionValue: CustomToastOptions = withAction;
+// @ts-expect-error -- progress, for a non-literal value
+export const rejectedProgressValue: CustomToastOptions = withProgress;
