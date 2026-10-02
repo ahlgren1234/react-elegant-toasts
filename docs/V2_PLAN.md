@@ -1288,6 +1288,57 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - `onDismiss(snapshot, reason)` and callback error isolation
   - `resetStore`
   - creation calls return `ToastId | undefined`; rejected creation returns `undefined` (§6.2)
+- Decisions made in P-09:
+  - The store is a plain module singleton in `src/store/store.ts`, never kept on `globalThis` (§8.2). Its internal types are in `store/types.ts`, ID generation in `store/ids.ts`, development warnings in `store/warnings.ts` and the call-time environment checks in `store/env.ts`. Nothing in `store/` is exported from the package entry, and there are no public API changes: the export surface is still the two values and eleven types of P-08.
+  - A record holds only `id`, `seq`, `revision`, `type`, `custom`, `content`, `description`, `position` (`options.position`, or `top-right`), the stored options and `phase`, plus `exit` bookkeeping (`reason`, and `relocateTo` for a relocation). The options are copied field by field and never spread, so no option can set a store-owned field (D-02). Records are frozen and replaced rather than mutated. Timer, remaining-time, pause and promise-token fields and the resolved Toaster configuration arrive in P-10, P-11, P-13 and P-14.
+  - `getSnapshot()` returns a frozen `{ active, byPosition }`, with frozen lists and frozen views. `active` is the owning Toaster. `byPosition` holds the `entering`, `visible` and `exiting` toasts of each position in `seq` order; P-14 owns the visual order (D-15). Subscribers are notified when a command changes the observable snapshot; otherwise the snapshot, and every position list and view that did not change, keep their identity. In P-09 the snapshot holds only rendered toasts and `active`, so a command that changes only queued records produces no notification. When such a command also changes rendered state, for example through promotion in P-10, the snapshot changes and subscribers are notified.
+    - A command mutates synchronously and then notifies once.
+    - A command issued while subscribers or callbacks run applies immediately, and its notification follows in a later round.
+    - `onDismiss` runs after notification.
+    - Subscribers and callbacks are isolated: an error goes to `reportError`, or is re-thrown asynchronously, and never stops the store or other callbacks.
+
+    `getServerSnapshot()` is constant and empty. `useSyncExternalStore` is wired in P-14.
+
+  - IDs come from `crypto.randomUUID()` when it is available. Otherwise they come from a deterministic module counter (`ret-1`, `ret-2`, …), with no random source. Generated IDs skip IDs that are already stored, so they are unique within the store. `resetStore()` restarts the counter. An empty explicit `id` counts as no `id`, because §6.2 forbids empty IDs. The tests check the generator's behaviour deterministically; there is no large-volume stress test.
+  - P-09 implements the §14 replacement table. Replacement never merges, and increments `revision`.
+    - A queued toast is replaced in place, or moved to the back of a new position with a new `seq`.
+    - A rendered toast is replaced in place, or relocated: it exits with reason `relocate` and joins the new position as queued with a new `seq` when `exited` is reported.
+    - An exiting toast is revived to `entering` at the same position, or its exit becomes a relocation.
+
+    Replacement, revival and relocation fire no callbacks. Dismissing a relocating toast turns the relocation into a removal.
+
+  - The §9 phases run through `dismiss(id?, reason)`, `entered(id)` and `exited(id)`:
+    - a queued toast is removed directly
+    - a rendered toast moves to `exiting`
+    - an exiting toast ignores further dismissals
+    - out-of-phase reports do nothing
+    - `onDismiss(snapshot, reason)` fires exactly once on removal, with the latest callback
+
+    The renderer will report `entered` and `exited` from P-14 and P-18; in P-09 the tests drive them.
+
+  - Promotion from `queued` to `entering` goes through one internal `promote()` step, which runs only while a Toaster is active. In P-09 its capacity is deliberately unlimited, so the lifecycle can be exercised through real commands. This is the P-09/P-10 seam: P-10 replaces the policy with per-position `maxVisible` and FIFO slot allocation by `seq`.
+  - While no Toaster is active, the store keeps at most 100 records. A new record at the cap is rejected: it returns `undefined`, even with an explicit `id`, stores nothing and fires no callback. Replacing an existing ID is still allowed. An active Toaster lifts the cap. A Toaster with a pending (deferred) detach still counts as active. Detaching never deletes records, and new records are rejected again until the count drops below 100.
+  - Development warnings are prefixed `[react-elegant-toasts]` and checked at call time with `isDev()` (`process.env.NODE_ENV !== 'production'`, guarded by `typeof process` and declared locally rather than through `@types/node`). Production logs nothing.
+    - **No-Toaster warning:** armed by any accepted creation or replacement while no Toaster is active, and logged only if no Toaster attaches within 1000 ms. That delay is an internal implementation detail, not a 2.x API guarantee. It is logged at most once per period without a Toaster; an attach ends the period. A detach or a rejected call does not arm it.
+    - **Cap warning:** logged once, and re-armed when the count is below the cap again.
+    - **Extra-Toaster warning:** logged once per Toaster.
+    - **Server warning:** logged once.
+
+    This development-only warning timer is the only timer in P-09.
+
+  - On the server (`typeof window === 'undefined'`, checked at call time), creation is rejected before an ID is generated: it returns `undefined`, stores nothing and warns once in development. `dismiss` does nothing on the server. Nothing touches browser globals at import time.
+  - Each `<Toaster />` creates a per-instance object token with `useState` and attaches it in `useEffect`. The first Toaster to attach is active; later ones wait in order. Detach is deferred with `queueMicrotask`, and a re-attach of the same token before it runs cancels it, so StrictMode's replay changes nothing: no ownership change, no re-queue, no duplicate warning or registration. There are no ownership timeouts.
+  - Every completed detach of the active Toaster runs the §8.4 effects first, then hands over:
+    1. `entering` and `visible` toasts go back to `queued`, keeping their `seq`.
+    2. A dismissal exit finishes with `onDismiss`; a relocation exit joins its destination.
+    3. The earliest waiting Toaster, if any, becomes active.
+    4. `promote()` runs.
+
+    An incoming Toaster therefore never inherits another renderer's rendered phases. A waiting Toaster that detaches simply leaves the waiting list. The Toaster still renders `null` until P-14.
+
+  - `toast()`, its variants and `toast.dismiss` pass straight through to the store. `toast.promise` is still the P-08 stub until P-13: it returns `undefined`, creates no toast, and never invokes or observes its input.
+  - `resetStore()` and `inspectRecords()` are internal test helpers and are not on the package entry. `resetStore()` clears records, ownership, pending detaches, warning state and timers, and the ID counter; `setupTests.ts` calls it after every test and also restores stubbed globals and environment variables. `inspectRecords()` returns frozen copies, so tests cannot change store state through it. There is no state-seeding helper.
+  - The P-08 skeleton test is replaced by `store`, `ids`, `no-toaster`, `server` (node environment), `toaster` and `facade` tests. `exports.test.ts` is unchanged.
 - Defects: D-01 (store side), D-02, D-03, D-06.
 
 **P-10 Queue and maxVisible**
