@@ -25,28 +25,72 @@ export interface ToastSnapshot {
 }
 
 // Optional fields accept an explicit `undefined` for consumers using exactOptionalPropertyTypes.
+/**
+ * Per-toast options. A call that reuses an existing `id` replaces that toast with a new
+ * definition: options it leaves out are not taken from the previous call. Invalid runtime values
+ * are ignored, as if the option had been left out.
+ */
 export interface ToastOptions {
+  /**
+   * The toast's ID. A toast with this ID that already exists is replaced. An empty string counts
+   * as no ID, and an ID is generated.
+   */
   id?: ToastId | undefined;
+  /** Secondary content shown below the main content. Any React node. */
   description?: ReactNode;
+  /**
+   * How long the toast stays, in milliseconds, while it is visible and not paused. Pausing never
+   * restarts it. `Infinity` makes the toast persistent, and a value of 0 or less closes it on the
+   * next timer tick. Loading toasts are always persistent. When omitted, the default (5000 ms)
+   * applies.
+   */
   duration?: number | undefined;
+  /**
+   * Where the toast is shown. When omitted, the default position (`"top-right"`) applies, so a
+   * replacement that leaves it out moves a toast shown elsewhere.
+   */
   position?: ToastPosition | undefined;
+  /** Replaces the type's icon. `null` shows no icon. Icons are hidden from assistive technology. */
   icon?: ReactNode | null;
+  /**
+   * One action button. Clicking it calls `onClick` and then dismisses the toast with the reason
+   * `"action"`, unless `onClick` calls `event.preventDefault()`.
+   */
   action?: ToastAction | undefined;
+  /** Whether the toast shows the library close button. */
   closeButton?: boolean | undefined;
+  /** Whether the toast shows a progress bar for its remaining time. */
   progress?: boolean | undefined;
+  /** Extra class names for the toast's root element. */
   className?: string | undefined;
+  /** Called once when the toast is removed, whatever the cause, with the reason. */
   onDismiss?: ((toast: ToastSnapshot, reason: DismissReason) => void) | undefined;
+  /** Called once each time the toast closes because its duration ran out, before `onDismiss`. */
   onAutoClose?: ((toast: ToastSnapshot) => void) | undefined;
 }
 
 // Custom toasts are chrome-less (§6.4): the normal content model's options are rejected by type.
+/**
+ * Options for `toast.custom`. The normal content model's `description`, `icon`, `action` and
+ * `progress` are not accepted, and are ignored at runtime.
+ */
 export interface CustomToastOptions {
+  /** As in {@link ToastOptions.id}. */
   id?: ToastId | undefined;
+  /** As in {@link ToastOptions.duration}. */
   duration?: number | undefined;
+  /** As in {@link ToastOptions.position}. */
   position?: ToastPosition | undefined;
+  /**
+   * Whether the library close button is placed on the custom content. Off unless `true` is
+   * passed.
+   */
   closeButton?: boolean | undefined;
+  /** As in {@link ToastOptions.className}. */
   className?: string | undefined;
+  /** As in {@link ToastOptions.onDismiss}. */
   onDismiss?: ((toast: ToastSnapshot, reason: DismissReason) => void) | undefined;
+  /** As in {@link ToastOptions.onAutoClose}. */
   onAutoClose?: ((toast: ToastSnapshot) => void) | undefined;
   description?: never;
   icon?: never;
