@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import type { CustomToastOptions, ToastId, ToastOptions, ToastPromiseMessages } from './types';
+import { dismiss, upsert } from './store/store';
+import type {
+  CustomToastOptions,
+  ToastId,
+  ToastOptions,
+  ToastPromiseMessages,
+  ToastType,
+} from './types';
 
 // The type of `toast`. Internal: consumers use `typeof toast` (§6.7 lists the public types).
 // The members are function-typed properties, not methods: they never use `this`, so they can be
@@ -20,17 +27,23 @@ interface ToastApi {
   dismiss: (id?: ToastId) => void;
 }
 
-// P-08 skeleton: the signatures are final, the bodies are not. Nothing is accepted yet, so every
-// creation call returns undefined, the meaning §6.2 gives it. The store arrives in P-09, the
-// facade behaviour in P-12 and promise handling in P-13; until then promise input is never
-// invoked or observed.
-export const toast: ToastApi = Object.assign((): ToastId | undefined => undefined, {
-  success: (): ToastId | undefined => undefined,
-  error: (): ToastId | undefined => undefined,
-  warning: (): ToastId | undefined => undefined,
-  info: (): ToastId | undefined => undefined,
-  loading: (): ToastId | undefined => undefined,
-  custom: (): ToastId | undefined => undefined,
+// Each creation call passes straight to the store, which accepts it (returning the ID) or rejects
+// it (returning undefined). Option defaults, validation and the custom-toast rules arrive in P-12.
+function creator(type: ToastType, custom = false) {
+  return (content: ReactNode, options?: ToastOptions | CustomToastOptions): ToastId | undefined =>
+    upsert({ type, custom, content, options });
+}
+
+export const toast: ToastApi = Object.assign(creator('default'), {
+  success: creator('success'),
+  error: creator('error'),
+  warning: creator('warning'),
+  info: creator('info'),
+  loading: creator('loading'),
+  custom: creator('custom', true),
+  // Still the P-08 stub: P-13 adds promise handling. The input is never invoked or observed.
   promise: (): ToastId | undefined => undefined,
-  dismiss: (): void => {},
+  dismiss: (id?: ToastId): void => {
+    dismiss(id, 'programmatic');
+  },
 });
