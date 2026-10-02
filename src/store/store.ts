@@ -1,8 +1,9 @@
 // The external toast store (§5, §7, §8). A plain module singleton: one store per loaded copy of the
 // module, never kept on globalThis. Nothing here runs at import time except creating empty state.
-import type { DismissReason, ToastId, ToastOptions, ToastPosition, ToastSnapshot } from '../types';
+import type { DismissReason, ToastId, ToastPosition, ToastSnapshot } from '../types';
 import { isServer } from './env';
 import { generateId, resetIds } from './ids';
+import { normaliseOptions, POSITIONS } from './options';
 import {
   cancel,
   cancelAll,
@@ -36,14 +37,6 @@ import {
   warnServer,
 } from './warnings';
 
-const POSITIONS: readonly ToastPosition[] = [
-  'top-left',
-  'top-center',
-  'top-right',
-  'bottom-left',
-  'bottom-center',
-  'bottom-right',
-];
 const DEFAULT_POSITION: ToastPosition = 'top-right';
 // While no Toaster is active, the store holds at most this many records (§8.4).
 const NO_TOASTER_CAP = 100;
@@ -210,24 +203,6 @@ function put(record: ToastRecord): void {
   records.set(record.id, Object.freeze(record));
 }
 
-function copyOptions(options: ToastInput['options']): StoredOptions {
-  const copy: {
-    -readonly [Key in keyof StoredOptions]: StoredOptions[Key];
-  } = {};
-  if (!options) return Object.freeze(copy);
-  // Field by field, never spread: no option can set a store-owned field (D-02).
-  const source: ToastOptions = options;
-  if (source.duration !== undefined) copy.duration = source.duration;
-  if (source.icon !== undefined) copy.icon = source.icon;
-  if (source.action !== undefined) copy.action = source.action;
-  if (source.closeButton !== undefined) copy.closeButton = source.closeButton;
-  if (source.progress !== undefined) copy.progress = source.progress;
-  if (source.className !== undefined) copy.className = source.className;
-  if (source.onDismiss !== undefined) copy.onDismiss = source.onDismiss;
-  if (source.onAutoClose !== undefined) copy.onAutoClose = source.onAutoClose;
-  return Object.freeze(copy);
-}
-
 function toastSnapshot(record: ToastRecord): ToastSnapshot {
   return Object.freeze(
     record.description === undefined
@@ -378,8 +353,10 @@ export function upsert(input: ToastInput): ToastId | undefined {
     return undefined;
   }
   return command(() => {
-    // An empty `id` counts as no `id`: the library never returns an empty ID (§6.2).
-    const requestedId = input.options?.id || undefined;
+    // Invalid option values count as omitted. An empty or non-string `id` counts as no `id`: the
+    // library only ever returns a non-empty string ID (§6.2).
+    const normalised = normaliseOptions(input.options, input.custom);
+    const requestedId = normalised.id;
     const existing = requestedId === undefined ? undefined : records.get(requestedId);
     if (records.size < NO_TOASTER_CAP) rearmCapWarning();
     if (!existing && active === null && records.size >= NO_TOASTER_CAP) {
@@ -387,15 +364,16 @@ export function upsert(input: ToastInput): ToastId | undefined {
       return undefined;
     }
 
-    const position = input.options?.position ?? DEFAULT_POSITION;
+    // Not a merge: an omitted position is the default one, even on replacement (§14).
+    const position = normalised.position ?? DEFAULT_POSITION;
     const definition = {
       type: input.type,
       custom: input.custom,
       content: input.content,
-      description: (input.options as ToastOptions | undefined)?.description,
-      options: copyOptions(input.options),
+      description: normalised.description,
+      options: normalised.options,
       // Every definition starts a fresh timer: creation, and every replacement (§10, §14).
-      timer: freshTimer(resolveDuration(input.type, input.options?.duration)),
+      timer: freshTimer(resolveDuration(input.type, normalised.options.duration)),
     };
 
     let id: ToastId;
