@@ -110,9 +110,9 @@ toast.addToast({
 // Update existing toast
 const id = toast.addToast({ message: 'Loading...' });
 // ... after some operation
-toast.updateToast(id, { 
+toast.updateToast(id, {
   type: 'success',
-  message: 'Operation completed!' 
+  message: 'Operation completed!'
 });
 
 // Remove specific toast
@@ -217,11 +217,11 @@ toast.addToast({
 ### TypeScript Support
 
 ```tsx
-import type { 
-  ToastProps, 
-  ToastPosition, 
-  ToastType, 
-  ToastAnimation 
+import type {
+  ToastProps,
+  ToastPosition,
+  ToastType,
+  ToastAnimation
 } from 'react-elegant-toasts';
 
 // Use in your code
@@ -289,35 +289,35 @@ export default function App() {
 
 ### ToastProvider Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| defaultPosition | ToastPosition | 'top-right' | Default position for toasts |
-| defaultAnimation | ToastAnimation | 'slide' | Default animation type |
-| defaultDuration | number | 5000 | Default duration in milliseconds |
-| maxToasts | number | 5 | Maximum number of toasts shown at once |
-| containerClassName | string | undefined | Custom class for the container |
-| containerStyle | CSSProperties | undefined | Custom styles for the container |
-| pauseOnPageIdle | boolean | true | Pause toasts when page is idle |
-| pauseOnFocusLoss | boolean | true | Pause toasts when window loses focus |
+| Prop               | Type           | Default     | Description                            |
+| ------------------ | -------------- | ----------- | -------------------------------------- |
+| defaultPosition    | ToastPosition  | 'top-right' | Default position for toasts            |
+| defaultAnimation   | ToastAnimation | 'slide'     | Default animation type                 |
+| defaultDuration    | number         | 5000        | Default duration in milliseconds       |
+| maxToasts          | number         | 5           | Maximum number of toasts shown at once |
+| containerClassName | string         | undefined   | Custom class for the container         |
+| containerStyle     | CSSProperties  | undefined   | Custom styles for the container        |
+| pauseOnPageIdle    | boolean        | true        | Pause toasts when page is idle         |
+| pauseOnFocusLoss   | boolean        | true        | Pause toasts when window loses focus   |
 
 ### Toast Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| type | ToastType | 'info' | Type of toast |
-| title | string | undefined | Toast title |
-| message | string | required | Toast message |
-| position | ToastPosition | 'top-right' | Toast position |
-| animation | ToastAnimation | 'slide' | Animation type |
-| duration | number | 5000 | Duration in milliseconds |
-| pauseOnHover | boolean | true | Pause timer on hover |
-| closeOnClick | boolean | true | Close toast on click |
-| progressBar | boolean | true | Show progress bar |
-| rtl | boolean | false | Right-to-left support |
-| className | string | undefined | Custom class name |
-| style | CSSProperties | undefined | Custom styles |
-| icon | ReactNode | undefined | Custom icon |
-| role | string | 'alert' | ARIA role |
+| Prop         | Type           | Default     | Description              |
+| ------------ | -------------- | ----------- | ------------------------ |
+| type         | ToastType      | 'info'      | Type of toast            |
+| title        | string         | undefined   | Toast title              |
+| message      | string         | required    | Toast message            |
+| position     | ToastPosition  | 'top-right' | Toast position           |
+| animation    | ToastAnimation | 'slide'     | Animation type           |
+| duration     | number         | 5000        | Duration in milliseconds |
+| pauseOnHover | boolean        | true        | Pause timer on hover     |
+| closeOnClick | boolean        | true        | Close toast on click     |
+| progressBar  | boolean        | true        | Show progress bar        |
+| rtl          | boolean        | false       | Right-to-left support    |
+| className    | string         | undefined   | Custom class name        |
+| style        | CSSProperties  | undefined   | Custom styles            |
+| icon         | ReactNode      | undefined   | Custom icon              |
+| role         | string         | 'alert'     | ARIA role                |
 
 ## Browser Support
 
@@ -345,4 +345,4 @@ MIT © [Your Name]
 
 - Inspired by the best practices of toast notifications
 - Built with accessibility in mind
-- Designed for modern React applications 
+- Designed for modern React applications

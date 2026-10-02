@@ -61,4 +61,4 @@ jobs:
           echo "Building package..."
           npm run build
           echo "Build output:"
-          ls -la dist/ 
+          ls -la dist/

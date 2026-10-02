@@ -114,7 +114,13 @@ const Toast: React.FC<ToastProps> = ({
   }, [closeOnClick, pauseTimer, onClose]);
 
   useEffect(() => {
-    if (!isVisible && onClose && shouldClose.current && isTimerExpired.current && !wasClicked.current) {
+    if (
+      !isVisible &&
+      onClose &&
+      shouldClose.current &&
+      isTimerExpired.current &&
+      !wasClicked.current
+    ) {
       onClose();
     }
   }, [isVisible, onClose]);

@@ -1,11 +1,11 @@
 # react-elegant-toasts v2: engineering and product plan
 
-| | |
-| --- | --- |
-| Status | Draft, revision 2. The open-question review decisions are incorporated. |
-| Baseline | v0.1.2 (`v2` branch at `7a662f7`) |
-| Target | 2.0.0 |
-| Scope | Planning only. This document makes no changes to source, tests, config, workflows or the demo. |
+|          |                                                                                                |
+| -------- | ---------------------------------------------------------------------------------------------- |
+| Status   | Draft, revision 2. The open-question review decisions are incorporated.                        |
+| Baseline | v0.1.2 (`v2` branch at `7a662f7`)                                                              |
+| Target   | 2.0.0                                                                                          |
+| Scope    | Planning only. This document makes no changes to source, tests, config, workflows or the demo. |
 
 ## How to read this document
 
@@ -66,25 +66,25 @@ These are out of scope for 2.0 unless a hard architectural requirement emerges. 
 
 ### 4.1 Baseline inventory (factual)
 
-| Area | v0.1.2 state |
-| --- | --- |
-| Source | `src/ToastContext.tsx` (provider and state), `src/ToastContainer.tsx` (one fixed `div` per position), `src/Toast.tsx` (timer, progress, click), `src/types.ts`, `src/utils.ts`, `src/styles.css` |
-| Public exports | `Toast`, `ToastContainer`, `ToastProvider`, `useToast`, a default export (`useToast`). Types: `ToastProps`, `ToastPosition`, `ToastType`, `ToastAnimation`, `ToastProviderProps`, `ToastContextValue` |
-| API | `useToast()` returns `{ addToast, updateToast, removeToast, removeAll }`. `addToast({ type, title, message, … })` returns an ID. |
-| State | A `useState` array in `ToastProvider`. One provider-wide `isPaused` boolean is copied onto every toast. |
-| Types | `success`, `error`, `warning`, `info`. No default or loading type. `title` and `message` are both `string`. |
-| Timers | A `setTimeout(duration)` per toast. Progress uses a `requestAnimationFrame` loop that calls `setProgress` every frame. |
-| Animation | Enter classes for `slide`, `fade`, `zoom` and `bounce`. Exit keyframes are defined but never used. |
-| Styling | Global, unprefixed classes (`.toast`, `.success`, `.rtl`, `.top-right`, …) and keyframes (`slideIn`, `fadeIn`, …). Inline container styles (`z-index: 9999`, `padding: 12px`). Dark mode only through a media query. |
-| Package | `main`, `module`, `types` and `style` fields. No `exports` map. `sideEffects: false`. `react` and `react-dom` appear in **both** `dependencies` (`^18.2.0`) and `peerDependencies` (`>=16.8.0`). `engines.node >= 14`. `prepare` runs the build. |
-| Build | tsup 7.2 (`tsup.config.ts` plus CLI flags in `build:js`) and `cp` for the CSS. Output is `dist/index.{js,mjs,d.ts,d.mts}` plus `dist/styles.css`. |
-| TS config | A single `tsconfig.json` covering `src` and the tests. `jsx: "react"` (classic runtime), `moduleResolution: "node"`, `target: es2018`. |
-| Tests | Jest 29 with ts-jest, jsdom and Testing Library 14. Two suites. `requestAnimationFrame` is mocked through `setTimeout`. No accessibility tests and no tests against the built package. |
-| Lint/format | ESLint 8 (legacy config) and Prettier 3. The `format` script runs `prettier --write` and then `git add -A src/`. |
-| CI | `ci.yml`, Node 18, `npm install`. Typecheck, lint and tests are all `continue-on-error: true`. |
-| Release | `release.yml` runs on GitHub release creation: `npm ci`, build, then publish with `NPM_TOKEN`. No tests, no package validation, no provenance. |
-| Demo | A Vite app in `demo/` that imports from `../src`. Deployed to GitHub Pages from `main` by `deploy-demo.yml`. |
-| Repo | No `LICENSE` file, although `package.json` says MIT. No `CHANGELOG.md`. A stale `.github/workflows/deploy-demo` file with no extension. |
+| Area           | v0.1.2 state                                                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Source         | `src/ToastContext.tsx` (provider and state), `src/ToastContainer.tsx` (one fixed `div` per position), `src/Toast.tsx` (timer, progress, click), `src/types.ts`, `src/utils.ts`, `src/styles.css`                                                 |
+| Public exports | `Toast`, `ToastContainer`, `ToastProvider`, `useToast`, a default export (`useToast`). Types: `ToastProps`, `ToastPosition`, `ToastType`, `ToastAnimation`, `ToastProviderProps`, `ToastContextValue`                                            |
+| API            | `useToast()` returns `{ addToast, updateToast, removeToast, removeAll }`. `addToast({ type, title, message, … })` returns an ID.                                                                                                                 |
+| State          | A `useState` array in `ToastProvider`. One provider-wide `isPaused` boolean is copied onto every toast.                                                                                                                                          |
+| Types          | `success`, `error`, `warning`, `info`. No default or loading type. `title` and `message` are both `string`.                                                                                                                                      |
+| Timers         | A `setTimeout(duration)` per toast. Progress uses a `requestAnimationFrame` loop that calls `setProgress` every frame.                                                                                                                           |
+| Animation      | Enter classes for `slide`, `fade`, `zoom` and `bounce`. Exit keyframes are defined but never used.                                                                                                                                               |
+| Styling        | Global, unprefixed classes (`.toast`, `.success`, `.rtl`, `.top-right`, …) and keyframes (`slideIn`, `fadeIn`, …). Inline container styles (`z-index: 9999`, `padding: 12px`). Dark mode only through a media query.                             |
+| Package        | `main`, `module`, `types` and `style` fields. No `exports` map. `sideEffects: false`. `react` and `react-dom` appear in **both** `dependencies` (`^18.2.0`) and `peerDependencies` (`>=16.8.0`). `engines.node >= 14`. `prepare` runs the build. |
+| Build          | tsup 7.2 (`tsup.config.ts` plus CLI flags in `build:js`) and `cp` for the CSS. Output is `dist/index.{js,mjs,d.ts,d.mts}` plus `dist/styles.css`.                                                                                                |
+| TS config      | A single `tsconfig.json` covering `src` and the tests. `jsx: "react"` (classic runtime), `moduleResolution: "node"`, `target: es2018`.                                                                                                           |
+| Tests          | Jest 29 with ts-jest, jsdom and Testing Library 14. Two suites. `requestAnimationFrame` is mocked through `setTimeout`. No accessibility tests and no tests against the built package.                                                           |
+| Lint/format    | ESLint 8 (legacy config) and Prettier 3. The `format` script runs `prettier --write` and then `git add -A src/`.                                                                                                                                 |
+| CI             | `ci.yml`, Node 18, `npm install`. Typecheck, lint and tests are all `continue-on-error: true`.                                                                                                                                                   |
+| Release        | `release.yml` runs on GitHub release creation: `npm ci`, build, then publish with `NPM_TOKEN`. No tests, no package validation, no provenance.                                                                                                   |
+| Demo           | A Vite app in `demo/` that imports from `../src`. Deployed to GitHub Pages from `main` by `deploy-demo.yml`.                                                                                                                                     |
+| Repo           | No `LICENSE` file, although `package.json` says MIT. No `CHANGELOG.md`. A stale `.github/workflows/deploy-demo` file with no extension.                                                                                                          |
 
 ### 4.2 Known defects and problems
 
@@ -149,18 +149,18 @@ Every defect has a v2 response. The full traceability matrix is in Appendix A.
 
 ### 4.3 Conflicts and tensions with the repository (history and status)
 
-| ID | Tension | Status |
-| --- | --- | --- |
+| ID   | Tension                                                                                                          | Status                                                                                                                                                                                                                                            |
+| ---- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | C-01 | Dual ESM and CJS output combined with a module-level singleton store risks two stores (the dual-package hazard). | **Resolved:** 2.0 is ESM-only (§24). No `globalThis` store is used. Duplicate installs of the package can still create separate stores, which is the same limitation React has. The no-Toaster warning (§8.4) is the hint that this has happened. |
-| C-02 | No 1.x exists, so 2.0.0 follows 0.1.x directly. | **Resolved:** migration language always says "0.x → 2.0" (§30). |
-| C-03 | The original pause reasons left out keyboard focus. | **Resolved:** focus within the toast is a pause reason (§10). |
-| C-04 | tsup's `treeshake: true` routes output through Rollup, which strips `"use client"`. | **Resolved as a P-03 task:** stay on tsup 8, disable the Rollup tree-shake step, add the directive with `banner`, and verify it in P-07 (§24). |
-| C-05 | `sideEffects: false` conflicts with shipping CSS. | **Resolved:** `sideEffects: ["**/*.css"]` (§24). |
-| C-06 | The demo deploys from `main`. | **Resolved:** demo deployment waits for the final 2.0.0 release (§29, P-06). |
-| C-07 | CI runs only for `main`. | **Resolved in P-06:** add the `v2` branch. |
-| C-08 | A module-level store is shared across SSR requests. | **Resolved:** `toast()` on the server stores nothing (§8.3, §23). |
-| C-09 | The 0.x tests assert behaviour v2 removes. | **Resolved in P-08:** delete them rather than port them. |
-| C-10 | ESM-only affects consumers that run CommonJS, for example CJS-mode Jest. | **Accepted:** documented as compatibility guidance (§24.3, §30). |
+| C-02 | No 1.x exists, so 2.0.0 follows 0.1.x directly.                                                                  | **Resolved:** migration language always says "0.x → 2.0" (§30).                                                                                                                                                                                   |
+| C-03 | The original pause reasons left out keyboard focus.                                                              | **Resolved:** focus within the toast is a pause reason (§10).                                                                                                                                                                                     |
+| C-04 | tsup's `treeshake: true` routes output through Rollup, which strips `"use client"`.                              | **Resolved as a P-03 task:** stay on tsup 8, disable the Rollup tree-shake step, add the directive with `banner`, and verify it in P-07 (§24).                                                                                                    |
+| C-05 | `sideEffects: false` conflicts with shipping CSS.                                                                | **Resolved:** `sideEffects: ["**/*.css"]` (§24).                                                                                                                                                                                                  |
+| C-06 | The demo deploys from `main`.                                                                                    | **Resolved:** demo deployment waits for the final 2.0.0 release (§29, P-06).                                                                                                                                                                      |
+| C-07 | CI runs only for `main`.                                                                                         | **Resolved in P-06:** add the `v2` branch.                                                                                                                                                                                                        |
+| C-08 | A module-level store is shared across SSR requests.                                                              | **Resolved:** `toast()` on the server stores nothing (§8.3, §23).                                                                                                                                                                                 |
+| C-09 | The 0.x tests assert behaviour v2 removes.                                                                       | **Resolved in P-08:** delete them rather than port them.                                                                                                                                                                                          |
+| C-10 | ESM-only affects consumers that run CommonJS, for example CJS-mode Jest.                                         | **Accepted:** documented as compatibility guidance (§24.3, §30).                                                                                                                                                                                  |
 
 ---
 
@@ -250,6 +250,7 @@ toast.dismiss(id?: ToastId): void                                         // no 
 const id = toast.success("Saved");
 if (id) toast.dismiss(id); // id is undefined only if creation was rejected
 ```
+
 - `toast.custom` accepts only a `ReactNode` in 2.0. If the custom content needs its own ID, for example to call `toast.dismiss(id)` from inside it, pass an explicit `id`:
 
 ```tsx
@@ -263,25 +264,26 @@ toast.custom(
 
 Each option is per toast and overrides the matching `<Toaster />` default. Final names are confirmed in P-08 and must not change behaviour.
 
-| Option | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `id` | `ToastId` | generated | If the ID exists, the toast is replaced (§14). |
-| `description` | `ReactNode` | none | Secondary content. |
-| `duration` | `number` (ms) | Toaster `duration` (5000) | `Infinity` makes the toast persistent. Loading toasts are always persistent. |
-| `position` | `ToastPosition` | Toaster `position` (`"top-right"`) | Changing it through replacement moves the toast (§14). |
-| `icon` | `ReactNode \| null` | type icon | `null` hides the icon. Always `aria-hidden`. |
-| `action` | `ToastAction` | none | Exactly one action (§15). |
-| `closeButton` | `boolean` | Toaster `closeButton` (`true`) | |
-| `progress` | `boolean` | Toaster `progress` (`false`) | |
-| `className` | `string` | none | Added to the toast root. |
-| `onDismiss` | `(toast: ToastSnapshot, reason: DismissReason) => void` | none | §16 |
-| `onAutoClose` | `(toast: ToastSnapshot) => void` | none | §16 |
+| Option        | Type                                                    | Default                            | Notes                                                                        |
+| ------------- | ------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| `id`          | `ToastId`                                               | generated                          | If the ID exists, the toast is replaced (§14).                               |
+| `description` | `ReactNode`                                             | none                               | Secondary content.                                                           |
+| `duration`    | `number` (ms)                                           | Toaster `duration` (5000)          | `Infinity` makes the toast persistent. Loading toasts are always persistent. |
+| `position`    | `ToastPosition`                                         | Toaster `position` (`"top-right"`) | Changing it through replacement moves the toast (§14).                       |
+| `icon`        | `ReactNode \| null`                                     | type icon                          | `null` hides the icon. Always `aria-hidden`.                                 |
+| `action`      | `ToastAction`                                           | none                               | Exactly one action (§15).                                                    |
+| `closeButton` | `boolean`                                               | Toaster `closeButton` (`true`)     |                                                                              |
+| `progress`    | `boolean`                                               | Toaster `progress` (`false`)       |                                                                              |
+| `className`   | `string`                                                | none                               | Added to the toast root.                                                     |
+| `onDismiss`   | `(toast: ToastSnapshot, reason: DismissReason) => void` | none                               | §16                                                                          |
+| `onAutoClose` | `(toast: ToastSnapshot) => void`                        | none                               | §16                                                                          |
 
 ### 6.4 `CustomToastOptions`
 
 `toast.custom` is **chrome-less**.
 
 The consumer owns:
+
 - surface and background
 - border and padding
 - icon
@@ -289,6 +291,7 @@ The consumer owns:
 - every internal control
 
 The library still owns:
+
 - the store and lifecycle
 - position, stack and queue
 - timers and pausing
@@ -296,26 +299,26 @@ The library still owns:
 - swipe
 - the accessibility infrastructure: live-region announcement, the region landmark, hotkey and focus management
 
-| Option | Default | Notes |
-| --- | --- | --- |
-| `id`, `duration`, `position`, `className`, `onDismiss`, `onAutoClose` | as in `ToastOptions` | |
-| `closeButton` | **`false`** | This is a deliberate exception to the general rule that the close button is on by default. The library close button is never overlaid on custom content unless the caller passes `closeButton: true` explicitly. In that case the library places its standard close button in a predictable, documented spot: the inline-end top corner of the custom wrapper. Adding the button does not change the consumer's ownership of the rest of the custom design: surface, padding and layout. |
+| Option                                                                | Default              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `duration`, `position`, `className`, `onDismiss`, `onAutoClose` | as in `ToastOptions` |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `closeButton`                                                         | **`false`**          | This is a deliberate exception to the general rule that the close button is on by default. The library close button is never overlaid on custom content unless the caller passes `closeButton: true` explicitly. In that case the library places its standard close button in a predictable, documented spot: the inline-end top corner of the custom wrapper. Adding the button does not change the consumer's ownership of the rest of the custom design: surface, padding and layout. |
 
 `toast.custom` takes custom visual content instead of the normal content model. It does **not** accept `description`, `icon`, `action` or `progress`, which belong to that normal model and to its visual chrome. The type checker enforces this. `closeButton` is the only deliberate exception: it is off by default and can be turned on explicitly. The Toaster-level `closeButton` prop does not affect custom toasts.
 
 ### 6.5 `<Toaster />` props
 
-| Prop | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `position` | `ToastPosition` | `"top-right"` | The default position for toasts. It is never changed based on viewport width (§12). |
-| `theme` | `"light" \| "dark" \| "system"` | `"system"` | |
-| `maxVisible` | `number` | `4` | Applies **per position** (§11). |
-| `duration` | `number` | `5000` | The default for finite toasts. |
-| `closeButton` | `boolean` | `true` | The default for normal toasts. Custom toasts ignore it (§6.4). |
-| `progress` | `boolean` | `false` | |
-| `hotkey` | `readonly string[] \| false` | `["altKey", "KeyT"]` | Modifier property names plus a `KeyboardEvent.code` value. `false` disables the hotkey (§18). |
-| `labels` | `{ region?: string; close?: string; warningPrefix?: string; errorPrefix?: string }` | `"Notifications"`, `"Close notification"`, `"Warning:"`, `"Error:"` | Localisable strings (§17). |
-| `className` | `string` | none | Added to the toaster root. |
+| Prop          | Type                                                                                | Default                                                             | Notes                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `position`    | `ToastPosition`                                                                     | `"top-right"`                                                       | The default position for toasts. It is never changed based on viewport width (§12).           |
+| `theme`       | `"light" \| "dark" \| "system"`                                                     | `"system"`                                                          |                                                                                               |
+| `maxVisible`  | `number`                                                                            | `4`                                                                 | Applies **per position** (§11).                                                               |
+| `duration`    | `number`                                                                            | `5000`                                                              | The default for finite toasts.                                                                |
+| `closeButton` | `boolean`                                                                           | `true`                                                              | The default for normal toasts. Custom toasts ignore it (§6.4).                                |
+| `progress`    | `boolean`                                                                           | `false`                                                             |                                                                                               |
+| `hotkey`      | `readonly string[] \| false`                                                        | `["altKey", "KeyT"]`                                                | Modifier property names plus a `KeyboardEvent.code` value. `false` disables the hotkey (§18). |
+| `labels`      | `{ region?: string; close?: string; warningPrefix?: string; errorPrefix?: string }` | `"Notifications"`, `"Close notification"`, `"Warning:"`, `"Error:"` | Localisable strings (§17).                                                                    |
+| `className`   | `string`                                                                            | none                                                                | Added to the toaster root.                                                                    |
 
 There is no `dir` prop in 2.0. Direction is inherited from the DOM (§20), and a prop could be added later without a breaking change.
 
@@ -472,6 +475,7 @@ A Toaster is **active** when it is attached to the store and is the one that ren
   - No warning may be logged, whether duplicate, no-Toaster or multiple-Toaster.
 
   One acceptable approach is to defer the detach briefly, for example by a microtask, and cancel it if the same Toaster re-attaches. The requirement is the behaviour above, not that particular mechanism.
+
 - **Development warnings, deduplicated:**
   - **No-Toaster warning.** If a toast is accepted while no Toaster is active, no warning is logged straight away. It is logged only if no Toaster has become active shortly afterwards, and at most once per period without a Toaster. This lets an application create toasts during start-up, just before its Toaster mounts, without a false warning. The exact delay is an internal implementation detail chosen in P-09. It is not part of the public API. This warning is also the hint for a duplicate install (C-01).
   - **Cap warning.** This is logged once the first time a creation is rejected because of the cap. It is logged again only after the store has dropped below the cap and then reached it again.
@@ -533,15 +537,16 @@ Rules:
 - **Default duration:** 5000 ms for finite toasts of every type. It can be configured on the Toaster or per toast.
 - **Four independent pause reasons, combined** (D-07, D-09), plus one internal reason:
 
-| Reason | Source | Scope |
-| --- | --- | --- |
-| `hover` | `pointerenter` / `pointerleave` on the position's list | **The whole position stack** |
-| `focus-within` | `focusin` / `focusout` on the toast, using `relatedTarget` to ignore moves between controls inside the same toast | **Per toast** |
-| `window-blur` | `window` `blur` / `focus`, and `document.hasFocus()` at attach | Global |
-| `document-hidden` | `visibilitychange`, and `document.hidden` at attach | Global |
-| `swipe` (internal) | an active swipe gesture | Per toast |
+| Reason             | Source                                                                                                            | Scope                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `hover`            | `pointerenter` / `pointerleave` on the position's list                                                            | **The whole position stack** |
+| `focus-within`     | `focusin` / `focusout` on the toast, using `relatedTarget` to ignore moves between controls inside the same toast | **Per toast**                |
+| `window-blur`      | `window` `blur` / `focus`, and `document.hasFocus()` at attach                                                    | Global                       |
+| `document-hidden`  | `visibilitychange`, and `document.hidden` at attach                                                               | Global                       |
+| `swipe` (internal) | an active swipe gesture                                                                                           | Per toast                    |
 
-  A toast is paused when the combined set of its toast-scoped reasons, its position's reasons and the global reasons is not empty. It resumes only when **every** active reason has cleared. A toast never expires while focus is on a focusable element inside it.
+A toast is paused when the combined set of its toast-scoped reasons, its position's reasons and the global reasons is not empty. It resumes only when **every** active reason has cleared. A toast never expires while focus is on a focusable element inside it.
+
 - **Persistent toasts** (`duration: Infinity` and loading toasts) never schedule a timeout.
 - **Expiry** moves the toast to `exiting` with reason `timeout` and fires `onAutoClose` (§16).
 - **Replacement** resets the timer to the new duration (`remaining = duration`, `runningSince = null`). The timer starts again when the toast is `visible` and not paused. Active pause reasons stay in effect (§14).
@@ -619,12 +624,12 @@ There is no separate update API. Calling any public creation function with an ex
   - re-announces the toast if it is rendered (§17)
 - **Behaviour by phase:**
 
-| Current phase | Same position | Different position (relocation) |
-| --- | --- | --- |
-| `queued` | Content and options are replaced. Queue position is kept. | Moves to the new position's queue with a new `seq` (at the back). No callbacks fire. |
-| `entering` / `visible` | Replaced in place, with no remount and no new enter animation. The timer is reset. | Exits from the old stack with internal reason `relocate`, so no callbacks fire. When the exit completes it frees the old slot, gets a new `seq` and joins the new position as if newly created. |
-| `exiting` (dismissed or timing out) | **Revival.** Pending removal is cancelled and the exit reason cleared. The toast goes back to `entering` with the new definition and keeps its slot, so capacity cannot overflow. `onDismiss` does not fire. If `onAutoClose` already fired, it is not undone. | Pending removal is cancelled. The exit continues as a `relocate` exit, then the toast joins the new position as above. `onDismiss` does not fire. |
-| removed / unknown ID | A new toast is created. Below the cap, or with an active Toaster, it is accepted. At the cap with no Toaster, it is rejected (§8.4). | Same as the same-position case. |
+| Current phase                       | Same position                                                                                                                                                                                                                                                  | Different position (relocation)                                                                                                                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queued`                            | Content and options are replaced. Queue position is kept.                                                                                                                                                                                                      | Moves to the new position's queue with a new `seq` (at the back). No callbacks fire.                                                                                                            |
+| `entering` / `visible`              | Replaced in place, with no remount and no new enter animation. The timer is reset.                                                                                                                                                                             | Exits from the old stack with internal reason `relocate`, so no callbacks fire. When the exit completes it frees the old slot, gets a new `seq` and joins the new position as if newly created. |
+| `exiting` (dismissed or timing out) | **Revival.** Pending removal is cancelled and the exit reason cleared. The toast goes back to `entering` with the new definition and keeps its slot, so capacity cannot overflow. `onDismiss` does not fire. If `onAutoClose` already fired, it is not undone. | Pending removal is cancelled. The exit continues as a `relocate` exit, then the toast joins the new position as above. `onDismiss` does not fire.                                               |
+| removed / unknown ID                | A new toast is created. Below the cap, or with an active Toaster, it is accepted. At the cap with no Toaster, it is rejected (§8.4).                                                                                                                           | Same as the same-position case.                                                                                                                                                                 |
 
 - **Determinism:** revival and relocation are covered by unit tests in every phase combination (AC-API-6, AC-LC-3).
 - Calling `toast.dismiss(id)` with an unknown ID does nothing.
@@ -640,14 +645,14 @@ There is no separate update API. Calling any public creation function with an ex
 
 ## 16. Dismissal and callback semantics
 
-| Cause | `DismissReason` | Notes |
-| --- | --- | --- |
-| Timer expiry | `timeout` | The only cause that fires `onAutoClose`. |
-| Close button | `close-button` | Native button. On by default for normal toasts and off by default for custom toasts. |
-| Swipe | `swipe` | §19 |
-| `toast.dismiss(id?)` | `programmatic` | Also used when a throwing `error(err)` message function dismisses the toast (§13). |
-| Action | `action` | Unless `preventDefault()` (§15). |
-| **Click on the toast body** | none | **Never dismisses** (D-17). |
+| Cause                       | `DismissReason` | Notes                                                                                |
+| --------------------------- | --------------- | ------------------------------------------------------------------------------------ |
+| Timer expiry                | `timeout`       | The only cause that fires `onAutoClose`.                                             |
+| Close button                | `close-button`  | Native button. On by default for normal toasts and off by default for custom toasts. |
+| Swipe                       | `swipe`         | §19                                                                                  |
+| `toast.dismiss(id?)`        | `programmatic`  | Also used when a throwing `error(err)` message function dismisses the toast (§13).   |
+| Action                      | `action`        | Unless `preventDefault()` (§15).                                                     |
+| **Click on the toast body** | none            | **Never dismisses** (D-17).                                                          |
 
 - `onAutoClose(snapshot)` fires once, synchronously, when timer expiry moves the toast from `visible` to `exiting`.
 - `onDismiss(snapshot, reason)` fires **exactly once** when an accepted toast leaves the store (`→ removed`), whatever the cause. That includes queued toasts that are dismissed, toasts removed by `dismiss()` with no ID, fallback-completed exits, and exiting toasts that finish when the Toaster detaches.
@@ -671,17 +676,18 @@ Accessibility is an architectural requirement. Everything that tooling can check
 - Individual toasts never have `role="alert"`, and the visible toast list is not itself a live region.
 - **Politeness by type:**
 
-| Type | Politeness |
-| --- | --- |
-| default (neutral) | polite |
-| success | polite |
-| info | polite |
-| warning | polite |
-| loading | polite |
-| custom | polite |
-| error | **assertive** |
+| Type              | Politeness    |
+| ----------------- | ------------- |
+| default (neutral) | polite        |
+| success           | polite        |
+| info              | polite        |
+| warning           | polite        |
+| loading           | polite        |
+| custom            | polite        |
+| error             | **assertive** |
 
-  A promise that settles as an error is announced assertively, because the settlement replaces the toast with an error toast.
+A promise that settles as an error is announced assertively, because the settlement replaces the toast with an error toast.
+
 - **Announcement text** is taken from the rendered toast's text content (content plus description). Warning and error announcements are prefixed with `labels.warningPrefix` and `labels.errorPrefix` ("Warning:" and "Error:" by default). No other type gets a prefix.
 - **There is no per-toast politeness override in 2.0.** Interrupting assistive technology is limited to errors.
 - **Each toast is announced once when it becomes rendered and once on each replacement.** Re-renders that do not change content, and StrictMode double renders, are not announced. Queued toasts are announced when they become rendered, not when they are created.
@@ -696,14 +702,14 @@ Accessibility is an architectural requirement. Everything that tooling can check
 
 ### 17.3 Custom content: where responsibility lies
 
-| The library provides, for custom toasts | The consumer is responsible for |
-| --- | --- |
-| Persistent live-region announcement of the rendered text (polite) | The meaning and quality of that text |
-| Region landmark, list structure, hotkey and focus restoration | Accessible names, roles and states of every control inside the custom content |
-| Pausing on hover, focus-within and window/document state | Keyboard operability of the custom content |
-| Lifecycle, motion (including reduced motion) and swipe | Contrast, focus-visible styles and target sizes inside the custom content |
-| No library close button by default (`closeButton: false`) | A keyboard-accessible way to dismiss a **persistent** custom toast (for example a button that calls `toast.dismiss(id)`), or setting `closeButton: true` |
-| | Marking decorative content `aria-hidden` |
+| The library provides, for custom toasts                           | The consumer is responsible for                                                                                                                          |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Persistent live-region announcement of the rendered text (polite) | The meaning and quality of that text                                                                                                                     |
+| Region landmark, list structure, hotkey and focus restoration     | Accessible names, roles and states of every control inside the custom content                                                                            |
+| Pausing on hover, focus-within and window/document state          | Keyboard operability of the custom content                                                                                                               |
+| Lifecycle, motion (including reduced motion) and swipe            | Contrast, focus-visible styles and target sizes inside the custom content                                                                                |
+| No library close button by default (`closeButton: false`)         | A keyboard-accessible way to dismiss a **persistent** custom toast (for example a button that calls `toast.dismiss(id)`), or setting `closeButton: true` |
+|                                                                   | Marking decorative content `aria-hidden`                                                                                                                 |
 
 The docs (§31) state this boundary explicitly. The demo's custom-toast example must itself meet it.
 
@@ -876,16 +882,16 @@ The docs (§31) state this boundary explicitly. The demo's custom-toast example 
 
 ## 26. Testing strategy
 
-| Layer | Tooling | Covers |
-| --- | --- | --- |
-| Store unit | Vitest (node environment), fake timers | IDs; replacement, revival and relocation; lifecycle; per-position queue; slot freed on removal; remaining-time timers; combined pause reasons; callbacks and their order; no-Toaster cap, rejection and warnings; detach and re-attach; one-Toaster arbitration; server rejection; error isolation |
-| Facade unit | Vitest | `toast.*` variants; `toast.custom` defaults; `toast.promise` (resolve, reject, throwing message functions, function input, never reviving after dismiss, ownership token); `dismiss` with and without an ID |
-| Type tests | Vitest `expectTypeOf` | Export list; immutable `id`; creation functions return `ToastId \| undefined`; promise inference; required `success`/`error`; `CustomToastOptions` excludes chrome options; `ToastId` is `string` |
-| Component | Vitest + **jsdom** + Testing Library, run under StrictMode | Positions and order; close button default on for normal and off for custom; action dismissal and `preventDefault`; no dismissal on body click; lifecycle with fallbacks; hover pausing the stack; focus-within pausing the toast; blur and visibility; hotkey, Escape and focus restoration; live regions and announcements; theme attribute; `className` |
-| Accessibility | **vitest-axe** | The §17.6 matrix |
-| Browser | **Playwright: Chromium, WebKit, Firefox** | Real animation lifecycle; reflow; reduced-motion emulation; touch swipe (thresholds, cancel, scrolling, no mouse drag); RTL; progress direction and pause sync; real blur and visibility; forced colours (Chromium) |
-| Package | §27 | Packed ESM tarball in Vite and Next.js fixtures |
-| Compatibility | CI matrix | React 18 and 19 for every layer except the browser suite, which runs on the latest React |
+| Layer         | Tooling                                                    | Covers                                                                                                                                                                                                                                                                                                                                                    |
+| ------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Store unit    | Vitest (node environment), fake timers                     | IDs; replacement, revival and relocation; lifecycle; per-position queue; slot freed on removal; remaining-time timers; combined pause reasons; callbacks and their order; no-Toaster cap, rejection and warnings; detach and re-attach; one-Toaster arbitration; server rejection; error isolation                                                        |
+| Facade unit   | Vitest                                                     | `toast.*` variants; `toast.custom` defaults; `toast.promise` (resolve, reject, throwing message functions, function input, never reviving after dismiss, ownership token); `dismiss` with and without an ID                                                                                                                                               |
+| Type tests    | Vitest `expectTypeOf`                                      | Export list; immutable `id`; creation functions return `ToastId \| undefined`; promise inference; required `success`/`error`; `CustomToastOptions` excludes chrome options; `ToastId` is `string`                                                                                                                                                         |
+| Component     | Vitest + **jsdom** + Testing Library, run under StrictMode | Positions and order; close button default on for normal and off for custom; action dismissal and `preventDefault`; no dismissal on body click; lifecycle with fallbacks; hover pausing the stack; focus-within pausing the toast; blur and visibility; hotkey, Escape and focus restoration; live regions and announcements; theme attribute; `className` |
+| Accessibility | **vitest-axe**                                             | The §17.6 matrix                                                                                                                                                                                                                                                                                                                                          |
+| Browser       | **Playwright: Chromium, WebKit, Firefox**                  | Real animation lifecycle; reflow; reduced-motion emulation; touch swipe (thresholds, cancel, scrolling, no mouse drag); RTL; progress direction and pause sync; real blur and visibility; forced colours (Chromium)                                                                                                                                       |
+| Package       | §27                                                        | Packed ESM tarball in Vite and Next.js fixtures                                                                                                                                                                                                                                                                                                           |
+| Compatibility | CI matrix                                                  | React 18 and 19 for every layer except the browser suite, which runs on the latest React                                                                                                                                                                                                                                                                  |
 
 Rules:
 
@@ -924,14 +930,14 @@ The fixtures are excluded from the library's lint and typecheck. They install wi
 
 Every job is **blocking**. No quality gate uses `continue-on-error` (D-31).
 
-| Job | Steps |
-| --- | --- |
-| `quality` | `npm ci`, `format:check` (pure check, no `git add`; D-32), `lint`, `typecheck` (library, tests and tooling configs checked separately) |
-| `test` (matrix: React 18, 19) | Unit, type, component and axe tests |
-| `build-package` | Build, publint, attw (ESM-only), pack, tarball contents, `"use client"` check, Vite fixture (React 18/19, TS latest and 5.0), Node ESM SSR smoke test, Next.js fixture |
-| `size` | Bundle-size check with size-limit against the budget (§33) |
-| `browser` | Playwright on Chromium, WebKit and Firefox |
-| `demo` | Demo typecheck and build only. **It never deploys before 2.0.0** (§29). |
+| Job                           | Steps                                                                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quality`                     | `npm ci`, `format:check` (pure check, no `git add`; D-32), `lint`, `typecheck` (library, tests and tooling configs checked separately)                                 |
+| `test` (matrix: React 18, 19) | Unit, type, component and axe tests                                                                                                                                    |
+| `build-package`               | Build, publint, attw (ESM-only), pack, tarball contents, `"use client"` check, Vite fixture (React 18/19, TS latest and 5.0), Node ESM SSR smoke test, Next.js fixture |
+| `size`                        | Bundle-size check with size-limit against the budget (§33)                                                                                                             |
+| `browser`                     | Playwright on Chromium, WebKit and Firefox                                                                                                                             |
+| `demo`                        | Demo typecheck and build only. **It never deploys before 2.0.0** (§29).                                                                                                |
 
 - **Triggers:** `push` and `pull_request` on `main` and `v2`, plus `workflow_dispatch` (C-07).
 - **Node:** a single current Active LTS for tooling (Node 24 at the time of writing). It is a CI setting only, not an `engines` field.
@@ -961,30 +967,30 @@ Every job is **blocking**. No quality gate uses `continue-on-error` (D-31).
 
 The guide is `docs/MIGRATION.md`, written in P-27. It must say plainly that 2.0.0 directly follows 0.1.x and that **there was no 1.x**. It always uses the phrase "0.x → 2.0", never "v1". Required mappings:
 
-| 0.x | 2.0 |
-| --- | --- |
-| `<ToastProvider>…</ToastProvider>` | Render `<Toaster />` once, near the root, and remove the provider. Only one Toaster is supported. |
-| `useToast().addToast({ type: "success", title, message })` | `toast.success(title, { description: message })`. Without a `title`, use `toast.success(message)`. |
-| `addToast({ … })` with no `type` (0.x defaulted to `info`) | `toast.info(…)`. Note that a plain `toast()` in 2.0 is neutral, not info. |
-| `updateToast(id, { … })` | Call a creation function with `{ id }`. This **replaces** the toast and does not merge (§14). |
-| `addToast()` always returned an ID | Creation returns `ToastId \| undefined`. It is `undefined` only when creation is rejected (§6.2). |
-| `removeToast(id)` / `removeAll()` | `toast.dismiss(id)` / `toast.dismiss()` |
-| `animation` | Removed. There is a single motion system. |
-| `closeOnClick` | Removed. Clicking the body never dismisses. Use the close button, which is on by default. |
-| `onClose` | `onDismiss(toast, reason)` for any cause, or `onAutoClose` for timeouts only. In 0.x a user's `onClose` never fired (D-06). |
-| `progressBar` (default on) | `progress`, which is **off** by default |
-| `rtl` per toast | Inherited from the DOM direction |
-| `role` | Removed. Politeness comes from the type (§17). |
-| `maxToasts` (default 5, global, drops the oldest) | `maxVisible` (default 4, **per position**, queues instead of dropping) |
-| `defaultPosition` / `defaultDuration` | `<Toaster position duration />` (defaults are `top-right` and 5000) |
-| `containerClassName` / `containerStyle` | `<Toaster className />` plus CSS custom properties |
-| `pauseOnHover` / `pauseOnPageIdle` / `pauseOnFocusLoss` | Always on, and now joined by focus-within. There are no toggles. |
-| `import "react-elegant-toasts/dist/styles.css"` | `import "react-elegant-toasts/styles.css"` |
-| `.toast`, `.toast.success`, `.toast-title`, … | `.ret-toast`, `.ret-toast--success`, `.ret-toast__title`, … plus custom properties |
-| `import useToast from "react-elegant-toasts"` | Named imports only |
-| CommonJS `require("react-elegant-toasts")` | Not supported. The package is ESM-only (§24.3), and the guide includes Jest guidance. |
-| React ≥ 16.8 | React 18 or 19 |
-| Content was a `string` | Content is a `ReactNode` |
+| 0.x                                                        | 2.0                                                                                                                         |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `<ToastProvider>…</ToastProvider>`                         | Render `<Toaster />` once, near the root, and remove the provider. Only one Toaster is supported.                           |
+| `useToast().addToast({ type: "success", title, message })` | `toast.success(title, { description: message })`. Without a `title`, use `toast.success(message)`.                          |
+| `addToast({ … })` with no `type` (0.x defaulted to `info`) | `toast.info(…)`. Note that a plain `toast()` in 2.0 is neutral, not info.                                                   |
+| `updateToast(id, { … })`                                   | Call a creation function with `{ id }`. This **replaces** the toast and does not merge (§14).                               |
+| `addToast()` always returned an ID                         | Creation returns `ToastId \| undefined`. It is `undefined` only when creation is rejected (§6.2).                           |
+| `removeToast(id)` / `removeAll()`                          | `toast.dismiss(id)` / `toast.dismiss()`                                                                                     |
+| `animation`                                                | Removed. There is a single motion system.                                                                                   |
+| `closeOnClick`                                             | Removed. Clicking the body never dismisses. Use the close button, which is on by default.                                   |
+| `onClose`                                                  | `onDismiss(toast, reason)` for any cause, or `onAutoClose` for timeouts only. In 0.x a user's `onClose` never fired (D-06). |
+| `progressBar` (default on)                                 | `progress`, which is **off** by default                                                                                     |
+| `rtl` per toast                                            | Inherited from the DOM direction                                                                                            |
+| `role`                                                     | Removed. Politeness comes from the type (§17).                                                                              |
+| `maxToasts` (default 5, global, drops the oldest)          | `maxVisible` (default 4, **per position**, queues instead of dropping)                                                      |
+| `defaultPosition` / `defaultDuration`                      | `<Toaster position duration />` (defaults are `top-right` and 5000)                                                         |
+| `containerClassName` / `containerStyle`                    | `<Toaster className />` plus CSS custom properties                                                                          |
+| `pauseOnHover` / `pauseOnPageIdle` / `pauseOnFocusLoss`    | Always on, and now joined by focus-within. There are no toggles.                                                            |
+| `import "react-elegant-toasts/dist/styles.css"`            | `import "react-elegant-toasts/styles.css"`                                                                                  |
+| `.toast`, `.toast.success`, `.toast-title`, …              | `.ret-toast`, `.ret-toast--success`, `.ret-toast__title`, … plus custom properties                                          |
+| `import useToast from "react-elegant-toasts"`              | Named imports only                                                                                                          |
+| CommonJS `require("react-elegant-toasts")`                 | Not supported. The package is ESM-only (§24.3), and the guide includes Jest guidance.                                       |
+| React ≥ 16.8                                               | React 18 or 19                                                                                                              |
+| Content was a `string`                                     | Content is a `ReactNode`                                                                                                    |
 
 The guide also includes before-and-after examples for Next.js.
 
@@ -1063,6 +1069,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-00 Planning.** This document.
 
 **P-01 Repository hygiene**
+
 - Scope:
   - add `LICENSE` (MIT)
   - delete `.github/workflows/deploy-demo`
@@ -1073,6 +1080,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-25 (in part), D-30, D-32 (in part), D-34, D-35 (LICENSE).
 
 **P-02 TypeScript modernisation**
+
 - Scope:
   - a strict, split `tsconfig` set: base, library (`src` only), tests, tooling and demo
   - `jsx: "react-jsx"`, `moduleResolution: "bundler"`, a modern `target` and `lib`
@@ -1082,6 +1090,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-29 (in part).
 
 **P-03 Build and package shape (ESM-only)**
+
 - Scope:
   - tsup 8 with a single config file, **ESM format only**, `.d.ts` output, Rollup tree-shake step disabled, and `"use client"` added through `banner`
   - a CSS build step to `dist/styles.css`
@@ -1096,6 +1105,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-25, D-26, D-27, D-28, D-29.
 
 **P-04 Test runner migration**
+
 - Scope:
   - Vitest, Testing Library, **jsdom**, **vitest-axe**, a fake-timer setup
   - remove Jest, ts-jest and identity-obj-proxy
@@ -1111,12 +1121,14 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Not in scope: new behaviour tests.
 
 **P-05 Lint and format modernisation**
+
 - Scope:
   - ESLint flat config (TypeScript, React, Hooks, jsx-a11y)
   - a Prettier check across `src`, tests, fixtures, config and docs
   - fix existing violations
 
 **P-06 Blocking CI baseline**
+
 - Scope:
   - blocking `quality`, `test` and `build` jobs, on the Active LTS Node, with `npm ci`
   - triggers on `main` and `v2`, least-privilege permissions, debug steps removed
@@ -1125,6 +1137,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-31, D-32, C-06, C-07.
 
 **P-07 Package validation harness**
+
 - Scope:
   - publint and attw `--profile esm-only --exclude-entrypoints ./styles.css` (see §27)
   - `npm pack` and a tarball-content check (no CJS files)
@@ -1137,6 +1150,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 ### Track B: Core (no rendering)
 
 **P-08 Clean break and v2 skeleton**
+
 - Scope:
   - delete the 0.x implementation, its tests, `utils.ts` and the old exports
   - add the v2 `src/` layout
@@ -1148,6 +1162,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-05, C-09.
 
 **P-09 Store core**
+
 - Scope:
   - ID generation and custom IDs
   - replacement, revival and relocation bookkeeping (§14)
@@ -1162,10 +1177,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-01 (store side), D-02, D-03, D-06.
 
 **P-10 Queue and maxVisible**
+
 - Scope: §11 in full: per-position `maxVisible` of 4, FIFO by `seq`, slot freed only on removal, positions independent, revival without needing a slot, relocation re-queuing.
 - Defects: D-12.
 
 **P-11 Timer and pause model**
+
 - Scope: §10 in full:
   - remaining time
   - the four combined reasons plus `swipe`, with stack-scoped hover and toast-scoped focus-within
@@ -1176,17 +1193,20 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-07, D-08, D-09 (store side).
 
 **P-12 `toast` facade**
+
 - Scope:
   - `toast()`, `success`, `error`, `warning`, `info`, `loading`, `custom` (chrome-less, `closeButton` false by default, restricted options) and `dismiss`
   - type tests
 - Defects: D-01, D-04.
 
 **P-13 `toast.promise`**
+
 - Scope: §13 in full: required messages, the ownership token, never reviving after dismissal, throwing message functions, inference, rejection handling.
 
 ### Track C: Rendering and behaviour
 
 **P-14 Toaster rendering**
+
 - Scope:
   - `useSyncExternalStore`, with attachment through the store's arbitration
   - position lists in DOM and visual order
@@ -1202,6 +1222,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-15, D-16, D-17, D-19.
 
 **P-15 Environmental pause wiring**
+
 - Scope:
   - hover on the position stack (pointer events)
   - focus-within per toast
@@ -1210,6 +1231,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-07, D-09.
 
 **P-16 Accessibility layer**
+
 - Scope:
   - persistent polite and assertive regions, the announcer, the politeness table, warning and error prefixes, re-announcement on replacement
   - `labels`
@@ -1222,6 +1244,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 ### Track D: Visual (starts behind the P-17 gate)
 
 **P-17 Styling foundation**
+
 - **Entry gate:** OQ-24 (visual direction signed off from a mockup or prototype) and OQ-25 (public CSS contract) must both be resolved before implementation starts.
 - Scope:
   - `ret-` CSS, the tokens, and the light, dark and system themes
@@ -1233,26 +1256,32 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-11 (layout), D-20, D-23, D-24.
 
 **P-18 Enter and exit motion**
+
 - Scope: `ret-enter` and `ret-exit`, `animationend` plus the fallbacks, reduced motion, the spinner.
 - Defects: D-13, D-14, D-21.
 
 **P-19 Stack repositioning**
+
 - **Prototype gate:** build both the measured-offset approach and the FLIP/WAAPI approach, choose one within the §22 constraints, and record the decision in the PR.
 - Scope: the chosen technique, including its reduced-motion behaviour.
 
 **P-20 Progress indicator**
+
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
 
 **P-21 Swipe to dismiss**
+
 - Scope: §19 in full, with thresholds set by prototype. Touch and pen only, centre positions in either direction, custom toasts included.
 
 ### Track E: Verification
 
 **P-22 Browser test suite**
+
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
 
 **P-23 Compatibility and SSR verification**
+
 - Scope:
   - the full React 18/19 matrix. This requires upgrading `@testing-library/react` from 14 (React 18 only) to 16, and adding `@testing-library/dom` (kept at 14 in P-04).
   - declarations type-checked under both `@types` versions and under TypeScript 5.0 and the latest TypeScript
@@ -1260,6 +1289,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - the **Next.js App Router fixture** with its Playwright check
 
 **P-24 Bundle-size baseline and budget**
+
 - Scope: size-limit setup, an optional CSS minifier, the baseline measurement, the budget file and the blocking `size` job.
 
 ### Track F: Documentation and release
@@ -1271,6 +1301,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
 **P-28 Release tooling**
+
 - Scope:
   - Changesets and `CHANGELOG.md`
   - `release.yml` with full validation before publishing
@@ -1280,6 +1311,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-33.
 
 **P-29 Release candidate and 2.0.0**
+
 - Scope:
   - `next` pre-releases
   - the manual screen-reader and cross-browser audit
@@ -1293,6 +1325,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 2.0.0 ships only when every criterion passes. † means the criterion is verified by automated tests. Defect references show which regression each criterion prevents.
 
 **API**
+
 - AC-API-1 † The package exports exactly `Toaster` and `toast` as values, has no default export, and its type exports match §6.7. (D-05)
 - AC-API-2 † Creation calls are typed `ToastId | undefined`. Every accepted creation, including a successful replacement, returns the toast's real `string` ID, and the library never returns an empty or placeholder ID. Custom IDs are honoured. Generated IDs do not collide over 100,000 creations. (D-03)
 - AC-API-3 † `toast()` called outside React, before a Toaster mounts, renders once a Toaster becomes active. (D-01)
@@ -1305,6 +1338,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - AC-API-10 † `toast.custom` renders chrome-less. Its `closeButton` defaults to `false` whatever the Toaster `closeButton` is. When `closeButton: true` is set explicitly, the close button renders in the documented inline-end top corner. It does not accept `description`, `icon`, `action` or `progress`.
 
 **No-Toaster policy and Toaster arbitration**
+
 - AC-NT-1 † With no active Toaster, up to 100 accepted toasts are kept. The 101st new creation is rejected: nothing is stored, no `onDismiss` fires, and the call returns `undefined`, even with an explicit `id`. A cap warning is logged in development.
 - AC-NT-2 † At the cap, replacing an already accepted toast still succeeds and returns that toast's real ID.
 - AC-NT-3 † No timer runs without an active Toaster. When the Toaster unmounts, rendered toasts go back to `queued` with their remaining time kept, and exiting toasts finish with `onDismiss`. When it remounts, toasts continue with the time they had left.
@@ -1312,6 +1346,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - AC-NT-5 † A second `<Toaster />` renders nothing and logs one development warning. When the active Toaster unmounts, a waiting one takes over. StrictMode re-mounting does not count as a second Toaster.
 
 **Lifecycle, timers and queue**
+
 - AC-LC-1 † Dismissing a rendered toast moves it to `exiting`, and it is removed only after the exit or the fallback completes. (D-13)
 - AC-LC-2 † The lifecycle completes without animation events (in jsdom, with reduced motion, and with `display: none`).
 - AC-LC-3 † Reusing the ID of an exiting toast cancels removal and makes it re-enter with the new definition, without firing `onDismiss` and without going over `maxVisible`.
@@ -1325,12 +1360,14 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - AC-Q-3 † No accepted toast leaves the store without `onDismiss`.
 
 **Callbacks**
+
 - AC-CB-1 † `onAutoClose` fires once, and only for timeouts. (D-06)
 - AC-CB-2 † `onDismiss(snapshot, reason)` fires exactly once per accepted toast for every cause, with the correct reason. It does not fire on replacement, revival, relocation or a rejected creation. (D-06)
 - AC-CB-3 † For a timeout, `onAutoClose` fires before `onDismiss`.
 - AC-CB-4 † A callback that throws does not corrupt the store or stop other callbacks.
 
 **Positioning, motion, progress, RTL and swipe**
+
 - AC-POS-1 † All six positions work, and the default is `top-right`. The newest toast is nearest the anchored edge, and DOM order matches visual order. Viewport width never changes the position. (D-15)
 - AC-MO-1 † Real enter and exit animations run in all three browsers, and toasts at left positions settle without leftover offset. (D-13, D-14)
 - AC-MO-2 † Existing toasts move smoothly when the stack changes.
@@ -1340,6 +1377,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - AC-SW-1 † A touch swipe past the threshold dismisses with reason `swipe`, and one below it springs back. Centre positions accept either horizontal direction. A mouse drag never dismisses. Vertical scrolling still works. A swipe never starts on interactive elements.
 
 **Accessibility**
+
 - AC-A11Y-1 † Live regions exist before the first toast. Toast items never have `role="alert"`. (D-18)
 - AC-A11Y-2 † Politeness matches §17.1: error is assertive, and every other type, including loading and custom, is polite. Warnings and errors carry their prefixes.
 - AC-A11Y-3 † Icons have `aria-hidden="true"`. (D-19)
@@ -1352,11 +1390,13 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - AC-KB-2 † Focus inside a toast pauses it. When focus leaves, it resumes with the time it had left.
 
 **Styling**
+
 - AC-CSS-1 † Every selector and keyframe in `styles.css` uses the `ret-` prefix, which a lint script checks. (D-23)
 - AC-CSS-2 † `theme` accepts `light`, `dark` and `system`, defaults to `system`, and server and client markup match. (D-24)
 - AC-CSS-3 † Containers have no inline `z-index` or padding. Both come from custom properties. (D-24)
 
 **Package**
+
 - AC-PKG-1 † There are no runtime dependencies, and the peers are React and ReactDOM `^18 || ^19`. (D-25)
 - AC-PKG-2 † `import "react-elegant-toasts/styles.css"` works, and the CSS reaches the output in both the Vite and Next.js fixtures. (D-26, D-27)
 - AC-PKG-3 † publint and attw (ESM-only profile) pass. The tarball is ESM-only: `"type": "module"`, no `require` condition and no CJS files.
@@ -1368,6 +1408,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - AC-PKG-9 † The shipped declarations type-check with TypeScript 5.0 and the latest TypeScript, and with both `@types/react` 18 and 19.
 
 **Process**
+
 - AC-CI-1 † Every gate in §28 blocks, and the format check is able to fail. (D-31, D-32)
 - AC-REL-1 Releases validate fully before publishing, and publish through Trusted Publishing with provenance. Pre-releases use `next`. The demo deploys only at 2.0.0. (D-33)
 - AC-REL-2 `LICENSE`, `CHANGELOG.md` and `docs/MIGRATION.md` (0.x → 2.0) all exist. The README has no placeholders or unverified claims. (D-22, D-35)
@@ -1400,94 +1441,94 @@ These are deliberately left out of 2.0:
 
 Only two questions remain. Both are deferred to the P-17 entry gate, and neither blocks P-01 to P-16.
 
-| ID | Question | Current recommendation (not a decision) | Gate |
-| --- | --- | --- | --- |
-| OQ-24 | **Visual design direction.** The final look of the normal shell and its variants, signed off from an actual mockup or prototype. | A neutral card surface with a semantic colour accent | **P-17 entry gate** |
-| OQ-25 | **The public CSS contract.** Which styling surface is semver-stable for 2.x. | Documented custom properties are public and stable for 2.x. Documented `ret-*` selectors and data attributes meant for customisation are public and stable for 2.x. No `@layer`, no `classNames` slot map and no per-toast `style` in 2.0. | **P-17 entry gate** (design-system decision) |
+| ID    | Question                                                                                                                         | Current recommendation (not a decision)                                                                                                                                                                                                    | Gate                                         |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| OQ-24 | **Visual design direction.** The final look of the normal shell and its variants, signed off from an actual mockup or prototype. | A neutral card surface with a semantic colour accent                                                                                                                                                                                       | **P-17 entry gate**                          |
+| OQ-25 | **The public CSS contract.** Which styling surface is semver-stable for 2.x.                                                     | Documented custom properties are public and stable for 2.x. Documented `ret-*` selectors and data attributes meant for customisation are public and stable for 2.x. No `@layer`, no `classNames` slot map and no per-toast `style` in 2.0. | **P-17 entry gate** (design-system decision) |
 
 ---
 
 ## Appendix A: Defect traceability
 
-| Defect | 2.0 response (section) | Phase | Acceptance |
-| --- | --- | --- | --- |
-| D-01 provider-only creation | §5, §8 | P-09, P-12 | AC-API-3 |
-| D-02 ID and internal state can be changed | §7, §14 | P-09 | AC-API-5 |
-| D-03 weak IDs, no custom IDs | §7 | P-09 | AC-API-2 |
-| D-04 string-only content | §6 | P-12 | AC-API-4 |
-| D-05 internals exported, default export | §6.7, §6.8 | P-08 | AC-API-1 |
-| D-06 `onClose` never fires | §16 | P-09, P-11 | AC-CB-1, AC-CB-2 |
-| D-07 pause reasons overwrite each other | §10 | P-11, P-15 | AC-TM-2 |
-| D-08 resume restarts the duration | §10 | P-11 | AC-TM-1 |
-| D-09 hover not combined with other pauses | §10 | P-11, P-15 | AC-TM-2 |
-| D-10 rAF-driven progress that resets | §22 | P-20 | AC-PR-1 |
-| D-11 progress wrong in RTL | §20 | P-17, P-20 | AC-RTL-1 |
-| D-12 silent drop | §11 | P-10 | AC-Q-1, AC-Q-3 |
-| D-13 no exit lifecycle | §9, §22 | P-09, P-18 | AC-LC-1, AC-MO-1 |
-| D-14 left slide left offset | §22 | P-18 | AC-MO-1 |
-| D-15 stack order | §12 | P-14 | AC-POS-1 |
-| D-16 everything re-renders | §32 | P-14 | Render-count tests (§32) |
-| D-17 body click dismisses, no close button | §16, §17 | P-14 | AC-A11Y-4 |
-| D-18 `role="alert"` everywhere | §17 | P-16 | AC-A11Y-1, AC-A11Y-2 |
-| D-19 icons announced | §17 | P-14 | AC-A11Y-3 |
-| D-20 contrast failures | §17, §21 | P-17 | AC-A11Y-6 |
-| D-21 no reduced motion | §22 | P-18 | AC-MO-3 |
-| D-22 README overstates accessibility | §31 | P-16, P-26 | AC-REL-2 |
-| D-23 unprefixed CSS | §21 | P-17 | AC-CSS-1 |
-| D-24 no theme control, inline styles | §21 | P-17 | AC-CSS-2, AC-CSS-3 |
-| D-25 React as a runtime dependency | §24, §25 | P-01, P-03 | AC-PKG-1 |
-| D-26 no exports map | §24 | P-03 | AC-PKG-2, AC-PKG-6 |
-| D-27 CSS tree-shaken | §24 | P-03 | AC-PKG-2 |
-| D-28 no `"use client"` | §23, §24 | P-03 | AC-PKG-4 |
-| D-29 tooling configuration | §24, §26 | P-02, P-03 | AC-PKG-3, AC-PKG-9 |
-| D-30 `prepare` script | §24 | P-01 | AC-REL-3 |
-| D-31 non-blocking CI | §28 | P-06 | AC-CI-1 |
-| D-32 format gate can never fail | §28 | P-01, P-06 | AC-CI-1 |
-| D-33 unvalidated, token-based release | §29 | P-28 | AC-REL-1 |
-| D-34 stale workflow | §28 | P-01 | AC-REL-3 |
-| D-35 missing LICENSE, README placeholders | §29, §31 | P-01, P-26 | AC-REL-2 |
-| D-36 tests encode removed behaviour, test `src/` only | §26, §27 | P-04, P-08 | AC-PKG-5, AC-PKG-8 |
+| Defect                                                | 2.0 response (section) | Phase      | Acceptance               |
+| ----------------------------------------------------- | ---------------------- | ---------- | ------------------------ |
+| D-01 provider-only creation                           | §5, §8                 | P-09, P-12 | AC-API-3                 |
+| D-02 ID and internal state can be changed             | §7, §14                | P-09       | AC-API-5                 |
+| D-03 weak IDs, no custom IDs                          | §7                     | P-09       | AC-API-2                 |
+| D-04 string-only content                              | §6                     | P-12       | AC-API-4                 |
+| D-05 internals exported, default export               | §6.7, §6.8             | P-08       | AC-API-1                 |
+| D-06 `onClose` never fires                            | §16                    | P-09, P-11 | AC-CB-1, AC-CB-2         |
+| D-07 pause reasons overwrite each other               | §10                    | P-11, P-15 | AC-TM-2                  |
+| D-08 resume restarts the duration                     | §10                    | P-11       | AC-TM-1                  |
+| D-09 hover not combined with other pauses             | §10                    | P-11, P-15 | AC-TM-2                  |
+| D-10 rAF-driven progress that resets                  | §22                    | P-20       | AC-PR-1                  |
+| D-11 progress wrong in RTL                            | §20                    | P-17, P-20 | AC-RTL-1                 |
+| D-12 silent drop                                      | §11                    | P-10       | AC-Q-1, AC-Q-3           |
+| D-13 no exit lifecycle                                | §9, §22                | P-09, P-18 | AC-LC-1, AC-MO-1         |
+| D-14 left slide left offset                           | §22                    | P-18       | AC-MO-1                  |
+| D-15 stack order                                      | §12                    | P-14       | AC-POS-1                 |
+| D-16 everything re-renders                            | §32                    | P-14       | Render-count tests (§32) |
+| D-17 body click dismisses, no close button            | §16, §17               | P-14       | AC-A11Y-4                |
+| D-18 `role="alert"` everywhere                        | §17                    | P-16       | AC-A11Y-1, AC-A11Y-2     |
+| D-19 icons announced                                  | §17                    | P-14       | AC-A11Y-3                |
+| D-20 contrast failures                                | §17, §21               | P-17       | AC-A11Y-6                |
+| D-21 no reduced motion                                | §22                    | P-18       | AC-MO-3                  |
+| D-22 README overstates accessibility                  | §31                    | P-16, P-26 | AC-REL-2                 |
+| D-23 unprefixed CSS                                   | §21                    | P-17       | AC-CSS-1                 |
+| D-24 no theme control, inline styles                  | §21                    | P-17       | AC-CSS-2, AC-CSS-3       |
+| D-25 React as a runtime dependency                    | §24, §25               | P-01, P-03 | AC-PKG-1                 |
+| D-26 no exports map                                   | §24                    | P-03       | AC-PKG-2, AC-PKG-6       |
+| D-27 CSS tree-shaken                                  | §24                    | P-03       | AC-PKG-2                 |
+| D-28 no `"use client"`                                | §23, §24               | P-03       | AC-PKG-4                 |
+| D-29 tooling configuration                            | §24, §26               | P-02, P-03 | AC-PKG-3, AC-PKG-9       |
+| D-30 `prepare` script                                 | §24                    | P-01       | AC-REL-3                 |
+| D-31 non-blocking CI                                  | §28                    | P-06       | AC-CI-1                  |
+| D-32 format gate can never fail                       | §28                    | P-01, P-06 | AC-CI-1                  |
+| D-33 unvalidated, token-based release                 | §29                    | P-28       | AC-REL-1                 |
+| D-34 stale workflow                                   | §28                    | P-01       | AC-REL-3                 |
+| D-35 missing LICENSE, README placeholders             | §29, §31               | P-01, P-26 | AC-REL-2                 |
+| D-36 tests encode removed behaviour, test `src/` only | §26, §27               | P-04, P-08 | AC-PKG-5, AC-PKG-8       |
 
 ## Appendix B: Open-question decision log (revision 1 → revision 2)
 
 IDs are kept for history. A resolved ID is never reused.
 
-| ID | Outcome | Where it now lives |
-| --- | --- | --- |
-| OQ-01 | Resolved: ESM-only, a plain module singleton, no `globalThis` store | §8.2, §24, C-01 |
-| OQ-02 | Resolved: one active Toaster, the first to attach wins, extra Toasters warn and render nothing, handover on unmount | §8.5 |
-| OQ-03 | Resolved: pending retention, a hard cap of 100 with rejection and no `evicted` reason, deduplicated warnings, timers suspended, unmount returns toasts to queued | §8.4 |
-| OQ-04 | Resolved: `maxVisible` is 4 per position | §11 |
-| OQ-05 | Accepted: a slot frees only at removal | §11 |
-| OQ-06 | Accepted: 5000 ms default | §10 |
-| OQ-07 | Resolved and accepted: replacement (not merge), revival from exiting, relocation on a position change | §14 |
-| OQ-08 | Accepted: the timer resets on replacement and pause reasons are kept | §10, §14 |
-| OQ-09 | Accepted: hover pauses the stack, focus-within pauses the toast | §10 |
-| OQ-10 | Resolved: focus-within is a pause reason | §10 |
-| OQ-11 | Accepted: no pause toggles in 2.0 | §10, §37 |
-| OQ-12 | Accepted: persistent hidden polite and assertive regions, text taken from the rendered DOM, warning and error prefixes, no per-toast override | §17.1 |
-| OQ-13 | Resolved and accepted: only error is assertive, and loading and custom are polite | §17.1 |
-| OQ-14 | Accepted: Alt+T (configurable and disableable), Escape returns focus | §18 |
-| OQ-15 | Accepted: `labels` on the Toaster | §6.5 |
-| OQ-16 | Accepted: an action dismisses unless `preventDefault()` is called, and its label is a `ReactNode` | §15 |
-| OQ-17 | Resolved: `toast.custom` accepts only a `ReactNode`, is chrome-less, and has `closeButton` off by default | §6.4, §17.3 |
-| OQ-18 | Accepted: messages are required, a promise never revives a dismissed toast (ownership token), and one set of options applies to every state | §13 |
-| OQ-19 | Accepted: `onDismiss` receives the dismiss reason | §16 |
-| OQ-20 | Accepted: centre positions swipe in either horizontal direction, thresholds come from a prototype, no mouse drag | §19, P-21 |
-| OQ-21 | Accepted: positions are physical, and there is no `dir` prop | §12, §20 |
-| OQ-22 | Accepted: progress is off by default and still depletes under reduced motion | §22 |
-| OQ-23 | Converted into a phase task: a prototype gate in P-19 | §22, P-19 |
-| OQ-24 | **Still open:** the P-17 entry gate | §38 |
-| OQ-25 | **Still open:** the P-17 entry gate | §38 |
-| OQ-26 | Accepted: rendered inline with `position: fixed` | §12, §23 |
-| OQ-27 | Accepted: on the server, creation is rejected, with one warning in development | §8.3 |
-| OQ-28 | Accepted: the ESM package shape, no `engines` field, TypeScript 5.0 or later | §24 |
-| OQ-29 | Converted into a phase task: size-limit in P-24 | §33, P-24 |
-| OQ-30 | Converted into a phase task: tsup 8 with directive preservation in P-03 | §24, P-03, P-07 |
-| OQ-31 | Accepted: the `next` dist-tag, the demo deployed at 2.0.0, 0.x deprecated, "0.x → 2.0" wording | §29, §30 |
-| OQ-32 | Converted into phase tasks: jsdom, vitest-axe, Playwright on three browsers, a Next.js fixture, no visual regression | §26, §27, P-04, P-22, P-23 |
-| OQ-33 | Removed (it was an unused placeholder) | n/a |
-| OQ-34 | Accepted: `ToastId` is `string` | §6.6 |
-| OQ-35 | Accepted: development warning for normal toasts only | §17.2 |
-| OQ-36 | Resolved: the default position is `top-right` | §6.5, §12 |
-| OQ-37 | Resolved: creation returns `ToastId \| undefined`, with `undefined` for any rejected creation (server or cap) even if an explicit `id` was supplied, and never an empty or placeholder ID | §6.2, §8.3, §8.4, §13 |
+| ID    | Outcome                                                                                                                                                                                   | Where it now lives         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| OQ-01 | Resolved: ESM-only, a plain module singleton, no `globalThis` store                                                                                                                       | §8.2, §24, C-01            |
+| OQ-02 | Resolved: one active Toaster, the first to attach wins, extra Toasters warn and render nothing, handover on unmount                                                                       | §8.5                       |
+| OQ-03 | Resolved: pending retention, a hard cap of 100 with rejection and no `evicted` reason, deduplicated warnings, timers suspended, unmount returns toasts to queued                          | §8.4                       |
+| OQ-04 | Resolved: `maxVisible` is 4 per position                                                                                                                                                  | §11                        |
+| OQ-05 | Accepted: a slot frees only at removal                                                                                                                                                    | §11                        |
+| OQ-06 | Accepted: 5000 ms default                                                                                                                                                                 | §10                        |
+| OQ-07 | Resolved and accepted: replacement (not merge), revival from exiting, relocation on a position change                                                                                     | §14                        |
+| OQ-08 | Accepted: the timer resets on replacement and pause reasons are kept                                                                                                                      | §10, §14                   |
+| OQ-09 | Accepted: hover pauses the stack, focus-within pauses the toast                                                                                                                           | §10                        |
+| OQ-10 | Resolved: focus-within is a pause reason                                                                                                                                                  | §10                        |
+| OQ-11 | Accepted: no pause toggles in 2.0                                                                                                                                                         | §10, §37                   |
+| OQ-12 | Accepted: persistent hidden polite and assertive regions, text taken from the rendered DOM, warning and error prefixes, no per-toast override                                             | §17.1                      |
+| OQ-13 | Resolved and accepted: only error is assertive, and loading and custom are polite                                                                                                         | §17.1                      |
+| OQ-14 | Accepted: Alt+T (configurable and disableable), Escape returns focus                                                                                                                      | §18                        |
+| OQ-15 | Accepted: `labels` on the Toaster                                                                                                                                                         | §6.5                       |
+| OQ-16 | Accepted: an action dismisses unless `preventDefault()` is called, and its label is a `ReactNode`                                                                                         | §15                        |
+| OQ-17 | Resolved: `toast.custom` accepts only a `ReactNode`, is chrome-less, and has `closeButton` off by default                                                                                 | §6.4, §17.3                |
+| OQ-18 | Accepted: messages are required, a promise never revives a dismissed toast (ownership token), and one set of options applies to every state                                               | §13                        |
+| OQ-19 | Accepted: `onDismiss` receives the dismiss reason                                                                                                                                         | §16                        |
+| OQ-20 | Accepted: centre positions swipe in either horizontal direction, thresholds come from a prototype, no mouse drag                                                                          | §19, P-21                  |
+| OQ-21 | Accepted: positions are physical, and there is no `dir` prop                                                                                                                              | §12, §20                   |
+| OQ-22 | Accepted: progress is off by default and still depletes under reduced motion                                                                                                              | §22                        |
+| OQ-23 | Converted into a phase task: a prototype gate in P-19                                                                                                                                     | §22, P-19                  |
+| OQ-24 | **Still open:** the P-17 entry gate                                                                                                                                                       | §38                        |
+| OQ-25 | **Still open:** the P-17 entry gate                                                                                                                                                       | §38                        |
+| OQ-26 | Accepted: rendered inline with `position: fixed`                                                                                                                                          | §12, §23                   |
+| OQ-27 | Accepted: on the server, creation is rejected, with one warning in development                                                                                                            | §8.3                       |
+| OQ-28 | Accepted: the ESM package shape, no `engines` field, TypeScript 5.0 or later                                                                                                              | §24                        |
+| OQ-29 | Converted into a phase task: size-limit in P-24                                                                                                                                           | §33, P-24                  |
+| OQ-30 | Converted into a phase task: tsup 8 with directive preservation in P-03                                                                                                                   | §24, P-03, P-07            |
+| OQ-31 | Accepted: the `next` dist-tag, the demo deployed at 2.0.0, 0.x deprecated, "0.x → 2.0" wording                                                                                            | §29, §30                   |
+| OQ-32 | Converted into phase tasks: jsdom, vitest-axe, Playwright on three browsers, a Next.js fixture, no visual regression                                                                      | §26, §27, P-04, P-22, P-23 |
+| OQ-33 | Removed (it was an unused placeholder)                                                                                                                                                    | n/a                        |
+| OQ-34 | Accepted: `ToastId` is `string`                                                                                                                                                           | §6.6                       |
+| OQ-35 | Accepted: development warning for normal toasts only                                                                                                                                      | §17.2                      |
+| OQ-36 | Resolved: the default position is `top-right`                                                                                                                                             | §6.5, §12                  |
+| OQ-37 | Resolved: creation returns `ToastId \| undefined`, with `undefined` for any rejected creation (server or cap) even if an explicit `id` was supplied, and never an empty or placeholder ID | §6.2, §8.3, §8.4, §13      |

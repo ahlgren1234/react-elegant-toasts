@@ -1,12 +1,7 @@
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
 export type ToastPosition =
-  | 'top-left'
-  | 'top-center'
-  | 'top-right'
-  | 'bottom-left'
-  | 'bottom-center'
-  | 'bottom-right';
+  'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
 export type ToastAnimation = 'slide' | 'fade' | 'zoom' | 'bounce';
 
