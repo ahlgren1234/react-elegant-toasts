@@ -1,13 +1,13 @@
 import React from 'react';
-import { ToastProps } from './types';
+import type { ToastProps } from './types';
 import Toast from './Toast';
 import { getPositionStyle } from './utils';
 
 interface ToastContainerProps {
   toasts: ToastProps[];
   onRemove: (id: string) => void;
-  className?: string;
-  style?: React.CSSProperties;
+  className?: string | undefined;
+  style?: React.CSSProperties | undefined;
 }
 
 const ToastContainer: React.FC<ToastContainerProps> = ({

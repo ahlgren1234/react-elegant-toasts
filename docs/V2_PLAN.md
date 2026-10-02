@@ -1076,6 +1076,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - a strict, split `tsconfig` set: base, library (`src` only), tests, tooling and demo
   - `jsx: "react-jsx"`, `moduleResolution: "bundler"`, a modern `target` and `lib`
   - extra strict flags recorded in the PR
+  - integration with the existing tooling: tsup is pointed at `tsconfig.lib.json` and ts-jest at `tsconfig.test.json`. Because ts-jest compiles to CommonJS, `tsconfig.test.json` temporarily sets `verbatimModuleSyntax: false`. That override is removed in P-04.
 - Not in scope: behaviour changes.
 - Defects: D-29 (in part).
 
@@ -1091,6 +1092,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Scope:
   - Vitest, Testing Library, **jsdom**, **vitest-axe**, a fake-timer setup
   - remove Jest, ts-jest and identity-obj-proxy
+  - remove the temporary `verbatimModuleSyntax: false` override from `tsconfig.test.json` (added in P-02)
   - port the 0.x tests mechanically only if needed to keep the gate green until P-08
 - Not in scope: new behaviour tests.
 

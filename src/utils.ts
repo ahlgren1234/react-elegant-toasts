@@ -11,7 +11,7 @@ export const getPositionStyle = (position: string): React.CSSProperties => {
     'bottom-center': { bottom: 0, left: '50%', transform: 'translateX(-50%)' },
     'bottom-right': { bottom: 0, right: 0 },
   };
-  return positions[position] || positions['top-right'];
+  return positions[position] || positions['top-right']!;
 };
 
 export const getAnimationStyle = (animation: string): string => {
@@ -21,5 +21,5 @@ export const getAnimationStyle = (animation: string): string => {
     zoom: 'zoomIn',
     bounce: 'bounceIn',
   };
-  return animations[animation] || animations['slide'];
+  return animations[animation] || animations['slide']!;
 };

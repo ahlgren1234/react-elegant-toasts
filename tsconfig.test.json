@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "esModuleInterop": true,
+    // Temporary: ts-jest compiles to CommonJS, which verbatimModuleSyntax rejects.
+    // Remove this override in P-04 when Jest/ts-jest is replaced by Vitest.
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src"]
+}

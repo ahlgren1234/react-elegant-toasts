@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { ToastProps } from './types';
+import type { ToastProps } from './types';
 import { getAnimationStyle } from './utils';
 
 const Toast: React.FC<ToastProps> = ({

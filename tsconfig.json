@@ -1,24 +1,9 @@
 {
-  "compilerOptions": {
-    "target": "es2018",
-    "module": "esnext",
-    "lib": ["dom", "esnext"],
-    "declaration": true,
-    "sourceMap": true,
-    "moduleResolution": "node",
-    "skipLibCheck": true,
-    "strict": true,
-    "isolatedModules": true,
-    "noFallthroughCasesInSwitch": true,
-    "jsx": "react",
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
-    "downlevelIteration": true,
-    "declarationDir": "dist",
-    "outDir": "dist",
-    "typeRoots": ["node_modules/@types"]
-  },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
-} 
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.lib.json" },
+    { "path": "./tsconfig.test.json" },
+    { "path": "./tsconfig.tooling.json" },
+    { "path": "./demo/tsconfig.json" }
+  ]
+}

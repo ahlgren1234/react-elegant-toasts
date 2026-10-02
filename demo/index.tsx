@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ToastProvider, useToast, ToastPosition, ToastAnimation, ToastType } from '../src'
+import { ToastProvider, useToast, type ToastPosition, type ToastAnimation, type ToastType } from '../src'
 import '../src/styles.css'
 import './styles.css'
 

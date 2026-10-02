@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useCallback, useState, useEffect } from 'react';
-import { ToastContextValue, ToastProps, ToastProviderProps } from './types';
+import type { ToastContextValue, ToastProps, ToastProviderProps } from './types';
 import { generateId } from './utils';
 import ToastContainer from './ToastContainer';
 
@@ -29,6 +29,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }
+    return undefined;
   }, [pauseOnPageIdle]);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
         window.removeEventListener('blur', handleBlur);
       };
     }
+    return undefined;
   }, [pauseOnFocusLoss]);
 
   const addToast = useCallback(
