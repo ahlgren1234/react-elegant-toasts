@@ -27,7 +27,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.lib.json && tsc -p tsconfig.test.json && tsc -p tsconfig.tooling.json",
     "typecheck:demo": "tsc -p demo/tsconfig.json",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -50,7 +50,7 @@
     "toast-notifications"
   ],
   "author": {
-    "name": "Peter Ahlgren",
+    "name": "Peter Anyawantana",
     "url": "https://github.com/ahlgren1234"
   },
   "license": "MIT",
