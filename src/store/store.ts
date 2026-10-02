@@ -32,6 +32,8 @@ const POSITIONS: readonly ToastPosition[] = [
 const DEFAULT_POSITION: ToastPosition = 'top-right';
 // While no Toaster is active, the store holds at most this many records (§8.4).
 const NO_TOASTER_CAP = 100;
+// Rendered toasts per position (§11).
+const DEFAULT_MAX_VISIBLE = 4;
 
 function emptySnapshot(): StoreSnapshot {
   const byPosition = {} as Record<ToastPosition, readonly ToastView[]>;
@@ -206,15 +208,30 @@ function requeueAt(record: ToastRecord, position: ToastPosition): void {
   put({ ...record, position, seq: nextSeq++, phase: 'queued', exit: undefined });
 }
 
+/** How many rendered toasts each position may hold (§11). */
+function capacity(): number {
+  return DEFAULT_MAX_VISIBLE;
+}
+
 /**
- * The P-09/P-10 promotion seam: while a Toaster is active, queued toasts move to `entering`.
- * P-09 has unlimited capacity. P-10 replaces this policy with per-position `maxVisible` and FIFO
- * slot allocation by `seq`.
+ * Moves queued toasts to `entering` while a Toaster is active (§11). Each position has its own
+ * capacity, used by its `entering`, `visible` and `exiting` toasts: an exiting toast keeps its slot
+ * until it leaves the position. Free slots go to the queued toasts with the lowest `seq` (FIFO).
+ * Overflow stays queued. A relocating exit still counts at its old position.
  */
 function promote(): void {
   if (active === null) return;
-  const queued = [...records.values()].filter(record => record.phase === 'queued');
+  const limit = capacity();
+  const occupied = new Map<ToastPosition, number>();
+  const queued: ToastRecord[] = [];
+  for (const record of records.values()) {
+    if (record.phase === 'queued') queued.push(record);
+    else occupied.set(record.position, (occupied.get(record.position) ?? 0) + 1);
+  }
   for (const record of queued.sort((a, b) => a.seq - b.seq)) {
+    const count = occupied.get(record.position) ?? 0;
+    if (count >= limit) continue;
+    occupied.set(record.position, count + 1);
     put({ ...record, phase: 'entering' });
   }
 }
@@ -355,10 +372,11 @@ export function exited(id: ToastId): void {
     if (record?.phase !== 'exiting' || !record.exit) return;
     if (record.exit.reason === 'relocate' && record.exit.relocateTo) {
       requeueAt(record, record.exit.relocateTo);
-      promote();
     } else if (record.exit.reason !== 'relocate') {
       remove(record, record.exit.reason);
     }
+    // Leaving the position frees its slot; the old position and any destination fill it now.
+    promote();
   });
 }
 
