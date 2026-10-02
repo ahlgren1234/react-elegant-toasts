@@ -3,13 +3,27 @@
 import type { DismissReason, ToastId, ToastOptions, ToastPosition, ToastSnapshot } from '../types';
 import { isServer } from './env';
 import { generateId, resetIds } from './ids';
+import {
+  cancel,
+  cancelAll,
+  expiredTimer,
+  freshTimer,
+  now,
+  resolveDuration,
+  schedule,
+  startTimer,
+  suspendTimer,
+} from './timer';
 import type {
+  GlobalPauseReason,
   StoredOptions,
   StoreSnapshot,
   ToasterConfig,
   ToasterToken,
   ToastInput,
+  ToastPauseReason,
   ToastRecord,
+  ToastTimer,
   ToastView,
 } from './types';
 import {
@@ -35,6 +49,7 @@ const DEFAULT_POSITION: ToastPosition = 'top-right';
 const NO_TOASTER_CAP = 100;
 // Rendered toasts per position (§11).
 const DEFAULT_MAX_VISIBLE = 4;
+const NO_REASONS: readonly ToastPauseReason[] = Object.freeze([]);
 
 function emptySnapshot(): StoreSnapshot {
   const byPosition = {} as Record<ToastPosition, readonly ToastView[]>;
@@ -53,10 +68,12 @@ let pendingDetach = new Set<ToasterToken>();
 let configs = new WeakMap<ToasterToken, ToasterConfig>();
 // Bumped by resetStore so detach microtasks scheduled before a reset never run against new state.
 let generation = 0;
+// Pause reasons (§10). Toast-scoped reasons live on each record (`pausedBy`).
+let globalPause = new Set<GlobalPauseReason>();
+let hoveredPositions = new Set<ToastPosition>();
 
 let listeners = new Set<() => void>();
 let snapshot: StoreSnapshot = SERVER_SNAPSHOT;
-let views = new WeakMap<ToastRecord, ToastView>();
 let dirty = false;
 let depth = 0;
 let flushing = false;
@@ -66,15 +83,17 @@ let pendingCallbacks: (() => void)[] = [];
 // Commands and notification
 
 /**
- * Runs a mutation. When the outermost command finishes, subscribers are notified once if the
- * snapshot changed, and queued callbacks run afterwards. Commands issued while subscribers or
- * callbacks run apply immediately; their notification follows in a later round (§8.2).
+ * Runs a mutation, then reconciles timers with the new state. When the outermost command
+ * finishes, subscribers are notified once if the snapshot changed, and queued callbacks run
+ * afterwards. Commands issued while subscribers or callbacks run apply immediately; their
+ * notification follows in a later round (§8.2).
  */
 function command<T>(run: () => T): T {
   depth++;
   try {
     return run();
   } finally {
+    syncTimers();
     depth--;
     dirty = true;
     if (depth === 0) flush();
@@ -119,28 +138,49 @@ function isolate(run: () => void): void {
   }
 }
 
-function viewOf(record: ToastRecord & { phase: ToastView['phase'] }): ToastView {
-  let view = views.get(record);
-  if (!view) {
-    view = Object.freeze({
-      id: record.id,
-      seq: record.seq,
-      revision: record.revision,
-      type: record.type,
-      custom: record.custom,
-      content: record.content,
-      description: record.description,
-      position: record.position,
-      phase: record.phase,
-      options: record.options,
-    });
-    views.set(record, view);
-  }
-  return view;
+const VIEW_KEYS = [
+  'id',
+  'seq',
+  'revision',
+  'type',
+  'custom',
+  'content',
+  'description',
+  'position',
+  'phase',
+  'options',
+] as const satisfies readonly (keyof ToastView)[];
+
+/**
+ * The view of a rendered record. The previous view is kept while every render-visible field is
+ * unchanged, so record changes that rendering cannot see (timer and pause state) notify nobody.
+ */
+function viewOf(
+  record: ToastRecord & { phase: ToastView['phase'] },
+  previous: ToastView | undefined
+): ToastView {
+  const next: ToastView = {
+    id: record.id,
+    seq: record.seq,
+    revision: record.revision,
+    type: record.type,
+    custom: record.custom,
+    content: record.content,
+    description: record.description,
+    position: record.position,
+    phase: record.phase,
+    options: record.options,
+  };
+  if (previous && VIEW_KEYS.every(key => previous[key] === next[key])) return previous;
+  return Object.freeze(next);
 }
 
 /** Returns the current snapshot object when nothing rendered or the active Toaster changed. */
 function buildSnapshot(): StoreSnapshot {
+  const previousViews = new Map<ToastId, ToastView>();
+  for (const position of POSITIONS) {
+    for (const view of snapshot.byPosition[position]) previousViews.set(view.id, view);
+  }
   const rendered = [...records.values()]
     .filter(
       (record): record is ToastRecord & { phase: ToastView['phase'] } => record.phase !== 'queued'
@@ -149,7 +189,9 @@ function buildSnapshot(): StoreSnapshot {
   let changed = active !== snapshot.active;
   const byPosition = {} as Record<ToastPosition, readonly ToastView[]>;
   for (const position of POSITIONS) {
-    const next = rendered.filter(record => record.position === position).map(viewOf);
+    const next = rendered
+      .filter(record => record.position === position)
+      .map(record => viewOf(record, previousViews.get(record.id)));
     const previous = snapshot.byPosition[position];
     if (next.length === previous.length && next.every((view, index) => view === previous[index])) {
       byPosition[position] = previous;
@@ -246,6 +288,68 @@ function promote(): void {
   }
 }
 
+/**
+ * A toast is paused while any reason applies to it: a global reason, hover on its position's stack,
+ * or one of its own reasons (§10). It resumes only when every one of them has cleared.
+ */
+function isPaused(record: ToastRecord): boolean {
+  return (
+    globalPause.size > 0 || hoveredPositions.has(record.position) || record.pausedBy.length > 0
+  );
+}
+
+/**
+ * Reconciles every timer with the store, at the end of each command. A timer runs only for a
+ * `visible`, finite, unpaused toast while a Toaster is active (§5, §9 rule 5, §10). Starting one
+ * schedules its `remaining` time. Stopping one folds the time it ran into `remaining`, so resuming
+ * never restarts the full duration (D-08). Idempotent: a timer in the right state is left alone.
+ */
+function syncTimers(): void {
+  let at: number | undefined;
+  for (const record of records.values()) {
+    const shouldRun =
+      active !== null &&
+      record.phase === 'visible' &&
+      record.timer.duration !== Infinity &&
+      !isPaused(record);
+    const running = record.timer.runningSince !== null;
+    if (shouldRun && !running) {
+      at ??= now();
+      const timer = startTimer(record.timer, at);
+      put({ ...record, timer });
+      const scheduledGeneration = generation;
+      schedule(record.id, timer.remaining, () => {
+        expire(record.id, timer, scheduledGeneration);
+      });
+    } else if (!shouldRun) {
+      if (running) {
+        at ??= now();
+        put({ ...record, timer: suspendTimer(record.timer, at) });
+      }
+      // Also drops a timeout left over from a replaced timer.
+      cancel(record.id);
+    }
+  }
+}
+
+/**
+ * Timer expiry: the toast exits with reason `timeout`, and `onAutoClose` runs after subscribers
+ * see it (§10, §16). Its slot stays taken until `exited()`, so nothing is promoted here (§11). The
+ * timer that fires must still be the toast's running timer: a reset, suspension or removal
+ * replaces it.
+ */
+function expire(id: ToastId, timer: ToastTimer, scheduledGeneration: number): void {
+  if (scheduledGeneration !== generation) return;
+  command(() => {
+    const record = records.get(id);
+    if (record?.timer !== timer || record.phase !== 'visible' || active === null) return;
+    if (isPaused(record)) return;
+    put({ ...record, phase: 'exiting', exit: { reason: 'timeout' }, timer: expiredTimer(timer) });
+    const onAutoClose = record.options.onAutoClose;
+    if (onAutoClose) pendingCallbacks.push(() => onAutoClose(toastSnapshot(record)));
+  });
+}
+
 // ---------------------------------------------------------------------------------------------
 // Public store API (internal to the package)
 
@@ -290,6 +394,8 @@ export function upsert(input: ToastInput): ToastId | undefined {
       content: input.content,
       description: (input.options as ToastOptions | undefined)?.description,
       options: copyOptions(input.options),
+      // Every definition starts a fresh timer: creation, and every replacement (§10, §14).
+      timer: freshTimer(resolveDuration(input.type, input.options?.duration)),
     };
 
     let id: ToastId;
@@ -306,6 +412,7 @@ export function upsert(input: ToastInput): ToastId | undefined {
         position,
         phase: 'queued',
         exit: undefined,
+        pausedBy: NO_REASONS,
       });
     }
 
@@ -315,10 +422,16 @@ export function upsert(input: ToastInput): ToastId | undefined {
   });
 }
 
-/** Replacement is not a merge: the new call defines the toast (§14). */
+/**
+ * Replacement is not a merge: the new call defines the toast (§14). The fresh timer in `definition`
+ * resets the old one, whose pending timeout can no longer act; active pause reasons are kept.
+ */
 function replace(
   existing: ToastRecord,
-  definition: Pick<ToastRecord, 'type' | 'custom' | 'content' | 'description' | 'options'>,
+  definition: Pick<
+    ToastRecord,
+    'type' | 'custom' | 'content' | 'description' | 'options' | 'timer'
+  >,
   position: ToastPosition
 ): void {
   const replaced: ToastRecord = { ...existing, ...definition, revision: existing.revision + 1 };
@@ -390,6 +503,41 @@ export function exited(id: ToastId): void {
   });
 }
 
+// Pause reasons combine as sets (§10, D-07, D-09): setting a reason twice and clearing it once
+// clears it. The active Toaster reports them; pausing and resuming change nothing rendered.
+
+/** Window focus loss or document visibility loss, which pause every toast. */
+export function setGlobalPause(reason: GlobalPauseReason, on: boolean): void {
+  if (isServer()) return;
+  command(() => {
+    if (on) globalPause.add(reason);
+    else globalPause.delete(reason);
+  });
+}
+
+/** Pointer hover over a position's stack, which pauses every toast at that position. */
+export function setStackPause(position: ToastPosition, on: boolean): void {
+  if (isServer()) return;
+  command(() => {
+    if (active === null) return;
+    if (on) hoveredPositions.add(position);
+    else hoveredPositions.delete(position);
+  });
+}
+
+/** Focus within one toast, or an active swipe on it, which pauses only that toast. */
+export function setToastPause(id: ToastId, reason: ToastPauseReason, on: boolean): void {
+  if (isServer()) return;
+  command(() => {
+    const record = records.get(id);
+    if (active === null || !record || record.pausedBy.includes(reason) === on) return;
+    const pausedBy = on
+      ? [...record.pausedBy, reason]
+      : record.pausedBy.filter(candidate => candidate !== reason);
+    put({ ...record, pausedBy: Object.freeze(pausedBy) });
+  });
+}
+
 /**
  * Attaches a Toaster (§8.5). The first one to attach is active; later ones wait in order.
  * Detach is deferred by a microtask and cancelled when the same Toaster re-attaches first, so
@@ -452,6 +600,13 @@ function completeDetach(token: ToasterToken): void {
       }
     }
   }
+  // The pause reasons its DOM owned go with it. Window and document state stay: they describe the
+  // environment, and the next Toaster seeds them again at attach (§8.4, §10). Its timers are
+  // suspended with their remaining time when this command reconciles them (`syncTimers`).
+  hoveredPositions.clear();
+  for (const record of [...records.values()]) {
+    if (record.pausedBy.length > 0) put({ ...record, pausedBy: NO_REASONS });
+  }
   // Then the earliest waiting Toaster, if any, takes over and promotes the queue (§8.5).
   active = waiting.shift() ?? null;
   if (active !== null) {
@@ -483,7 +638,7 @@ export function inspectRecords(): readonly InspectedRecord[] {
   );
 }
 
-/** Restores the empty store, including ownership, warnings, pending work and ID state. */
+/** Restores the empty store: ownership, warnings, timers, pause state, pending work and IDs. */
 export function resetStore(): void {
   records = new Map();
   nextSeq = 1;
@@ -492,9 +647,11 @@ export function resetStore(): void {
   pendingDetach = new Set();
   configs = new WeakMap();
   generation++;
+  globalPause = new Set();
+  hoveredPositions = new Set();
+  cancelAll();
   listeners = new Set();
   snapshot = SERVER_SNAPSHOT;
-  views = new WeakMap();
   dirty = false;
   depth = 0;
   flushing = false;

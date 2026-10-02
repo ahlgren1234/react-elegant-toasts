@@ -222,3 +222,37 @@ describe('<Toaster maxVisible> (§11)', () => {
     expect(phaseOf('t3')).toBe('queued');
   });
 });
+
+describe('<Toaster /> and timers (§8.4)', () => {
+  const timerOf = (id: string) => inspectRecords().find(record => record.id === id)?.timer;
+
+  it('keeps remaining time through StrictMode replay, without duplicates or warnings', async () => {
+    vi.useFakeTimers();
+    const onAutoClose = vi.fn();
+    upsert({ type: 'default', custom: false, content: 't', options: { id: 't', onAutoClose } });
+    const first = render(<Toaster />);
+    entered('t');
+    vi.advanceTimersByTime(2000);
+    first.unmount();
+    await settle();
+    expect(timerOf('t')).toEqual({ duration: 5000, remaining: 3000, runningSince: null });
+
+    render(
+      <StrictMode>
+        <Toaster />
+      </StrictMode>
+    );
+    await settle();
+    expect(phaseOf('t')).toBe('entering');
+    expect(timerOf('t')).toEqual({ duration: 5000, remaining: 3000, runningSince: null });
+
+    entered('t');
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(2999);
+    expect(phaseOf('t')).toBe('visible');
+    vi.advanceTimersByTime(1);
+    expect(phaseOf('t')).toBe('exiting');
+    expect(onAutoClose).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
