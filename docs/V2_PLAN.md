@@ -1126,6 +1126,21 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - ESLint flat config (TypeScript, React, Hooks, jsx-a11y)
   - a Prettier check across `src`, tests, fixtures, config and docs
   - fix existing violations
+- Decisions made in P-05:
+  - **ESLint 9.x** (with `@eslint/js` 9.x) was chosen on purpose. ESLint 10 is available, but `eslint-plugin-react` 7.37 and `eslint-plugin-jsx-a11y` 6.10 do not declare it as a supported peer, so `npm ci` would fail on the peer conflict. A later phase can upgrade once both plugins support ESLint 10.
+  - `eslint.config.js` is a flat config that replaces `.eslintrc.cjs`. It uses `@eslint/js` recommended, typescript-eslint `recommendedTypeChecked` with `projectService`, and for `src` also React, React JSX runtime, the **full** `react-hooks` recommended preset (including the React Compiler rules) and jsx-a11y recommended.
+  - `projectService` resolves every TypeScript file through the solution-style `tsconfig.json` to its referenced project (library, tests or tooling), so all TypeScript code is linted with type information. The tsconfig set is unchanged.
+  - JavaScript files belong to no tsconfig project, so `**/*.js` uses `disableTypeChecked`. This means `eslint.config.js` is linted, but without type-aware rules, and it is not part of `typecheck`.
+  - Prettier is separate from ESLint. `eslint-plugin-prettier` is removed, `eslint-config-prettier` only turns off conflicting rules, and `format:check` is the formatting gate.
+  - "Fix existing violations" means the non-behavioural ones. Two violations would need runtime changes in 0.x code that P-08 deletes. Each one gets a single-line `eslint-disable-next-line` with a reason, and no rule is turned off file-wide or in the config:
+    - `react-hooks/set-state-in-effect` in `src/ToastContext.tsx`: the effect that copies `isPaused` onto every toast (D-07)
+    - `jsx-a11y/click-events-have-key-events` in `src/Toast.tsx`: click-to-dismiss on a `div` (D-17)
+  - `reportUnusedDisableDirectives` is `error`, so these directives fail lint once P-08 removes the code they cover.
+  - `lint` runs `eslint .`, and `format` and `format:check` run Prettier on the whole repository. `.prettierignore` excludes `dist/`, `coverage/`, `demo-dist/` and `package-lock.json`.
+  - The demo is formatted but not linted. Demo linting belongs to P-25.
+  - Fixtures are formatted but not linted (§27). The ESLint config already ignores `fixtures/` in preparation for P-07.
+  - Prettier is upgraded to 3.9.x and the deprecated `jsxBracketSameLine` option is removed. Markdown files set `embeddedLanguageFormatting: "off"`, so Prettier formats the documents but does not rewrite the code examples in them.
+  - P-05 does not add `--max-warnings 0`. P-06 sets the final warning policy.
 
 **P-06 Blocking CI baseline**
 
@@ -1134,6 +1149,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - triggers on `main` and `v2`, least-privilege permissions, debug steps removed
   - guard `deploy-demo.yml` so it cannot deploy before 2.0.0
   - Dependabot or Renovate
+  - finalise the lint warning policy, including whether `lint` runs with `--max-warnings 0` (P-05 left lint warnings non-blocking)
 - Defects: D-31, D-32, C-06, C-07.
 
 **P-07 Package validation harness**
