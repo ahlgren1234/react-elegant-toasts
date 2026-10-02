@@ -1241,6 +1241,38 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - add the export-list test (AC-API-1)
   - reduce the demo to a minimal placeholder that compiles
   - move the fixture to v2 imports
+- Decisions made in P-08:
+  - The 0.x implementation is deleted: `Toast`, `ToastContainer`, `ToastContext`, `utils.ts` and their 15 tests, which are not ported (C-09). There is no compatibility layer; 2.0 is a clean break (§6.8). The two P-05 inline suppressions disappeared with the files that contained them.
+  - The `src/` layout (§5) is finalised as:
+    - `index.ts`: public exports only
+    - `types.ts`: the §6.6 types
+    - `toast.ts`: the facade
+    - `react/Toaster.tsx`
+
+    P-09 adds `store/`, and P-14 the rest of `react/`. `src/styles.css` keeps its location and its 0.x content until P-17, because it is the shipped `./styles.css` and the source of the P-07 `CSS_MARKER`.
+
+  - The package exports exactly `Toaster` and `toast` as values, has no default export, and exports exactly the eleven §6.7 types: `CustomToastOptions`, `DismissReason`, `ToastAction`, `ToastId`, `ToastOptions`, `ToastPosition`, `ToastPromiseMessages`, `ToastSnapshot`, `ToastTheme`, `ToastType` and `ToasterProps`. There is no labels type and no convenience type. `src/__tests__/exports.test.ts` enforces this on the source (AC-API-1): it checks the runtime keys, and uses the TypeScript compiler API to check exactly 13 export names. `validate:package` enforces it on the packed artifact: the installed runtime entry exports exactly `Toaster` and `toast` with no default, and `dist/index.d.ts` has a single export list naming exactly the two values and the eleven types.
+  - `toast` is typed by an internal, unexported `ToastApi` interface. It has a call signature, and its members are function-typed properties rather than methods, so `toast.dismiss` and the other members can be passed around unbound without `unbound-method` lint errors. The value is built with a typed `Object.assign`, and every member is a separate function. `toast.promise<T>` infers `T` from the promise under TypeScript 5.0, without `NoInfer`. `toast.dismiss` returns `void`.
+  - Optional public fields are typed `?: T | undefined`, so consumers using `exactOptionalPropertyTypes` can forward `undefined`. `CustomToastOptions` declares `description`, `icon`, `action` and `progress` as `?: never`, so TypeScript 5.0 rejects them (§6.4).
+  - The runtime is a deliberate skeleton: the signatures are final, the bodies are not.
+    - Every creation call returns `undefined`, because nothing is accepted yet, which is the meaning §6.2 gives `undefined`. A fake ID would wrongly claim acceptance.
+    - `toast.dismiss` does nothing.
+    - `toast.promise` neither invokes function input nor attaches handlers.
+    - `<Toaster />` returns `null` and produces no DOM output.
+    - There are no development warnings.
+
+    P-09 to P-14 replace these bodies without changing a signature. The temporary `src/__tests__/skeleton.test.tsx` documents this contract and is replaced in P-09 and P-14.
+
+  - Behavioural TSDoc arrives with the behaviour: P-12 for `toast`, P-14 for `Toaster`. P-26 checks completeness (§31). P-08 has short source comments only.
+  - The demo is a minimal placeholder until P-25: a heading, a note, the four existing header links (GitHub, npm, portfolio, Buy Me a Coffee, with unchanged URLs), one `toast()` button and `<Toaster />`. The README still describes 0.x until P-26.
+  - `fixtures/consumer-vite` uses the v2 API. It still has React 18, TypeScript 5.0.4, Vite 8.3.2 and no rendering, and its `package.json` and lockfile are unchanged. It contains:
+    - `Toaster` through `createElement`
+    - every `toast` method, in an exported function that is never invoked
+    - all eleven public types
+    - two `@ts-expect-error` checks that `CustomToastOptions` rejects `description`: one on an object literal, and one on a non-literal `Pick<ToastOptions, 'id' | 'description'>` value. The literal check alone would pass even without `description?: never`, because of TypeScript's excess-property check.
+    - the blocked deep import of `ToastOptions`
+
+    The packed declarations now import their React types from `react`, so the 0.x global-namespace issue noted in P-07 is gone.
 - Defects: D-05, C-09.
 
 **P-09 Store core**
