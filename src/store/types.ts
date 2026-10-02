@@ -13,6 +13,16 @@ import type {
 
 export type ToastPhase = 'queued' | 'entering' | 'visible' | 'exiting';
 
+/** Remaining-time state (§7, §10). Frozen and replaced, never mutated. */
+export interface ToastTimer {
+  /** Effective duration in ms. `Infinity` means persistent. */
+  readonly duration: number;
+  /** Ms left. Equal to `duration` until the toast first runs. */
+  readonly remaining: number;
+  /** `performance.now()` when the timer started running, or null while it is not running. */
+  readonly runningSince: number | null;
+}
+
 /** Identifies one mounted `<Toaster />`. A plain object, so it can be held in a WeakSet. */
 export type ToasterToken = object;
 
@@ -54,6 +64,7 @@ export interface ToastRecord {
   readonly options: StoredOptions;
   readonly phase: ToastPhase;
   readonly exit: ToastExit | undefined;
+  readonly timer: ToastTimer;
 }
 
 /** What rendering needs from a rendered (entering, visible or exiting) toast. */
