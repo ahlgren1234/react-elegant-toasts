@@ -1395,6 +1395,48 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Scope:
   - `toast()`, `success`, `error`, `warning`, `info`, `loading`, `custom` (chrome-less, `closeButton` false by default, restricted options) and `dismiss`
   - type tests
+- Decisions made in P-12:
+  - Public options are normalised at the store boundary, not in the facade. `upsert()` calls `normaliseOptions(options, custom)` in the new `store/options.ts`, a pure module with no lifecycle, queue, timer or ownership policy and no browser globals. It replaces the P-09 `copyOptions` and returns the `id`, the `position`, the `description` and a freshly allocated, frozen `StoredOptions` per definition. The facade only maps each member to a type and the custom flag. The server check still runs first, so on the server no option is read, no ID is generated and only the existing server warning is logged.
+  - Only fixed defaults are applied when a toast is created. Defaults that depend on the Toaster stay absent from `StoredOptions` for normal toasts: there is no stored `duration: 5000`, `closeButton: true`, `progress: false`, type icon or position option.
+  - Each option the caller supplies is read at most once per call, and validation checks only that value, so an accessor cannot pass a check with one value and be stored with another (for example an `id` getter that returns a string and then a number). This includes `action.label` and `action.onClick`. The fields a custom toast drops (`description`, `icon`, `action`, `progress`) are not read for it at all, and `action.label` is read only when `onClick` is a function. A throwing getter is not caught.
+  - Invalid runtime values are treated as omitted, silently. There are no new warnings, and malformed options (`null`, primitives, functions, invalid fields) never throw. The rules:
+    - `id`: only a non-empty string counts. An empty or non-string value counts as no `id`, and a string ID is generated, with no `String()` coercion.
+    - `position`: only the six positions count. Anything else counts as omitted, so a toast can never enter an unknown position that the snapshot does not render.
+    - `duration`: a finite value is kept, with values at or below 0 stored as 0, and `Infinity` is kept as persistent. `NaN`, `-Infinity` and non-numbers are left out of `StoredOptions`, and P-11's internal 5000 ms timer fallback applies. Loading toasts stay persistent. `timer.ts` is unchanged.
+    - `description` and content: any value is kept by identity, with no ReactNode validation and no stringification (D-04).
+    - `icon`: kept when not `undefined`, so `null` (no icon) stays distinct from omitted.
+    - `action`: kept only when it is an object with a function `onClick`, and stored as a fresh frozen `{ label, onClick }` copy, so later changes to the caller's object change nothing.
+    - `closeButton` and `progress`: kept only as booleans. `className`: kept only as a string. `onDismiss` and `onAutoClose`: kept only as functions, so a malformed callback never reaches `reportError`.
+    - Internal fields (`phase`, `seq`, `revision`, `timer`, `pausedBy`, `type`, `custom`) are never read from options.
+  - Custom toasts (§6.4) always drop `description`, `icon`, `action` and `progress` at runtime, and a dropped `description` is not passed to callbacks either. `closeButton` is the given boolean, or a stored `false` when it is omitted or invalid. For a normal toast an omitted `closeButton` stays absent, so P-14 can apply the Toaster default. The types still reject the four chrome options.
+  - Replacement is a new definition, not a partial update (§14). Nothing from the previous definition is carried over except what the store already keeps (`id`, `seq`, phase, pause reasons). A normal → custom replacement drops the chrome options and stores `closeButton: false`. A custom → normal replacement leaves an omitted `closeButton` absent again. An omitted or invalid `position` on replacement means the default position, so a toast shown elsewhere is relocated.
+  - `toast.dismiss(id)` dismisses with the reason `programmatic`. `toast.dismiss()` and `toast.dismiss(undefined)` both dismiss everything, queued toasts included. `arguments.length` is not inspected. An unknown or empty ID does nothing. The TSDoc shows the safe idiom `if (id) toast.dismiss(id)`, because a rejected creation returns `undefined`.
+  - **P-14 owns `<Toaster duration>` and `<Toaster position>`**, together with the Toaster `closeButton`, `progress` and icon defaults. P-12 wires neither. It keeps an omitted or invalid `duration` absent from `StoredOptions` and adds no marker for an implicit position, so until P-14 an omitted position resolves to the built-in `top-right` when the toast is created.
+  - TSDoc describes the behaviour that is final in P-12. It does not describe the Toaster defaults as working yet, or `toast.promise`. The source comment that suggested `onClick={toast.dismiss}` was corrected, because that does not type-check.
+  - Tests:
+    - `facade.test.ts` gained the behavioural suites, including the `D-01` and `D-04` regression tests. Its existing tests, including the `toast.promise` stub tests, are unchanged. Accessor tests count the reads of every field and of the action fields, for normal and custom toasts.
+    - `server.test.ts` covers every creation variant with explicit IDs and malformed options, and checks that no option is read on the server.
+    - The new `types.test.ts` uses `expectTypeOf` and `@ts-expect-error` in a function that is never invoked. It is enforced by `npm run typecheck`.
+    - `fixtures/consumer-vite` also rejects `icon`, `action` and `progress` on `CustomToastOptions` under TypeScript 5.0, both as literals and as values.
+  - A mutation check confirmed the tests catch:
+    - removing the custom `closeButton: false` default, applying it to normal toasts, or carrying it across a custom → normal replacement
+    - keeping each of the four custom chrome options
+    - storing `closeButton: true`, `progress: false` or `duration: 5000` as defaults
+    - collapsing `icon: null`
+    - removing the position, callback, action, boolean, `className` or `id` checks
+    - storing `NaN` or a negative duration
+    - keeping the caller's action object by reference
+    - sharing one options object between definitions
+    - a second read of `id`, `className` or `action.onClick`, or reading `description` for a custom toast
+    - reading options before the server check
+    - a wrong variant type, or a normal variant marked custom
+    - a wrong dismiss reason
+    - a dismiss-all that skips queued toasts
+    - removing each `?: never`, widening a creation return type, removing `readonly` from `ToastSnapshot.id`, and adding an index signature to `ToastOptions`
+
+    Narrowing a creation return type to `ToastId` fails to compile against the facade implementation itself, so it needs no type test.
+
+  - There are no public API changes: the export surface is still the two values and eleven types of P-08, and no signature changed.
 - Defects: D-01, D-04.
 
 **P-13 `toast.promise`**
@@ -1412,6 +1454,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - the normal shell: close button on by default, action, SVG icons with `aria-hidden`
   - the custom wrapper: chrome-less, with no close button by default
   - lifecycle reporting through fallbacks (no animation yet)
+  - the Toaster defaults for toasts: `duration` and `position` (store side, deferred by P-10, P-11 and P-12), and `closeButton`, `progress` and the type icon (render side)
   - no dismissal on body click
   - the development warning for inaccessible persistent normal toasts
   - SSR safety

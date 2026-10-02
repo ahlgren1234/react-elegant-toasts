@@ -24,6 +24,46 @@ describe('on the server (§8.3)', () => {
     expect(getSnapshot()).toBe(getServerSnapshot());
   });
 
+  it('rejects every creation variant, with explicit ids and malformed options, generating no ID', () => {
+    const randomUUID = vi.spyOn(globalThis.crypto, 'randomUUID');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const variants = [
+      toast,
+      toast.success,
+      toast.error,
+      toast.warning,
+      toast.info,
+      toast.loading,
+      toast.custom,
+    ];
+    for (const create of variants) {
+      expect(create('Hello')).toBeUndefined();
+      expect(create('Hello', { id: 'explicit' })).toBeUndefined();
+      const malformed = { id: 42, position: 'nowhere', duration: NaN, action: 'bad', onDismiss: 1 };
+      expect(create('Hello', malformed as never)).toBeUndefined();
+      expect(create('Hello', null as never)).toBeUndefined();
+    }
+    expect(inspectRecords()).toEqual([]);
+    expect(randomUUID).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('called on the server'));
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('never reads the options on the server', () => {
+    const read = vi.fn();
+    const options = Object.defineProperties(
+      {},
+      {
+        id: { get: read },
+        position: { get: read },
+        duration: { get: read },
+      }
+    );
+    expect(toast.custom('Hello', options)).toBeUndefined();
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it('warns once in development', () => {
     toast('One');
     toast('Two');
