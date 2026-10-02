@@ -31,6 +31,21 @@ const BLOCKED_DEEP_IMPORTS = [
 ];
 // A selector from the current packed stylesheet. P-17 updates it with the stylesheet redesign.
 const CSS_MARKER = '.toast-progress';
+// The public export surface (§6.1, §6.7, AC-API-1).
+const VALUE_EXPORTS = ['Toaster', 'toast'];
+const TYPE_EXPORTS = [
+  'CustomToastOptions',
+  'DismissReason',
+  'ToastAction',
+  'ToastId',
+  'ToastOptions',
+  'ToastPosition',
+  'ToastPromiseMessages',
+  'ToastSnapshot',
+  'ToastTheme',
+  'ToastType',
+  'ToasterProps',
+];
 
 class ValidationError extends Error {}
 
@@ -290,6 +305,45 @@ function checkDeclarations(installed) {
   }
   assert(!/\bsrc\//.test(source), 'dist/index.d.ts mentions repository source');
   ok(`dist/index.d.ts present; imports only ${[...new Set(specifiers)].join(', ') || 'nothing'}`);
+
+  // The bundled declarations end in a single export list; any other export form is a leak.
+  const exportStatements = source.match(/^export\b.*$/gm) ?? [];
+  assert(
+    exportStatements.length === 1 && /^export\s*\{[^}]*\};?$/.test(exportStatements[0]),
+    `dist/index.d.ts must have exactly one export list, found: ${exportStatements.join(' | ')}`
+  );
+  const exported = exportStatements[0]
+    .replace(/^export\s*\{|\};?$/g, '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+    .map(item => {
+      const typeOnly = item.startsWith('type ');
+      const name = item
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)
+        .pop();
+      return { name, typeOnly };
+    });
+  const values = exported
+    .filter(item => !item.typeOnly)
+    .map(item => item.name)
+    .sort();
+  const types = exported
+    .filter(item => item.typeOnly)
+    .map(item => item.name)
+    .sort();
+  assert(
+    JSON.stringify(values) === JSON.stringify(VALUE_EXPORTS),
+    `declared value exports are [${values.join(', ')}], expected [${VALUE_EXPORTS.join(', ')}]`
+  );
+  assert(
+    JSON.stringify(types) === JSON.stringify([...TYPE_EXPORTS].sort()),
+    `declared type exports are [${types.join(', ')}], expected [${TYPE_EXPORTS.join(', ')}]`
+  );
+  ok(
+    `declarations export exactly ${VALUE_EXPORTS.join(', ')} and the ${TYPE_EXPORTS.length} public types`
+  );
 }
 
 function checkResolution(consumer, installed) {
@@ -300,8 +354,9 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 const name = ${JSON.stringify(PACKAGE_NAME)};
 const result = { resolved: {}, blocked: {}, react: {} };
-await import(name);
+const entry = await import(name);
 result.rootImport = true;
+result.runtimeExports = Object.keys(entry).sort();
 for (const subpath of ['styles.css', 'package.json']) {
   result.resolved[subpath] = fs.realpathSync(new URL(import.meta.resolve(name + '/' + subpath)));
 }
@@ -347,6 +402,11 @@ console.log(JSON.stringify(result));
 
   assert(result.rootImport, 'the root ESM import failed');
   ok(`import "${PACKAGE_NAME}" succeeds`);
+  assert(
+    JSON.stringify(result.runtimeExports) === JSON.stringify(VALUE_EXPORTS),
+    `runtime exports are [${result.runtimeExports.join(', ')}], expected [${VALUE_EXPORTS.join(', ')}] and no default`
+  );
+  ok(`runtime exports are exactly ${VALUE_EXPORTS.join(', ')}, with no default export`);
   for (const [subpath, file] of Object.entries(result.resolved)) {
     assert(isInside(file, installed), `${subpath} resolved outside the installed package: ${file}`);
     ok(`${PACKAGE_NAME}/${subpath} → ${path.relative(consumer, file)}`);
