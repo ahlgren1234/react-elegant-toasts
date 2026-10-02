@@ -926,6 +926,12 @@ Rules:
 
 The fixtures are excluded from the library's lint and typecheck. They install with their own lockfiles, or without one, and never touch the root lockfile. **There is no CJS smoke test.**
 
+This list is the final 2.0 state, and it is built up in phases:
+
+- P-07 adds steps 1–6, with the Vite fixture on React 18 and TypeScript 5.0, covering types and imports only.
+- P-14 adds the rendering test.
+- P-23 adds the React 19, `@types/react` 19 and latest-TypeScript legs, plus steps 7 and 8.
+
 ## 28. CI strategy
 
 Every job is **blocking**. No quality gate uses `continue-on-error` (D-31).
@@ -1183,10 +1189,45 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - publint and attw `--profile esm-only --exclude-entrypoints ./styles.css` (see §27)
   - `npm pack` and a tarball-content check (no CJS files)
   - a `"use client"` check
-  - a Vite fixture (React 18/19 matrix, TypeScript latest and 5.0) using **types and imports only** for now
+  - a Vite fixture (React 18, TypeScript 5.0) using **types and imports only** for now
   - the CSS-present-in-output check and the deep-import-blocked check
   - wiring into the blocking `build-package` job
-- Not in scope: rendering (added in P-14), the SSR and Next.js fixtures (added in P-23).
+- Not in scope: rendering (added in P-14), the React 19 and latest-TypeScript legs of the fixture, and the SSR and Next.js fixtures (all added in P-23).
+- Decisions made in P-07:
+  - `npm run validate:package` runs `npm run build` and then `scripts/validate-package.js`, a dependency-free Node ESM script. It packs the library once with `npm pack --json` into a directory made with `fs.mkdtemp` under `os.tmpdir()`, validates that tarball, and removes the directory in `finally`. With `KEEP_VALIDATE_TMP=1` it keeps the directory and prints its path. Nothing generated lands in the repository, and `*.tgz` is git-ignored as a guard against manual `npm pack` output.
+  - The tarball must contain exactly `LICENSE`, `README.md`, `package.json`, `dist/index.d.ts`, `dist/index.js`, `dist/index.js.map` and `dist/styles.css`. No file may end in `.cjs`, `.cts`, `.mjs` or `.mts`, which also rules out `.d.cts` and `.d.mts`.
+  - The packed `package.json` is checked from the installed artifact:
+    - `name`, and a `version` equal to the packed metadata (not a hard-coded 2.0.0)
+    - `type: "module"`, `types: "./dist/index.d.ts"`, `files: ["dist"]`, `sideEffects: ["**/*.css"]`
+    - peers exactly `^18.0.0 || ^19.0.0`, and no runtime `dependencies`
+    - no `main`, `module`, `style`, `engines` or `packageManager`
+    - exactly the `.`, `./styles.css` and `./package.json` exports, with the root export's `types` and `default` entries
+    - no `require` condition anywhere in `exports`
+  - publint (`publint run <tgz> --strict`) and attw (`attw <tgz> --profile esm-only --exclude-entrypoints ./styles.css`) run against the same tarball. Both are exact-pinned dev dependencies (publint 0.3.25, `@arethetypeswrong/cli` 0.18.5) and never run through `npx`. The CSS entry is excluded because it has no declarations by design (P-03).
+  - The installed `dist/index.js` must have no BOM, start with `"use client";` and contain the directive exactly once. The source has no directive (§24).
+  - `dist/index.d.ts` must exist and may import only `react`, `react-dom` or files inside the package. The 0.x declarations still use the global `React` namespace. P-08 replaces them.
+  - Node ESM checks run from the isolated consumer:
+    - the root import succeeds
+    - `./styles.css` and `./package.json` resolve inside the installed package
+    - `dist/index.js`, `dist/styles.css`, `dist/index.d.ts`, `src/index.ts` and `index.js` fail with `ERR_PACKAGE_PATH_NOT_EXPORTED`
+    - the consumer and the package resolve the same React, and only one React copy is installed
+
+    Export names are not asserted, because P-08 owns the export-list test. `require()` of the package is neither tested nor guaranteed (§24.3).
+
+  - `fixtures/consumer-vite` is committed: Vite 8.3.2, strict TypeScript 5.0.4 with `moduleResolution: "bundler"`, `skipLibCheck: false` and `types: []`, React 18.3.1 and `@types/react` 18.3.18, and no JSX or `@vitejs/plugin-react`. It imports the root entry and `react-elegant-toasts/styles.css`, uses public types, and keeps a `@ts-expect-error` deep type import that must stay blocked.
+  - The fixture's committed `package.json` and lockfile never contain the library. The script copies the fixture to the temp directory, runs `npm ci --ignore-scripts --no-audit --no-fund`, and installs the tarball with `npm install --no-save`. It then checks that the fixture manifests are byte-identical and that the package is a real copy inside the consumer, so repository source and the root `node_modules` cannot satisfy any import.
+  - `vite build` must succeed, and its CSS output must contain `CSS_MARKER` (`.toast-progress`), which must also appear in the packed `styles.css`. P-17 updates the marker when the stylesheet is redesigned. Vite's warning that the module-level `"use client"` directive is not preserved in an SPA bundle is expected.
+  - The `build-package` job keeps its name and runs `npm ci --ignore-scripts --no-audit --no-fund` and then `npm run validate:package`, with no separate build step. The setup-node cache is keyed on both lockfiles. `scripts/**/*.js` gets Node globals in ESLint. The fixture is formatted but not linted.
+  - Dependabot also tracks `fixtures/consumer-vite`. It never updates the fixture's TypeScript, which is the documented minimum, and ignores major React and `@types/react` updates until P-23. Like the rest of the config, it stays inactive until it reaches `main`.
+  - P-07 proves:
+    - all of AC-PKG-1 and AC-PKG-3
+    - for AC-PKG-2, the Vite part
+    - for AC-PKG-4, the directive part
+    - for AC-PKG-5, the React 18 typecheck and build
+    - for AC-PKG-6, the code part
+    - for AC-PKG-9, TypeScript 5.0 with `@types/react` 18
+
+    Rendering (P-14), React 19, the latest-TypeScript leg, `@types/react` 19, SSR and Next.js (P-23), and the README (P-26) complete those criteria.
 
 ### Track B: Core (no rendering)
 
@@ -1326,6 +1367,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Scope:
   - the full React 18/19 matrix. This requires upgrading `@testing-library/react` from 14 (React 18 only) to 16, and adding `@testing-library/dom` (kept at 14 in P-04).
   - declarations type-checked under both `@types` versions and under TypeScript 5.0 and the latest TypeScript
+  - the compatibility matrix of the packed Vite fixture (`fixtures/consumer-vite`): React 18 and 19, `@types/react` 18 and 19, and TypeScript 5.0 (the minimum) plus the latest supported TypeScript. P-07 added the fixture with React 18 and TypeScript 5.0.4 only.
   - the Node ESM `renderToString` smoke test on the packed package
   - the **Next.js App Router fixture** with its Playwright check
 
