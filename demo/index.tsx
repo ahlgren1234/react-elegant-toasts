@@ -243,7 +243,7 @@ const DemoPage = () => {
             npm Package
           </a>
           <a
-            href="https://peterahlgren.com"
+            href="https://anyawantana.se"
             target="_blank"
             rel="noopener noreferrer"
             className="demo-link portfolio"
