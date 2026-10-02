@@ -940,14 +940,15 @@ Every job is **blocking**. No quality gate uses `continue-on-error` (D-31).
 | `demo`                        | Demo typecheck and build only. **It never deploys before 2.0.0** (§29).                                                                                                |
 
 - **Triggers:** `push` and `pull_request` on `main` and `v2`, plus `workflow_dispatch` (C-07).
-- **Node:** a single current Active LTS for tooling (Node 24 at the time of writing). It is a CI setting only, not an `engines` field.
+- **Node:** a single current Active LTS for tooling, pinned explicitly by major (Node 24 since P-06). It is a CI setting only, not an `engines` field. Moving to the next Active LTS is a deliberate, reviewed change (see P-06).
 - **Hygiene:**
   - least-privilege `permissions:`
-  - pinned action versions (SHA pinning recommended)
+  - actions pinned to full commit SHAs, with a version comment
   - npm cache
   - no debug `ls` or `npm list` steps
-  - automated dev-dependency update PRs (Dependabot or Renovate, chosen in P-06)
+  - automated dev-dependency update PRs (Dependabot, chosen in P-06)
 - **Cleanup:** remove the stale `.github/workflows/deploy-demo` (D-34). P-06 guards `deploy-demo.yml` so it cannot deploy the 2.0 demo early.
+- **Phasing:** the table is the final 2.0 state. P-06 adds `quality`, `test`, `build-package` and `demo`. P-07 extends `build-package`, P-22 adds `browser`, P-23 turns `test` into the React 18/19 matrix, and P-24 adds `size`. Each gate blocks from the phase that adds it.
 
 ## 29. Release and versioning strategy
 
@@ -1145,11 +1146,35 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-06 Blocking CI baseline**
 
 - Scope:
-  - blocking `quality`, `test` and `build` jobs, on the Active LTS Node, with `npm ci`
+  - blocking `quality`, `test` and `build-package` jobs, on the Active LTS Node, with `npm ci`
   - triggers on `main` and `v2`, least-privilege permissions, debug steps removed
   - guard `deploy-demo.yml` so it cannot deploy before 2.0.0
   - Dependabot or Renovate
   - finalise the lint warning policy, including whether `lint` runs with `--max-warnings 0` (P-05 left lint warnings non-blocking)
+- Decisions made in P-06:
+  - `ci.yml` has four blocking jobs: `quality` (`format:check`, `lint`, `typecheck`), `test`, `build-package` and `demo`. No step uses `continue-on-error`, and CI never runs Prettier in write mode. Triggers are `push` and `pull_request` on `main` and `v2`, plus `workflow_dispatch`.
+  - The job is named `build-package` from P-06 on, as in §28. In P-06 it only proves that `npm run build` succeeds. P-07 adds the package validation to the same job without renaming it.
+  - `test` is a single React 18 job. The React 18/19 matrix, the Testing Library upgrade, the SSR smoke test and the Next.js fixture stay in P-23.
+  - The `demo` job runs `typecheck:demo` and `build:demo` and never deploys. It keeps the demo compiling from P-08 on. Demo linting stays in P-25.
+  - Node is pinned explicitly with `NODE_VERSION: '24'` in each workflow, not `lts/*`. There is still no `engines`, `packageManager`, `.nvmrc` or `.node-version`. Node 24 leaves Active LTS on 2026-10-20 and Node 26 becomes Active LTS on 2026-10-28. Node 26 replaces Node 24 in a deliberate, reviewed change after that date and before the final 2.0 release.
+  - CI installs with `npm ci --ignore-scripts --no-audit --no-fund`. Every gate was verified green without dependency install scripts: esbuild then uses its JS shim and the platform binary from `optionalDependencies`. There is no repository `.npmrc`, `allowScripts` or `strict-allow-scripts`. The repository-level install-script policy is deferred to the supply-chain and release work (§34, P-28).
+  - npm audit and deprecation output is not a CI gate. The dev-only audit findings are left to Dependabot. P-08 decides whether unexpected `console.error` output in tests fails the suite. Build output validation belongs to P-07.
+  - `lint` runs `eslint . --max-warnings 0`, both locally and in CI, so ESLint warnings fail the gate. `reportUnusedDisableDirectives` stays `error`. The two P-05 suppressions are unchanged and are removed with the 0.x code in P-08.
+  - Hygiene in `ci.yml` and `deploy-demo.yml`:
+    - top-level `permissions: contents: read`; `pages: write` and `id-token: write` only on the demo `deploy` job
+    - `persist-credentials: false` on checkout, and no `registry-url`
+    - every action pinned to a full commit SHA with a version comment
+    - setup-node `cache: npm`, keyed on `package-lock.json`, with `node_modules` never cached
+    - CI concurrency grouped by workflow and ref, cancelling superseded runs for pull requests only
+    - `timeout-minutes: 10` per job
+    - no debug steps
+  - `deploy-demo.yml` runs only through `workflow_dispatch`, and the `github-pages` environment still accepts deployments only from `main`. It no longer runs lint, typecheck or tests, because `ci.yml` owns those gates. P-29 reconnects it to the final 2.0.0 release (§29).
+  - `release.yml` is unchanged. It is a deliberate, temporary exception to the pinning and permissions policy until P-28 replaces it. It cannot publish in the meantime (§29).
+  - Dependabot, not Renovate, opens weekly `npm` and `github-actions` updates against `v2`. Minor and patch dev-dependency updates are grouped, and so are action updates. Major updates of the deliberately pinned tooling are ignored until their owning phases: ESLint and `@eslint/js` (P-05), Vite, `@vitejs/plugin-react`, Vitest and `@vitest/coverage-v8` (P-25), React, ReactDOM, their types and `@testing-library/react` (P-23). `vitest-axe` is ignored entirely (P-04). `.github/dependabot.yml` exists only on `v2`. Dependabot reads it only from the default branch, so version updates stay inactive until the file reaches `main`.
+  - `demo-dist/` is git-ignored, so `build:demo` leaves the working tree clean.
+  - The required status checks (`quality`, `test`, `build-package`, `demo`) are configured in GitHub only after the first green pushed run shows that those check names exist. Each later phase adds its own job.
+  - AC-CI-1 is met only for the gates that exist at a given phase. P-06 makes every existing gate blocking, and later phases add the remaining §28 gates.
+  - The package `author.name` is corrected to Peter Anyawantana.
 - Defects: D-31, D-32, C-06, C-07.
 
 **P-07 Package validation harness**
