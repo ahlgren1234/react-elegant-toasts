@@ -31,6 +31,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "validate:package": "npm run build && node scripts/validate-package.js",
     "prepublishOnly": "npm run build",
     "demo": "vite",
     "build:demo": "vite build"
