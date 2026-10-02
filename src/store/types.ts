@@ -13,6 +13,11 @@ import type {
 
 export type ToastPhase = 'queued' | 'entering' | 'visible' | 'exiting';
 
+/** Pause reasons that apply to every toast (§10). */
+export type GlobalPauseReason = 'window-blur' | 'document-hidden';
+/** Pause reasons that apply to one toast. `swipe` is internal (§7). */
+export type ToastPauseReason = 'focus-within' | 'swipe';
+
 /** Remaining-time state (§7, §10). Frozen and replaced, never mutated. */
 export interface ToastTimer {
   /** Effective duration in ms. `Infinity` means persistent. */
@@ -65,6 +70,8 @@ export interface ToastRecord {
   readonly phase: ToastPhase;
   readonly exit: ToastExit | undefined;
   readonly timer: ToastTimer;
+  /** Active toast-scoped pause reasons, without duplicates. Carried over on replacement. */
+  readonly pausedBy: readonly ToastPauseReason[];
 }
 
 /** What rendering needs from a rendered (entering, visible or exiting) toast. */

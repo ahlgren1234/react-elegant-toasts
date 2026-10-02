@@ -546,6 +546,7 @@ describe('replacement (§10, §14)', () => {
     create('t', smuggled);
     expect(record('t')).toMatchObject({
       timer: { duration: 5000, remaining: 5000, runningSince: null },
+      pausedBy: [],
     });
     entered('t');
     expect(timerOf('t')?.runningSince).not.toBeNull();

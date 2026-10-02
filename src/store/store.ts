@@ -15,11 +15,13 @@ import {
   suspendTimer,
 } from './timer';
 import type {
+  GlobalPauseReason,
   StoredOptions,
   StoreSnapshot,
   ToasterConfig,
   ToasterToken,
   ToastInput,
+  ToastPauseReason,
   ToastRecord,
   ToastTimer,
   ToastView,
@@ -47,6 +49,7 @@ const DEFAULT_POSITION: ToastPosition = 'top-right';
 const NO_TOASTER_CAP = 100;
 // Rendered toasts per position (§11).
 const DEFAULT_MAX_VISIBLE = 4;
+const NO_REASONS: readonly ToastPauseReason[] = Object.freeze([]);
 
 function emptySnapshot(): StoreSnapshot {
   const byPosition = {} as Record<ToastPosition, readonly ToastView[]>;
@@ -65,6 +68,9 @@ let pendingDetach = new Set<ToasterToken>();
 let configs = new WeakMap<ToasterToken, ToasterConfig>();
 // Bumped by resetStore so detach microtasks scheduled before a reset never run against new state.
 let generation = 0;
+// Pause reasons (§10). Toast-scoped reasons live on each record (`pausedBy`).
+let globalPause = new Set<GlobalPauseReason>();
+let hoveredPositions = new Set<ToastPosition>();
 
 let listeners = new Set<() => void>();
 let snapshot: StoreSnapshot = SERVER_SNAPSHOT;
@@ -147,7 +153,7 @@ const VIEW_KEYS = [
 
 /**
  * The view of a rendered record. The previous view is kept while every render-visible field is
- * unchanged, so record changes that rendering cannot see (timer state) notify nobody.
+ * unchanged, so record changes that rendering cannot see (timer and pause state) notify nobody.
  */
 function viewOf(
   record: ToastRecord & { phase: ToastView['phase'] },
@@ -283,8 +289,18 @@ function promote(): void {
 }
 
 /**
+ * A toast is paused while any reason applies to it: a global reason, hover on its position's stack,
+ * or one of its own reasons (§10). It resumes only when every one of them has cleared.
+ */
+function isPaused(record: ToastRecord): boolean {
+  return (
+    globalPause.size > 0 || hoveredPositions.has(record.position) || record.pausedBy.length > 0
+  );
+}
+
+/**
  * Reconciles every timer with the store, at the end of each command. A timer runs only for a
- * `visible`, finite toast while a Toaster is active (§5, §9 rule 5, §10). Starting one
+ * `visible`, finite, unpaused toast while a Toaster is active (§5, §9 rule 5, §10). Starting one
  * schedules its `remaining` time. Stopping one folds the time it ran into `remaining`, so resuming
  * never restarts the full duration (D-08). Idempotent: a timer in the right state is left alone.
  */
@@ -292,7 +308,10 @@ function syncTimers(): void {
   let at: number | undefined;
   for (const record of records.values()) {
     const shouldRun =
-      active !== null && record.phase === 'visible' && record.timer.duration !== Infinity;
+      active !== null &&
+      record.phase === 'visible' &&
+      record.timer.duration !== Infinity &&
+      !isPaused(record);
     const running = record.timer.runningSince !== null;
     if (shouldRun && !running) {
       at ??= now();
@@ -324,6 +343,7 @@ function expire(id: ToastId, timer: ToastTimer, scheduledGeneration: number): vo
   command(() => {
     const record = records.get(id);
     if (record?.timer !== timer || record.phase !== 'visible' || active === null) return;
+    if (isPaused(record)) return;
     put({ ...record, phase: 'exiting', exit: { reason: 'timeout' }, timer: expiredTimer(timer) });
     const onAutoClose = record.options.onAutoClose;
     if (onAutoClose) pendingCallbacks.push(() => onAutoClose(toastSnapshot(record)));
@@ -392,6 +412,7 @@ export function upsert(input: ToastInput): ToastId | undefined {
         position,
         phase: 'queued',
         exit: undefined,
+        pausedBy: NO_REASONS,
       });
     }
 
@@ -403,7 +424,7 @@ export function upsert(input: ToastInput): ToastId | undefined {
 
 /**
  * Replacement is not a merge: the new call defines the toast (§14). The fresh timer in `definition`
- * resets the old one, whose pending timeout can no longer act.
+ * resets the old one, whose pending timeout can no longer act; active pause reasons are kept.
  */
 function replace(
   existing: ToastRecord,
@@ -482,6 +503,41 @@ export function exited(id: ToastId): void {
   });
 }
 
+// Pause reasons combine as sets (§10, D-07, D-09): setting a reason twice and clearing it once
+// clears it. The active Toaster reports them; pausing and resuming change nothing rendered.
+
+/** Window focus loss or document visibility loss, which pause every toast. */
+export function setGlobalPause(reason: GlobalPauseReason, on: boolean): void {
+  if (isServer()) return;
+  command(() => {
+    if (on) globalPause.add(reason);
+    else globalPause.delete(reason);
+  });
+}
+
+/** Pointer hover over a position's stack, which pauses every toast at that position. */
+export function setStackPause(position: ToastPosition, on: boolean): void {
+  if (isServer()) return;
+  command(() => {
+    if (active === null) return;
+    if (on) hoveredPositions.add(position);
+    else hoveredPositions.delete(position);
+  });
+}
+
+/** Focus within one toast, or an active swipe on it, which pauses only that toast. */
+export function setToastPause(id: ToastId, reason: ToastPauseReason, on: boolean): void {
+  if (isServer()) return;
+  command(() => {
+    const record = records.get(id);
+    if (active === null || !record || record.pausedBy.includes(reason) === on) return;
+    const pausedBy = on
+      ? [...record.pausedBy, reason]
+      : record.pausedBy.filter(candidate => candidate !== reason);
+    put({ ...record, pausedBy: Object.freeze(pausedBy) });
+  });
+}
+
 /**
  * Attaches a Toaster (§8.5). The first one to attach is active; later ones wait in order.
  * Detach is deferred by a microtask and cancelled when the same Toaster re-attaches first, so
@@ -544,8 +600,13 @@ function completeDetach(token: ToasterToken): void {
       }
     }
   }
-  // Its timers are suspended with their remaining time when this command reconciles them
-  // (`syncTimers`).
+  // The pause reasons its DOM owned go with it. Window and document state stay: they describe the
+  // environment, and the next Toaster seeds them again at attach (§8.4, §10). Its timers are
+  // suspended with their remaining time when this command reconciles them (`syncTimers`).
+  hoveredPositions.clear();
+  for (const record of [...records.values()]) {
+    if (record.pausedBy.length > 0) put({ ...record, pausedBy: NO_REASONS });
+  }
   // Then the earliest waiting Toaster, if any, takes over and promotes the queue (§8.5).
   active = waiting.shift() ?? null;
   if (active !== null) {
@@ -577,7 +638,7 @@ export function inspectRecords(): readonly InspectedRecord[] {
   );
 }
 
-/** Restores the empty store: ownership, warnings, timers, pending work and IDs. */
+/** Restores the empty store: ownership, warnings, timers, pause state, pending work and IDs. */
 export function resetStore(): void {
   records = new Map();
   nextSeq = 1;
@@ -586,6 +647,8 @@ export function resetStore(): void {
   pendingDetach = new Set();
   configs = new WeakMap();
   generation++;
+  globalPause = new Set();
+  hoveredPositions = new Set();
   cancelAll();
   listeners = new Set();
   snapshot = SERVER_SNAPSHOT;
