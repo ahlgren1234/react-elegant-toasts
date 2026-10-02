@@ -1,14 +1,15 @@
-export { default as Toast } from './Toast';
-export { ToastProvider, useToast } from './ToastContext';
-export { default as ToastContainer } from './ToastContainer';
+export { Toaster } from './react/Toaster';
+export { toast } from './toast';
 export type {
-  ToastProps,
+  CustomToastOptions,
+  DismissReason,
+  ToastAction,
+  ToastId,
+  ToastOptions,
   ToastPosition,
+  ToastPromiseMessages,
+  ToastSnapshot,
+  ToastTheme,
   ToastType,
-  ToastAnimation,
-  ToastProviderProps,
-  ToastContextValue,
+  ToasterProps,
 } from './types';
-
-// Re-export useToast as the default export for convenience
-export { useToast as default } from './ToastContext';
