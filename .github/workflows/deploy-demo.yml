@@ -1,106 +1,56 @@
 name: Deploy Demo
 
+# Manual only until the final 2.0.0 release; P-29 reconnects it to the release process (§29).
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: 'pages'
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: '24'
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: '18'
+          persist-credentials: false
 
-      - name: Show initial workspace
-        run: |
-          echo "Current directory: $(pwd)"
-          ls -la
-          echo "Node version:"
-          node --version
-          echo "NPM version:"
-          npm --version
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
-        run: |
-          npm install
-          npm list
+      - run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Show workspace after install
-        run: |
-          echo "Current directory: $(pwd)"
-          ls -la
-          echo "Source directory:"
-          ls -la src/
-          echo "Demo directory:"
-          ls -la demo/
+      - run: npm run build:demo
 
-      - name: Type check
-        run: |
-          echo "Running type check..."
-          npm run typecheck
-        continue-on-error: true
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
-      - name: Lint
-        run: |
-          echo "Running linting..."
-          npm run lint
-        continue-on-error: true
-
-      - name: Test
-        run: |
-          echo "Running tests..."
-          npm test
-        continue-on-error: true
-
-      - name: Build library
-        run: |
-          echo "Building library..."
-          npm run build
-          echo "Build output:"
-          ls -la dist/
-
-      - name: Build demo
-        run: |
-          echo "Building demo..."
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          ls -la
-          echo "Demo directory contents:"
-          ls -la demo/
-          npm run build:demo
-          echo "Demo build output:"
-          ls -la demo-dist/
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: './demo-dist'
           retention-days: 1
 
   deploy:
     needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
