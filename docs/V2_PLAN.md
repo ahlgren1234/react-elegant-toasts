@@ -808,7 +808,7 @@ The docs (§31) state this boundary explicitly. The demo's custom-toast example 
 - Nothing touches the DOM at import time or during render. Layout effects use an isomorphic layout-effect helper, which avoids React 18's server warning.
 - `getServerSnapshot` returns a constant empty snapshot. Server HTML for `<Toaster />` contains only the empty region and live-region shells, so hydration matches.
 - **On the server, `toast()` is rejected and stores nothing** (§8.3). Server state cannot leak between requests. In development it logs one warning.
-- Both the package entry and the built file start with `"use client"`, so `<Toaster />` can go straight into an App Router layout. Calling `toast()` from Server Components or server actions has no effect, and the docs say to call it from client code.
+- The built package entry (`dist/index.js`, the file the `"."` export points to) starts with `"use client"`. The directive is added only through the tsup `banner`, never in `src/index.ts`, because a source directive would be kept by esbuild and duplicated by the banner. This means `<Toaster />` can go straight into an App Router layout. Calling `toast()` from Server Components or server actions has no effect, and the docs say to call it from client code.
 - Themes are CSS-only, so there is no theme flash and no hydration mismatch.
 - Rendering is inline with `position: fixed`, so no portal target is needed on the server.
 - **Verification (§27):**
@@ -901,7 +901,7 @@ Rules:
 `scripts/validate-package` (or equivalent) and the blocking CI job `build-package`:
 
 1. Build the library.
-2. **publint**, plus **AreTheTypesWrong** with the ESM-only profile (`attw --pack --profile esm-only`). Any problem fails the step.
+2. **publint**, plus **AreTheTypesWrong** with the ESM-only profile (`attw --pack --profile esm-only --exclude-entrypoints ./styles.css`). The CSS entry point has no type declarations, so attw always reports it as unresolved and it is excluded. Any other problem fails the step.
 3. `npm pack` produces the tarball.
 4. Check the tarball contents: it contains `dist/index.js`, `dist/index.d.ts` and `dist/styles.css`, and **no** CJS files. `package.json` has `"type": "module"` and no `require` condition.
 5. Verify that `dist/index.js` starts with `"use client"`.
@@ -953,6 +953,7 @@ Every job is **blocking**. No quality gate uses `continue-on-error` (D-31).
   3. It publishes with **npm Trusted Publishing (OIDC)**, using `id-token: write` and provenance. There is no long-lived `NPM_TOKEN` once OIDC works. Trusted Publishing needs a recent npm CLI (11.5 or later at the time of writing; P-28 verifies this).
   4. It creates a GitHub release from the changelog entry.
 - **LICENSE (MIT)** is added in P-01 (D-35).
+- **No releases between P-03 and P-28.** P-03 sets `publishConfig.provenance: true`. The legacy `release.yml` (an `NPM_TOKEN` and no `id-token: write`) can then no longer publish. That is intended: no package release may be made from the intermediate P-03 to P-27 state through the legacy workflow. P-28 replaces the workflow with Trusted Publishing.
 - **The demo deploys only with the final 2.0.0 release.** Pre-releases never deploy it.
 - **After 2.0.0,** the 0.x versions are deprecated on npm with a message pointing to the migration guide.
 
@@ -1085,7 +1086,13 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - tsup 8 with a single config file, **ESM format only**, `.d.ts` output, Rollup tree-shake step disabled, and `"use client"` added through `banner`
   - a CSS build step to `dist/styles.css`
   - the §24 package shape: `type: module`, the exports map with `./styles.css`, `sideEffects`, `files`, peers `^18 || ^19`, no `engines`, `publishConfig`
-- Not in scope: v2 runtime code, any CJS output.
+- Decisions made in P-03:
+  - the output is not minified (`minify: false`), because consumers' bundlers minify, and size-limit measures minified size (§33)
+  - `src/` is not shipped (`files: ["dist"]`), because the source maps embed `sourcesContent`
+  - the version stays `0.1.2`. Changesets sets the version in P-28/P-29.
+  - `"type": "module"` makes Node treat `.js` config files as ESM, so `jest.config.js` and `.eslintrc.js` are renamed to `.cjs` with their content unchanged. P-04 and P-05 replace them.
+  - `publishConfig.provenance: true` disables the legacy release workflow until P-28 (§29)
+- Not in scope: v2 runtime code, any CJS output, the version, `release.yml`.
 - Defects: D-25, D-26, D-27, D-28, D-29.
 
 **P-04 Test runner migration**
@@ -1112,7 +1119,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 **P-07 Package validation harness**
 - Scope:
-  - publint and attw `--profile esm-only`
+  - publint and attw `--profile esm-only --exclude-entrypoints ./styles.css` (see §27)
   - `npm pack` and a tarball-content check (no CJS files)
   - a `"use client"` check
   - a Vite fixture (React 18/19 matrix, TypeScript latest and 5.0) using **types and imports only** for now

@@ -1,18 +1,26 @@
 {
   "name": "react-elegant-toasts",
   "version": "0.1.2",
+  "type": "module",
   "description": "A highly customizable toast notification component for React",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
-  "style": "dist/styles.css",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
   "files": [
-    "dist",
-    "README.md"
+    "dist"
   ],
   "scripts": {
     "build": "npm run build:js && npm run build:css",
-    "build:js": "tsup src/index.ts --format cjs,esm --dts --minify --clean",
+    "build:js": "tsup",
     "build:css": "cp src/styles.css dist/",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -47,8 +55,8 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "react": ">=16.8.0",
-    "react-dom": ">=16.8.0"
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.1.4",
@@ -71,7 +79,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "ts-jest": "^29.1.1",
-    "tsup": "^7.2.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.2.2",
     "vite": "^4.5.0"
   },
@@ -83,11 +91,8 @@
     "url": "https://github.com/ahlgren1234/react-elegant-toasts/issues"
   },
   "homepage": "https://ahlgren1234.github.io/react-elegant-toasts/",
-  "sideEffects": false,
   "publishConfig": {
-    "access": "public"
-  },
-  "engines": {
-    "node": ">=14"
+    "access": "public",
+    "provenance": true
   }
 }
