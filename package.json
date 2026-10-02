@@ -31,6 +31,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "validate:package": "npm run build && node scripts/validate-package.js",
     "prepublishOnly": "npm run build",
     "demo": "vite",
     "build:demo": "vite build"
@@ -59,6 +60,7 @@
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@eslint/js": "^9.39.5",
     "@testing-library/jest-dom": "^6.1.4",
     "@testing-library/react": "^14.1.0",
@@ -75,6 +77,7 @@
     "globals": "^17.13.0",
     "jsdom": "^30.1.1",
     "prettier": "^3.9.9",
+    "publint": "0.3.25",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tsup": "^8.5.1",

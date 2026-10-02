@@ -34,7 +34,7 @@ export default defineConfig(
     settings: { react: { version: 'detect' } },
   },
   {
-    files: ['*.config.{js,ts}'],
+    files: ['*.config.{js,ts}', 'scripts/**/*.js'],
     languageOptions: { globals: globals.node },
   },
   // JS files belong to no tsconfig project, so they are linted without type information.

@@ -6,6 +6,7 @@ node_modules
 # Build
 dist
 demo-dist/
+*.tgz
 build
 lib
 .next

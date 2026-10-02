@@ -61,9 +61,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            fixtures/consumer-vite/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm run build
+      # Builds, packs and validates the tarball, including the packed consumer fixture (§27).
+      - run: npm run validate:package
 
   demo:
     runs-on: ubuntu-latest
