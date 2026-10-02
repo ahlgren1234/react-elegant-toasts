@@ -88,6 +88,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 0.x isPaused copy onto every toast (D-07), removed in P-08
     setToasts(prevToasts =>
       prevToasts.map(toast => ({
         ...toast,

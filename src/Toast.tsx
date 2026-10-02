@@ -124,6 +124,7 @@ const Toast: React.FC<ToastProps> = ({
   const animationClass = getAnimationStyle(animation);
 
   return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 0.x click-to-dismiss (D-17), removed in P-08
     <div
       role={role}
       className={`toast ${type} ${animationClass} ${className} ${rtl ? 'rtl' : ''}`}

@@ -7,6 +7,11 @@
   "tabWidth": 2,
   "useTabs": false,
   "bracketSpacing": true,
-  "jsxBracketSameLine": false,
-  "arrowParens": "avoid"
-} 
+  "arrowParens": "avoid",
+  "overrides": [
+    {
+      "files": "*.md",
+      "options": { "embeddedLanguageFormatting": "off" }
+    }
+  ]
+}

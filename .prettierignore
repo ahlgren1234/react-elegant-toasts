@@ -1,0 +1,4 @@
+dist/
+coverage/
+demo-dist/
+package-lock.json
