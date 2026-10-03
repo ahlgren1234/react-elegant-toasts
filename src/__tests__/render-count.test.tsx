@@ -2,7 +2,7 @@
 // kept by identity, so React would skip re-rendering it even if its item re-rendered; counting the
 // content's renders would prove nothing. Instead the item's render function is wrapped, and the
 // wrapper is memoised exactly when the real item is, so the test sees what production does.
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import { memo, Profiler, type ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster, toast } from '../index';
@@ -10,6 +10,7 @@ import {
   dismiss,
   entered,
   getSnapshot,
+  inspectRecords,
   setGlobalPause,
   setStackPause,
   setToastPause,
@@ -105,6 +106,39 @@ describe('render counts (§32, D-16)', () => {
       setToastPause('a', 'focus-within', true);
       setGlobalPause('window-blur', false);
     });
+    expect(getSnapshot()).toBe(snapshot);
+    expect(commits()).toBe(before);
+    expect(rendersSince()).toEqual({});
+  });
+
+  it('renders nothing for the DOM events that pause toasts (P-15)', () => {
+    const { commits } = mountWithToasts();
+    const snapshot = getSnapshot();
+    const before = commits();
+    const list = document.querySelector('ol[data-position="top-right"]') as HTMLOListElement;
+    const close = (id: string) =>
+      [...list.querySelectorAll('li')]
+        .find(item => item.textContent?.includes(id))
+        ?.querySelector('button') as HTMLButtonElement;
+    const hidden = vi.spyOn(document, 'hidden', 'get');
+    act(() => {
+      fireEvent.pointerEnter(list);
+      close('a').focus();
+      close('b').focus();
+      fireEvent.blur(window);
+      fireEvent.focus(window);
+      hidden.mockReturnValue(true);
+      fireEvent(document, new Event('visibilitychange'));
+      hidden.mockReturnValue(false);
+      fireEvent(document, new Event('visibilitychange'));
+    });
+    // The events reached the store: focus is inside b.
+    expect(inspectRecords().find(record => record.id === 'b')?.pausedBy).toEqual(['focus-within']);
+    act(() => {
+      close('b').blur();
+      fireEvent.pointerLeave(list);
+    });
+    hidden.mockRestore();
     expect(getSnapshot()).toBe(snapshot);
     expect(commits()).toBe(before);
     expect(rendersSince()).toEqual({});
