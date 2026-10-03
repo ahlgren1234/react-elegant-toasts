@@ -47,6 +47,11 @@ const PositionList = memo(function PositionList({
 // renders the store's snapshot while it is the active one. Before any Toaster is active, including
 // on the server and during hydration, it renders the empty region (§23). While another Toaster is
 // active it renders nothing.
+/**
+ * Shows the toasts. Render one `<Toaster />`, near the root of the app. Toasts created before it
+ * mounts appear once it does. If more than one is mounted, only the first shows toasts; another
+ * takes over when it unmounts.
+ */
 export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   maxVisible,
   position,

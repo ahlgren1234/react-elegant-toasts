@@ -113,7 +113,7 @@ export interface ToastView {
 export interface StoreSnapshot {
   /** The Toaster that renders, or null when none is attached (§8.5). */
   readonly active: ToasterToken | null;
-  /** Rendered toasts per position, in `seq` order. Visual order is P-14's job. */
+  /** Rendered toasts per position, in `seq` order. The renderer applies the visual order (§12). */
   readonly byPosition: Readonly<Record<ToastPosition, readonly ToastView[]>>;
 }
 

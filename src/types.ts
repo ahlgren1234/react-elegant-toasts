@@ -41,25 +41,36 @@ export interface ToastOptions {
   /**
    * How long the toast stays, in milliseconds, while it is visible and not paused. Pausing never
    * restarts it. `Infinity` makes the toast persistent, and a value of 0 or less closes it on the
-   * next timer tick. Loading toasts are always persistent. When omitted, the default (5000 ms)
-   * applies.
+   * next timer tick. Loading toasts are always persistent. When omitted, the `<Toaster />`
+   * `duration` applies (5000 ms unless set). A toast created while no `<Toaster />` is mounted
+   * gets the default of the first one that mounts.
    */
   duration?: number | undefined;
   /**
-   * Where the toast is shown. When omitted, the default position (`"top-right"`) applies, so a
-   * replacement that leaves it out moves a toast shown elsewhere.
+   * Where the toast is shown. When omitted, the `<Toaster />` `position` applies (`"top-right"`
+   * unless set), so a replacement that leaves it out moves a toast shown elsewhere. A toast
+   * created while no `<Toaster />` is mounted gets the position of the first one that mounts.
    */
   position?: ToastPosition | undefined;
-  /** Replaces the type's icon. `null` shows no icon. Icons are hidden from assistive technology. */
+  /**
+   * Replaces the type's built-in icon; neutral toasts have none. `null` shows no icon at all.
+   * Icons are hidden from assistive technology.
+   */
   icon?: ReactNode | null;
   /**
    * One action button. Clicking it calls `onClick` and then dismisses the toast with the reason
    * `"action"`, unless `onClick` calls `event.preventDefault()`.
    */
   action?: ToastAction | undefined;
-  /** Whether the toast shows the library close button. */
+  /**
+   * Whether the toast shows the library close button. When omitted, the `<Toaster />`
+   * `closeButton` applies (on unless set).
+   */
   closeButton?: boolean | undefined;
-  /** Whether the toast shows a progress bar for its remaining time. */
+  /**
+   * The toast's progress setting. When omitted, the `<Toaster />` `progress` applies, which is off
+   * unless set.
+   */
   progress?: boolean | undefined;
   /** Extra class names for the toast's root element. */
   className?: string | undefined;
@@ -83,7 +94,7 @@ export interface CustomToastOptions {
   position?: ToastPosition | undefined;
   /**
    * Whether the library close button is placed on the custom content. Off unless `true` is
-   * passed.
+   * passed: the `<Toaster />` `closeButton` does not apply to custom toasts.
    */
   closeButton?: boolean | undefined;
   /** As in {@link ToastOptions.className}. */
@@ -118,12 +129,34 @@ export interface ToastPromiseMessages<T> {
   error: ReactNode | ((error: unknown) => ReactNode);
 }
 
+/** Props of `<Toaster />`. */
 export interface ToasterProps {
+  /**
+   * The position of toasts that do not set their own. Defaults to `"top-right"`. Changing it does
+   * not move toasts that already have a position.
+   */
   position?: ToastPosition | undefined;
   theme?: ToastTheme | undefined;
+  /**
+   * How many toasts each position shows at once: a whole number of at least 1, 4 by default. More
+   * toasts wait, in order, and appear as shown ones close. Lowering it closes nothing.
+   */
   maxVisible?: number | undefined;
+  /**
+   * The duration, in milliseconds, of toasts that do not set their own. Defaults to 5000.
+   * `Infinity` makes them persistent. Changing it does not change toasts that already have a
+   * duration.
+   */
   duration?: number | undefined;
+  /**
+   * Whether normal toasts that do not set `closeButton` show the library close button. On by
+   * default. Changing it updates those toasts at once. Custom toasts ignore it.
+   */
   closeButton?: boolean | undefined;
+  /**
+   * The progress setting of normal toasts that do not set their own. Off by default. Custom toasts
+   * have no progress setting.
+   */
   progress?: boolean | undefined;
   hotkey?: readonly string[] | false | undefined;
   labels?:
@@ -134,5 +167,6 @@ export interface ToasterProps {
         errorPrefix?: string | undefined;
       }
     | undefined;
+  /** Extra class names for the toaster's root element. */
   className?: string | undefined;
 }

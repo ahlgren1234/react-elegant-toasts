@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "build": "vite build"
+    "build": "vite build",
+    "test:render": "vite build --ssr render-check.mjs --outDir dist-render --emptyOutDir && node dist-render/render-check.js"
   },
   "dependencies": {
     "react": "18.3.1",
@@ -13,6 +14,7 @@
   "devDependencies": {
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
+    "jsdom": "30.1.1",
     "typescript": "5.0.4",
     "vite": "8.3.2"
   }
