@@ -23,7 +23,7 @@ import { AnnouncerContext, createAnnouncer, VISUALLY_HIDDEN } from './announcer'
 import { resolveCloseButton, resolveLabels } from './defaults';
 import { ToastItem } from './ToastItem';
 import { useEnvironmentPause } from './useEnvironmentPause';
-import { useHotkey } from './useHotkey';
+import { keyShortcutsOf, useHotkey } from './useHotkey';
 
 const createToken = (): ToasterToken => ({});
 
@@ -147,7 +147,7 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   const owner = snapshot.active === token;
   useEnvironmentPause(owner);
   const section = useRef<HTMLElement>(null);
-  useHotkey(owner, section, hotkey);
+  const hotkeySpec = useHotkey(owner, section, hotkey);
   // Writes into this Toaster's live regions. Its pending announcements go with it.
   const [announcer] = useState(createAnnouncer);
   useEffect(() => () => announcer.dispose(), [announcer]);
@@ -156,12 +156,14 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   // Resolved to strings on every render, so a new `labels` object with the same text changes no
   // prop below the region.
   const { region, close, warningPrefix, errorPrefix } = resolveLabels(labels);
-  // The region takes focus from script only, as the last place focus restoration can go (§18).
+  // The region takes focus from script only, as the last place focus restoration can go (§18). It
+  // advertises the hotkey in effect when ARIA can name it (§17.2); its role is the named section's.
   return (
     <section
       ref={section}
       className={className ? `ret-toaster ${className}` : 'ret-toaster'}
       aria-label={region}
+      aria-keyshortcuts={hotkeySpec ? keyShortcutsOf(hotkeySpec) : undefined}
       data-theme={THEMES.includes(theme) ? theme : 'system'}
       tabIndex={-1}
     >

@@ -52,6 +52,54 @@ export function normaliseHotkey(value: unknown): HotkeySpec | null {
 export const matchesHotkey = (event: KeyboardEvent, spec: HotkeySpec): boolean =>
   event.code === spec.code && MODIFIERS.every(modifier => event[modifier] === spec[modifier]);
 
+// The modifiers in `aria-keyshortcuts` notation, in the order they are written.
+const ARIA_MODIFIERS = [
+  ['ctrlKey', 'Control'],
+  ['altKey', 'Alt'],
+  ['metaKey', 'Meta'],
+  ['shiftKey', 'Shift'],
+] as const;
+
+// Named keys whose `code` is also their ARIA name.
+const ARIA_NAMED_KEYS: ReadonlySet<string> = new Set([
+  'Space',
+  'Enter',
+  'Tab',
+  'Escape',
+  'Backspace',
+  'Delete',
+  'Insert',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+]);
+
+/** A physical key's ARIA name, for the keys whose name is not in doubt; otherwise undefined. */
+function ariaKeyOf(code: string): string | undefined {
+  if (ARIA_NAMED_KEYS.has(code)) return code;
+  if (/^F(?:[1-9]|1\d|2[0-4])$/.test(code)) return code;
+  return /^(?:Key([A-Z])|Digit(\d))$/.exec(code)?.slice(1).find(Boolean);
+}
+
+/**
+ * The hotkey in `aria-keyshortcuts` notation (§17.2): ARIA names physical keys, like `code`, by
+ * their label, modifiers first, so `["shiftKey", "ctrlKey", "KeyY"]` is `Control+Shift+Y`. Only
+ * letters, digits, F1 to F24 and a few named keys are written. Others, such as punctuation, whose
+ * labels depend on the layout, the numpad, which would read as the digit row, and unknown codes,
+ * give undefined: the hotkey still works, but is not advertised. Never the raw `code`.
+ */
+export function keyShortcutsOf(spec: HotkeySpec): string | undefined {
+  const key = ariaKeyOf(spec.code);
+  if (key === undefined) return undefined;
+  const held = ARIA_MODIFIERS.filter(([modifier]) => spec[modifier]).map(([, name]) => name);
+  return [...held, key].join('+');
+}
+
 /** Escape, with no modifier, and not ending an IME composition (§18). */
 const isPlainEscape = (event: KeyboardEvent): boolean =>
   event.key === 'Escape' && !event.isComposing && MODIFIERS.every(modifier => !event[modifier]);
@@ -84,11 +132,14 @@ function firstEligibleToast(region: HTMLElement): HTMLElement | null {
 //
 // An Escape that does not act, from outside the region for instance, goes on to the hotkey, so a
 // hotkey of `["Escape"]` focuses the toasts from outside and Escape returns from inside.
+//
+// Returns the hotkey in effect for this render, null when disabled, so the region can advertise
+// the hotkey that is matched (§17.2).
 export function useHotkey(
   owner: boolean,
   section: { readonly current: HTMLElement | null },
   hotkey: unknown
-): void {
+): HotkeySpec | null {
   const spec = normaliseHotkey(hotkey);
   const specRef = useRef(spec);
   useIsomorphicLayoutEffect(() => {
@@ -137,4 +188,5 @@ export function useHotkey(
       previousFocus.current = null;
     };
   }, [owner, section]);
+  return spec;
 }

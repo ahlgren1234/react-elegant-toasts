@@ -18,6 +18,7 @@ import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { Toaster, toast } from '../index';
 import { deepActiveElement } from '../react/focus';
+import { keyShortcutsOf, normaliseHotkey } from '../react/useHotkey';
 import { dismiss, inspectRecords } from '../store/store';
 import type { ToasterProps, ToastOptions } from '../types';
 
@@ -336,7 +337,7 @@ describe('the target (§12, §18)', () => {
     // The region takes focus only as the last place of focus restoration, never from the hotkey.
     const region = screen.getByRole('region');
     expect(region).toHaveAttribute('tabindex', '-1');
-    expect(region).not.toHaveAttribute('aria-keyshortcuts');
+    expect(region).toHaveAttribute('aria-keyshortcuts', 'Alt+T');
   });
 });
 
@@ -467,11 +468,16 @@ describe('listener ownership (§18, §32)', () => {
     await settle();
     const first = listeners.live();
     expect(first).toHaveLength(1);
+    // The waiting Toaster renders nothing, so only the owner's hotkey is advertised.
+    expect(screen.getAllByRole('region')).toHaveLength(1);
+    expect(screen.getByRole('region')).toHaveAttribute('aria-keyshortcuts', 'Alt+T');
 
     rerender(<Toaster key="second" hotkey={['ctrlKey', 'KeyY']} />);
     await settle();
     expect(listeners.live()).toHaveLength(1);
     expect(listeners.live()).not.toEqual(first);
+    expect(screen.getAllByRole('region')).toHaveLength(1);
+    expect(screen.getByRole('region')).toHaveAttribute('aria-keyshortcuts', 'Control+Y');
     show('a', { id: 'a' });
     act(() => outside.focus());
     expect(press(ALT_T)).toBe(true);
@@ -501,16 +507,31 @@ describe('listener ownership (§18, §32)', () => {
     expect(attached).toHaveLength(1);
     show('a', { id: 'a' });
 
-    const steps: [ToasterProps['hotkey'], KeyboardEventInit, KeyboardEventInit][] = [
-      [undefined, ALT_T, { code: 'KeyY', ctrlKey: true }],
-      [['ctrlKey', 'KeyY'], { code: 'KeyY', ctrlKey: true }, ALT_T],
-      [['shiftKey', 'KeyY'], { code: 'KeyY', shiftKey: true }, { code: 'KeyY', ctrlKey: true }],
-      [false, { code: 'KeyZ' }, { code: 'KeyY', shiftKey: true }],
-      [['altKey', 'KeyT'], ALT_T, { code: 'KeyY', shiftKey: true }],
-      [['altKey', 'KeyT'], ALT_T, { code: 'KeyY', shiftKey: true }],
+    const region = screen.getByRole('region');
+    expect(region).not.toHaveAttribute('aria-keyshortcuts');
+    const steps: [
+      ToasterProps['hotkey'],
+      KeyboardEventInit,
+      KeyboardEventInit,
+      string | undefined,
+    ][] = [
+      [undefined, ALT_T, { code: 'KeyY', ctrlKey: true }, 'Alt+T'],
+      [['ctrlKey', 'KeyY'], { code: 'KeyY', ctrlKey: true }, ALT_T, 'Control+Y'],
+      [
+        ['shiftKey', 'KeyY'],
+        { code: 'KeyY', shiftKey: true },
+        { code: 'KeyY', ctrlKey: true },
+        'Shift+Y',
+      ],
+      [false, { code: 'KeyZ' }, { code: 'KeyY', shiftKey: true }, undefined],
+      [['altKey', 'KeyT'], ALT_T, { code: 'KeyY', shiftKey: true }, 'Alt+T'],
+      [['altKey', 'KeyT'], ALT_T, { code: 'KeyY', shiftKey: true }, 'Alt+T'],
     ];
-    for (const [hotkey, acts, ignored] of steps) {
+    for (const [hotkey, acts, ignored, shortcut] of steps) {
       rerender(<App hotkey={hotkey} />);
+      // The region advertises the hotkey of this render, with the same listener.
+      if (shortcut === undefined) expect(region).not.toHaveAttribute('aria-keyshortcuts');
+      else expect(region).toHaveAttribute('aria-keyshortcuts', shortcut);
       act(() => outside.focus());
       expect(press(ignored)).toBe(true);
       expect(outside).toHaveFocus();
@@ -923,7 +944,162 @@ describe('Escape (§18)', () => {
   });
 });
 
+describe('aria-keyshortcuts (§17.2)', () => {
+  const shortcutOf = (hotkey: unknown) => {
+    const spec = normaliseHotkey(hotkey);
+    return spec && keyShortcutsOf(spec);
+  };
+
+  it('names modifiers first, as Control, Alt, Meta and Shift, then the key', () => {
+    expect(shortcutOf(undefined)).toBe('Alt+T');
+    expect(shortcutOf(['shiftKey', 'ctrlKey', 'KeyY'])).toBe('Control+Shift+Y');
+    expect(shortcutOf(['shiftKey', 'metaKey', 'altKey', 'ctrlKey', 'KeyA'])).toBe(
+      'Control+Alt+Meta+Shift+A'
+    );
+    expect(shortcutOf(['metaKey', 'KeyK'])).toBe('Meta+K');
+  });
+
+  it.each<[string, string]>([
+    ['KeyA', 'A'],
+    ['KeyZ', 'Z'],
+    ['Digit0', '0'],
+    ['Digit9', '9'],
+    ['F1', 'F1'],
+    ['F12', 'F12'],
+    ['F24', 'F24'],
+    ['Space', 'Space'],
+    ['Enter', 'Enter'],
+    ['Tab', 'Tab'],
+    ['Escape', 'Escape'],
+    ['Backspace', 'Backspace'],
+    ['Delete', 'Delete'],
+    ['Insert', 'Insert'],
+    ['Home', 'Home'],
+    ['End', 'End'],
+    ['PageUp', 'PageUp'],
+    ['PageDown', 'PageDown'],
+    ['ArrowUp', 'ArrowUp'],
+    ['ArrowDown', 'ArrowDown'],
+    ['ArrowLeft', 'ArrowLeft'],
+    ['ArrowRight', 'ArrowRight'],
+  ])('names %s as %s', (code, name) => {
+    expect(shortcutOf([code])).toBe(name);
+  });
+
+  it('names the key pressed with Shift, not the character it types', () => {
+    expect(shortcutOf(['shiftKey', 'Digit5'])).toBe('Shift+5');
+  });
+
+  it.each([
+    'Minus',
+    'Equal',
+    'Slash',
+    'Period',
+    'BracketLeft',
+    'Backquote',
+    'Numpad1',
+    'NumpadEnter',
+    'IntlBackslash',
+    'IntlRo',
+    'Lang1',
+    'ShiftLeft',
+    'ControlRight',
+    'F0',
+    'F25',
+    'Keyt',
+    'KeyTT',
+    'Digit10',
+    'T',
+    '5',
+    'Foo',
+  ])('does not name %s, nor fall back to the code', code => {
+    expect(shortcutOf([code])).toBeUndefined();
+    expect(shortcutOf(['altKey', code])).toBeUndefined();
+  });
+
+  it('is nothing for no hotkey', () => {
+    expect(normaliseHotkey(false)).toBeNull();
+  });
+
+  it.each<[string, unknown, string | null]>([
+    ['the default', undefined, 'Alt+T'],
+    ['a configured hotkey', ['shiftKey', 'ctrlKey', 'KeyY'], 'Control+Shift+Y'],
+    ['a function key', ['F6'], 'F6'],
+    ['Escape as the hotkey', ['Escape'], 'Escape'],
+    ['a shifted digit', ['shiftKey', 'Digit5'], 'Shift+5'],
+    ['Space', ['Space'], 'Space'],
+    ['an invalid hotkey, as the default', ['altKey', 'ctrlKey'], 'Alt+T'],
+    ['a hotkey given as a string, as the default', 'Alt+T', 'Alt+T'],
+    ['no hotkey', false, null],
+    ['a hotkey ARIA cannot name', ['Minus'], null],
+  ])('the region advertises %s', (_name, hotkey, shortcut) => {
+    mount({ hotkey: hotkey as false });
+    expect(screen.getByRole('region').getAttribute('aria-keyshortcuts')).toBe(shortcut);
+  });
+
+  it('reads a frozen array without changing it', () => {
+    const hotkey = Object.freeze(['ctrlKey', 'shiftKey', 'KeyY']);
+    mount({ hotkey });
+    expect(screen.getByRole('region')).toHaveAttribute('aria-keyshortcuts', 'Control+Shift+Y');
+    expect(hotkey).toEqual(['ctrlKey', 'shiftKey', 'KeyY']);
+  });
+
+  it.each(['Minus', 'Numpad1'])(
+    'still matches %s, a hotkey it cannot name, which is only not advertised',
+    code => {
+      const { outside } = mount({ hotkey: ['ctrlKey', code] });
+      show('a', { id: 'a' });
+      expect(screen.getByRole('region')).not.toHaveAttribute('aria-keyshortcuts');
+      expect(press({ code, ctrlKey: true })).toBe(false);
+      expect(document.activeElement).toBe(itemOf('a'));
+      act(() => outside.focus());
+      expect(press({ code })).toBe(true);
+      expect(outside).toHaveFocus();
+    }
+  );
+
+  it('advertises the hotkey under StrictMode, and follows a change', async () => {
+    const { rerender } = render(
+      <StrictMode>
+        <Toaster hotkey={['F6']} />
+      </StrictMode>
+    );
+    await settle();
+    expect(screen.getByRole('region')).toHaveAttribute('aria-keyshortcuts', 'F6');
+    rerender(
+      <StrictMode>
+        <Toaster hotkey={false} />
+      </StrictMode>
+    );
+    expect(screen.getByRole('region')).not.toHaveAttribute('aria-keyshortcuts');
+  });
+});
+
 describe('hydration (§23)', () => {
+  it.each<[string, unknown, string | null]>([
+    ['the default', undefined, 'Alt+T'],
+    ['a configured hotkey', ['ctrlKey', 'KeyY'], 'Control+Y'],
+    ['an invalid hotkey', ['altKey'], 'Alt+T'],
+    ['no hotkey', false, null],
+    ['a hotkey ARIA cannot name', ['Minus'], null],
+  ])('hydrates the advertised hotkey without a mismatch: %s', async (_name, hotkey, shortcut) => {
+    const html = renderToString(<Toaster hotkey={hotkey as false} />);
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.append(container);
+    const error = vi.spyOn(console, 'error');
+    const root = await act(async () => {
+      const hydrated = hydrateRoot(container, <Toaster hotkey={hotkey as false} />);
+      await Promise.resolve();
+      return hydrated;
+    });
+    await settle();
+    expect(container.querySelector('section')?.getAttribute('aria-keyshortcuts')).toBe(shortcut);
+    expect(error).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    container.remove();
+  });
+
   it('hydrates without a mismatch, then the hotkey and Escape work', async () => {
     const html = renderToString(<Toaster />);
     const container = document.createElement('div');

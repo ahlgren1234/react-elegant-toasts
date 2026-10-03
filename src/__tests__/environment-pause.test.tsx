@@ -204,6 +204,22 @@ describe('listener ownership (§10, §32)', () => {
       </StrictMode>
     );
     await settle();
+    // The region advertises each new hotkey (P-16) with the same four listeners.
+    const region = document.querySelector('section') as HTMLElement;
+    expect(region).toHaveAttribute('aria-keyshortcuts', 'Control+Y');
+    for (const [hotkey, shortcut] of [
+      [false, null],
+      [['Minus'], null],
+      [undefined, 'Alt+T'],
+    ] as const) {
+      rerender(
+        <StrictMode>
+          <Toaster hotkey={hotkey} />
+        </StrictMode>
+      );
+      await settle();
+      expect(region.getAttribute('aria-keyshortcuts')).toBe(shortcut);
+    }
     expect(listeners.added()).toBe(4);
     expect(listeners.all()).toEqual(attached);
   });

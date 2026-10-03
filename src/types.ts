@@ -162,8 +162,14 @@ export interface ToasterProps {
    * The keyboard shortcut that moves focus to the first toast shown: the names of the modifier
    * properties to hold (`"altKey"`, `"ctrlKey"`, `"metaKey"`, `"shiftKey"`) plus one
    * `KeyboardEvent.code` value. Defaults to `["altKey", "KeyT"]` (Alt+T), which matches the
-   * physical key on any keyboard layout. Escape then returns focus to where it was. `false`
-   * disables the shortcut.
+   * physical key on any keyboard layout. Exactly the listed modifiers must be held, and no others.
+   * Escape then returns focus to where it was. `false` disables the shortcut. A change applies at
+   * once.
+   *
+   * The toaster's region advertises the shortcut to assistive technology with `aria-keyshortcuts`
+   * (`"Alt+T"` by default) for letter, digit, F1 to F24 and a few named keys such as `"Escape"`.
+   * Other keys, such as punctuation and the numpad, are not advertised, but the shortcut still
+   * works.
    */
   hotkey?: readonly string[] | false | undefined;
   /**

@@ -161,7 +161,7 @@ describe('icon and control accessibility (§17.2, D-19)', () => {
     expect(screen.queryByRole('img')).toBeNull();
   });
 
-  it('uses native buttons named by their label and "Close notification", and no later P-16 semantics', () => {
+  it('uses native buttons named by their label and "Close notification", and no other ARIA on toasts', () => {
     render(<Toaster />);
     show('Saved', { id: 's', action: { label: <span>Undo</span>, onClick: () => undefined } });
     const action = screen.getByRole('button', { name: 'Undo' });
@@ -172,9 +172,11 @@ describe('icon and control accessibility (§17.2, D-19)', () => {
     }
     expect(action).toHaveClass('ret-toast__action', { exact: true });
     expect(close).toHaveClass('ret-toast__close', { exact: true });
-    expect(document.querySelectorAll('[role="alert"], [aria-keyshortcuts], [inert]')).toHaveLength(
-      0
-    );
+    expect(document.querySelectorAll('[role="alert"], [inert]')).toHaveLength(0);
+    // Only the region advertises the hotkey (§17.2).
+    expect([...document.querySelectorAll('[aria-keyshortcuts]')]).toEqual([
+      screen.getByRole('region'),
+    ]);
     // Only the region, for focus restoration, and the toast itself, for the hotkey (§18), take focus
     // from script, and both stay out of the Tab order.
     expect([...document.querySelectorAll('[tabindex]')]).toEqual([

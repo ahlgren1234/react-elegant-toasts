@@ -694,7 +694,7 @@ A promise that settles as an error is announced assertively, because the settlem
 
 ### 17.2 Semantics of normal toasts (library-owned shell)
 
-- The toaster root is `<section aria-label={labels.region}>`, with `aria-keyshortcuts` set to the active hotkey when one is configured. Each position is an `<ol>` and each toast is an `<li>`.
+- The toaster root is `<section aria-label={labels.region}>`, with `aria-keyshortcuts` set to the hotkey in effect, in ARIA notation (`Alt+T` by default), when one is configured and ARIA can name it: modifiers as `Control`, `Alt`, `Meta` and `Shift`, in that order, then a letter, digit, F1 to F24, `Space` or a named key such as `Escape` or `ArrowUp`. Other keys, such as punctuation, the numpad and unknown codes, are not advertised, and the hotkey still works. The section needs no `role`. Each position is an `<ol>` and each toast is an `<li>`.
 - Icons, including the loading spinner, are inline SVG with `aria-hidden="true"` and `focusable="false"` (D-19).
 - The close and action controls are native `<button type="button">` elements. The close button is named by `labels.close`, and its target is at least 24×24 CSS px (WCAG 2.5.8).
 - Type is never conveyed by colour alone. Each type has a distinct icon shape, and warnings and errors get a text prefix for screen readers.
@@ -728,7 +728,7 @@ The docs (§31) state this boundary explicitly. The demo's custom-toast example 
 
 ### 17.6 Testing
 
-- axe (`vitest-axe`) runs across every theme, every normal type, a toast with an action, the close button, RTL, and a custom toast with accessible sample content.
+- axe (`vitest-axe`) runs across every theme, every normal type, a toast with an action, the close button, RTL, and a custom toast with accessible sample content. In jsdom it checks structure only: names, roles, landmark and list structure and valid ARIA. It skips content inside an inert toast and has no CSS or colour checks, so it does not replace contrast checks (P-17), real-browser behaviour (P-22) or the screen-reader checklist (P-29).
 - Tests assert:
   - live regions are present before content
   - politeness matches the type
@@ -745,10 +745,10 @@ The docs (§31) state this boundary explicitly. The demo's custom-toast example 
 ## 18. Keyboard interaction
 
 - **Hotkey:** the default is **Alt+T**, matched on `altKey` and `KeyboardEvent.code === "KeyT"` so it works regardless of keyboard layout or macOS Option characters. It is configurable through `hotkey`, and `hotkey={false}` disables it.
-  - Pressing the hotkey moves focus to the first rendered toast (in visual order) and records the element that had focus before.
+  - Pressing the hotkey moves focus to the first rendered toast (in visual order) and, when focus came from outside the region, records the element that had focus before.
   - It does nothing when there are no rendered toasts.
 - **Tab** moves through the controls in DOM order, which matches visual order (§12).
-- **Escape**, while focus is inside the region, returns focus to the element that had it before the hotkey (or to the document if that element has gone). **Escape never dismisses a toast.**
+- **Escape**, while focus is inside the region, returns focus to the element that had it before the hotkey when it can, and otherwise releases focus to the document: when nothing was recorded, or the recorded element has gone or no longer takes focus. **Escape never dismisses a toast.**
 - **Focus restoration when the focused toast is removed:** when a toast that holds focus starts to exit, focus moves before the toast becomes inert, and stays in the region:
   1. The equivalent control in the next toast: its close button or action from the same control, the toast itself from the toast. Focus in custom content has no equivalent.
   2. Otherwise, the previous toast.
@@ -1544,8 +1544,10 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - the Alt+T hotkey (configurable and disableable), Escape returning focus, focus restoration
   - `aria-keyshortcuts`
   - the axe suite
-  - docs notes on the custom-content boundary for P-26
+  - docs notes on the custom-content boundary for P-26, kept in the P-26 entry below
 - Defects: D-18, D-22.
+  - **D-18 is closed by P-16:** persistent polite and assertive regions, politeness by type, no `role` option and no `role="alert"` on toasts, covered by the announcement and role tests and backed by the structural axe suite.
+  - **D-22 stays open** until P-26 rewrites the 0.x README (AC-REL-2). P-16 makes the keyboard and assistive-technology behaviour real but does not touch the README.
 
 ### Track D: Visual (starts behind the P-17 gate)
 
@@ -1610,6 +1612,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-25 Demo rebuild** (§31). It deploys only at 2.0.0. After P-04 the demo still builds with Vite 4 and `@vitejs/plugin-react` 4, which were kept on purpose (see P-04). P-25 evaluates upgrading them, together with whether Vitest can then move past 3.x.
 
 **P-26 README and reference docs** (§31), including the accessibility boundary and the ESM-only guidance. Defects: D-22, D-35.
+
+- Notes from P-16 for the accessibility documentation:
+  - **Hotkey and focus.** A press from inside the region moves focus to the first toast and keeps the earlier record. There is no focus trap. Escape works from the region too. Removal restoration goes from the next toast's equivalent control (or the next toast) to the previous toast, then the region. `aria-keyshortcuts` names physical keys by their US-QWERTY labels, so on other layouts the advertised letter may differ from the printed one. Whether a configured hotkey meets WCAG (for example 2.1.4 for a single-character hotkey) is the consumer's responsibility; document the mechanism, not blanket conformance.
+  - **Labels.** Give a localisation example. The warning and error prefixes are read in announcements only and do not appear in the visible toast.
+  - **Custom content.** The library owns the region, the live-region mechanism, the hotkey, Escape focus return and removal focus restoration. The consumer owns roles, accessible names, keyboard operability, focusability and the behaviour of the controls inside custom content. Custom controls get no equivalent-control matching: removal restoration from custom content goes to the previous toast, then the region.
+  - **Announcement boundary.** A custom toast's announcement is the DOM `textContent` of its committed revision, which is not the accessibility tree: it includes `aria-hidden`, visually hidden and nested-control text, and later DOM changes without a new revision are not announced. It leaves out the library close button by its `.ret-toast__close` class, which custom markup can imitate. P-26 documents this boundary and decides whether that last case needs its own fix.
 
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
@@ -1695,11 +1703,11 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - AC-A11Y-2 † Politeness matches §17.1: error is assertive, and every other type, including loading and custom, is polite. Warnings and errors carry their prefixes.
 - AC-A11Y-3 † Icons have `aria-hidden="true"`. (D-19)
 - AC-A11Y-4 † Controls are native buttons with accessible names. The close button is on by default for normal toasts. Clicking the body never dismisses. (D-17)
-- AC-A11Y-5 † axe finds no violations across the §17.6 matrix.
+- AC-A11Y-5 † axe finds no violations across the §17.6 matrix. These are structural checks in jsdom (§17.6), not a substitute for AC-A11Y-6, P-22 or AC-A11Y-8.
 - AC-A11Y-6 † The documented token palette meets 4.5:1 for text and 3:1 for non-text in both themes. (D-20)
 - AC-A11Y-7 † A persistent normal toast with no close button and no action logs a development warning. Custom toasts do not trigger it.
 - AC-A11Y-8 The manual screen-reader checklist (§17.6) is completed and recorded.
-- AC-KB-1 † Alt+T is the default hotkey. It can be configured, it can be disabled, and it moves focus to the region. Escape returns focus without dismissing anything. Focus is restored when a focused toast is removed.
+- AC-KB-1 † Alt+T is the default hotkey. It can be configured, it can be disabled, and it moves focus to the first toast shown, in visual order. Escape returns focus without dismissing anything. Focus is restored when a focused toast is removed.
 - AC-KB-2 † Focus inside a toast pauses it. When focus leaves, it resumes with the time it had left.
 
 **Styling**

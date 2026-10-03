@@ -29,27 +29,33 @@ describe('<Toaster /> on the server (§23)', () => {
 
   it('renders only the named region, which takes focus from script only, and its empty live regions', () => {
     expect(renderToString(<Toaster />)).toBe(
-      `<section class="ret-toaster" aria-label="Notifications" data-theme="system" tabindex="-1">${LIVE_REGIONS}</section>`
+      `<section class="ret-toaster" aria-label="Notifications" aria-keyshortcuts="Alt+T" data-theme="system" tabindex="-1">${LIVE_REGIONS}</section>`
     );
   });
 
   it('renders the className and theme hooks', () => {
     expect(renderToString(<Toaster className="mine" theme="dark" />)).toBe(
-      `<section class="ret-toaster mine" aria-label="Notifications" data-theme="dark" tabindex="-1">${LIVE_REGIONS}</section>`
+      `<section class="ret-toaster mine" aria-label="Notifications" aria-keyshortcuts="Alt+T" data-theme="dark" tabindex="-1">${LIVE_REGIONS}</section>`
     );
   });
 
   it('names the region from labels', () => {
     expect(renderToString(<Toaster labels={{ region: 'Benachrichtigungen', close: '' }} />)).toBe(
-      `<section class="ret-toaster" aria-label="Benachrichtigungen" data-theme="system" tabindex="-1">${LIVE_REGIONS}</section>`
+      `<section class="ret-toaster" aria-label="Benachrichtigungen" aria-keyshortcuts="Alt+T" data-theme="system" tabindex="-1">${LIVE_REGIONS}</section>`
     );
   });
 
-  it('renders the same region whatever the hotkey, and reads no DOM for it (P-16)', () => {
-    const markup = renderToString(<Toaster />);
-    for (const hotkey of [['ctrlKey', 'KeyY'], false, ['F6']] as const) {
-      expect(renderToString(<Toaster hotkey={hotkey} />)).toBe(markup);
-    }
+  it.each<[string, unknown, string | undefined]>([
+    ['the default', undefined, 'Alt+T'],
+    ['a hotkey ARIA can name', ['shiftKey', 'ctrlKey', 'KeyY'], 'Control+Shift+Y'],
+    ['an invalid hotkey, as the default', ['altKey'], 'Alt+T'],
+    ['no hotkey', false, undefined],
+    ['a hotkey ARIA cannot name', ['Minus'], undefined],
+  ])('advertises %s in the region, reading no DOM for it (P-16)', (_name, hotkey, shortcut) => {
+    const attribute = shortcut === undefined ? '' : ` aria-keyshortcuts="${shortcut}"`;
+    expect(renderToString(<Toaster hotkey={hotkey as false} />)).toBe(
+      `<section class="ret-toaster" aria-label="Notifications"${attribute} data-theme="system" tabindex="-1">${LIVE_REGIONS}</section>`
+    );
     expect(error).not.toHaveBeenCalled();
   });
 

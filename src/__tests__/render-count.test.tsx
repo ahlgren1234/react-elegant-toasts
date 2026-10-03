@@ -338,8 +338,16 @@ describe('render counts (§32, D-16)', () => {
       entered('x');
     });
     rendersSince();
-    for (const hotkey of [['altKey', 'KeyT'], ['ctrlKey', 'KeyY'], false, undefined] as const) {
+    const region = document.querySelector('section') as HTMLElement;
+    for (const [hotkey, shortcut] of [
+      [['altKey', 'KeyT'], 'Alt+T'],
+      [['ctrlKey', 'KeyY'], 'Control+Y'],
+      [false, null],
+      [undefined, 'Alt+T'],
+    ] as const) {
       rerender(<Toaster hotkey={hotkey} />);
+      // Only the region's own attribute changes.
+      expect(region.getAttribute('aria-keyshortcuts')).toBe(shortcut);
       expect(rendersSince()).toEqual({});
     }
   });
