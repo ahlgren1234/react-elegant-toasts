@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
-import { dismiss, upsert } from './store/store';
+import { isServer } from './store/env';
+import { dismiss, dismissOwned, ownsToast, report, settleOwned, upsert } from './store/store';
+import { warnServer } from './store/warnings';
 import type {
   CustomToastOptions,
   ToastId,
@@ -48,6 +50,38 @@ interface ToastApi {
    * way to dismiss it, such as a button that calls `toast.dismiss(id)` with an explicit `id`.
    */
   custom: (content: ReactNode, options?: CustomToastOptions) => ToastId | undefined;
+  /**
+   * Shows a loading toast for some async work, then replaces it with a success or error toast when
+   * the work settles. The same toast (same ID) goes through every state.
+   *
+   * ```ts
+   * const id = toast.promise(saveProject(), {
+   *   loading: "Saving project...",
+   *   success: (project) => `Saved ${project.name}`,
+   *   error: (err) => (err instanceof Error ? err.message : "Could not save project"),
+   * });
+   * ```
+   *
+   * - `promise` is a promise, or a function that returns one. The loading toast is created first;
+   *   only once it has been accepted is the function called (immediately) or the promise observed.
+   *   A function that throws synchronously counts as a rejection.
+   * - The loading toast is persistent. On success it becomes a `success` toast, and on rejection an
+   *   `error` toast, with a new timer for its `duration`. The toast changes after the call has
+   *   returned, even for a promise that has already settled.
+   * - One set of `options` applies to every state, including `description` and the callbacks.
+   *   `duration` is ignored while loading and applies to the settled toast; `Infinity` keeps the
+   *   settled toast open until it is dismissed.
+   * - Once the toast is dismissed, or replaced by another call with the same `id`, the promise no
+   *   longer owns it: settling then changes nothing, never shows the toast again, and does not
+   *   call the message functions.
+   * - The promise's rejection counts as handled by this call. To use the result or the error,
+   *   await your own promise; `toast.promise` does not return it.
+   *
+   * @param messages - The content for each state. See {@link ToastPromiseMessages}.
+   * @returns The loading toast's ID, or `undefined` when it was rejected: on the server, or when
+   * 100 toasts are already waiting for a `<Toaster />`. When it is rejected, the function is not
+   * called and the promise is not observed.
+   */
   promise: <T>(
     promise: Promise<T> | (() => Promise<T>),
     messages: ToastPromiseMessages<T>,
@@ -76,6 +110,110 @@ function creator(type: ToastType, custom = false) {
     upsert({ type, custom, content, options });
 }
 
+/**
+ * `toast.promise` (§13). The loading toast carries a token that only this call holds. Settlement
+ * applies only while the toast still carries it and is not exiting, so a dismissed or externally
+ * replaced toast is never touched again. Message functions are consumer code: they run outside any
+ * store command, and the store checks ownership again before it changes anything.
+ */
+function promise<T>(
+  input: Promise<T> | (() => Promise<T>),
+  messages: ToastPromiseMessages<T>,
+  options?: ToastOptions
+): ToastId | undefined {
+  // Rejected before anything the caller supplied is read, invoked or observed (§8.3).
+  if (isServer()) {
+    warnServer();
+    return undefined;
+  }
+  // Each message is read once; settlement uses these values.
+  const { loading, success, error } = messages;
+  const token = Symbol('toast.promise');
+  const id = upsert({
+    type: 'loading',
+    custom: false,
+    content: loading,
+    options,
+    promiseToken: token,
+  });
+  // No loading toast, no async work: the function is not called and the promise is not observed.
+  if (id === undefined) return undefined;
+
+  const settleError = (reason: unknown): void => {
+    if (!ownsToast(id, token)) return;
+    let content: ReactNode;
+    if (typeof error === 'function') {
+      try {
+        content = error(reason);
+      } catch (thrown) {
+        // Never left loading: the toast is dismissed, and the message function's error reported.
+        dismissOwned(id, token);
+        report(thrown);
+        return;
+      }
+    } else {
+      content = error;
+    }
+    settleOwned(id, token, 'error', content);
+  };
+
+  const settleSuccess = (data: T): void => {
+    if (!ownsToast(id, token)) return;
+    let content: ReactNode;
+    if (typeof success === 'function') {
+      try {
+        content = success(data);
+      } catch (thrown) {
+        // A throwing success message turns the toast into an error with the thrown value.
+        settleError(thrown);
+        return;
+      }
+    } else {
+      content = success;
+    }
+    settleOwned(id, token, 'success', content);
+  };
+
+  // The handlers can never throw, so the promise `then` returns never rejects: the library adds no
+  // unhandled rejection. An unexpected error, including a failing `reportError`, ends here: the
+  // toast is dismissed if the promise still owns it, so it is not left loading, and the error is
+  // reported. Both steps are best effort, and neither can escape.
+  const contain =
+    <A>(settle: (value: A) => void) =>
+    (value: A): void => {
+      try {
+        settle(value);
+      } catch (failure) {
+        try {
+          dismissOwned(id, token);
+        } catch {
+          // Best-effort cleanup only: `failure` is reported below.
+        }
+        try {
+          report(failure);
+        } catch {
+          // Reporting itself failed. It must not reject the derived promise.
+        }
+      }
+    };
+
+  let source: Promise<T>;
+  if (typeof input === 'function') {
+    try {
+      source = Promise.resolve(input());
+    } catch (thrown) {
+      // Settles like an already-rejected promise: after this call has returned.
+      source = new Promise<T>(() => {
+        throw thrown;
+      });
+    }
+  } else {
+    source = Promise.resolve(input);
+  }
+  void source.then(contain(settleSuccess), contain(settleError));
+  return id;
+}
+
 /** Creates, replaces and dismisses toasts. Render one `<Toaster />` to show them. */
 export const toast: ToastApi = Object.assign(creator('default'), {
   success: creator('success'),
@@ -84,8 +222,7 @@ export const toast: ToastApi = Object.assign(creator('default'), {
   info: creator('info'),
   loading: creator('loading'),
   custom: creator('custom', true),
-  // Still the P-08 stub: P-13 adds promise handling. The input is never invoked or observed.
-  promise: (): ToastId | undefined => undefined,
+  promise,
   dismiss: (id?: ToastId): void => {
     dismiss(id, 'programmatic');
   },

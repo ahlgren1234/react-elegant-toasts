@@ -1,13 +1,14 @@
 // Public type tests (§26). The assertions are checked by `npm run typecheck`; at runtime they do
 // nothing. Calls that must not compile live in `compileOnly`, which is never invoked, so running
 // this file creates no toasts.
-import type { MouseEventHandler, ReactNode } from 'react';
+import { createElement, type MouseEventHandler, type ReactNode } from 'react';
 import { describe, expectTypeOf, it } from 'vitest';
 import {
   toast,
   type CustomToastOptions,
   type ToastId,
   type ToastOptions,
+  type ToastPromiseMessages,
   type ToastSnapshot,
 } from '../index';
 
@@ -24,6 +25,16 @@ describe('toast types', () => {
     expectTypeOf(toast.info).returns.toEqualTypeOf<ToastId | undefined>();
     expectTypeOf(toast.loading).returns.toEqualTypeOf<ToastId | undefined>();
     expectTypeOf(toast.custom).returns.toEqualTypeOf<ToastId | undefined>();
+    expectTypeOf(toast.promise).returns.toEqualTypeOf<ToastId | undefined>();
+  });
+
+  it('toast.promise takes ToastOptions, and its messages require all three keys', () => {
+    expectTypeOf(toast.promise).parameter(2).toEqualTypeOf<ToastOptions | undefined>();
+    expectTypeOf<ToastPromiseMessages<number>>().toEqualTypeOf<{
+      loading: ReactNode;
+      success: ReactNode | ((data: number) => ReactNode);
+      error: ReactNode | ((error: unknown) => ReactNode);
+    }>();
   });
 
   it('toast.dismiss takes an optional ID and returns void', () => {
@@ -147,4 +158,138 @@ function compileOnly(): void {
   const direct: MouseEventHandler<HTMLButtonElement> = toast.dismiss;
   const wrapped: MouseEventHandler<HTMLButtonElement> = () => toast.dismiss();
   expectTypeOf([direct, wrapped]).toBeArray();
+
+  promiseTypes();
+}
+
+interface Project {
+  name: string;
+}
+
+// toast.promise (§13). Never invoked, like compileOnly.
+function promiseTypes(): void {
+  const save = (): Promise<Project> => Promise.resolve({ name: 'P' });
+  const failing = 'Failed';
+
+  // T is inferred from a direct promise, a function and an async arrow.
+  toast.promise(save(), {
+    loading: 'Saving',
+    success: project => {
+      expectTypeOf(project).toEqualTypeOf<Project>();
+      return project.name;
+    },
+    error: err => {
+      expectTypeOf(err).toEqualTypeOf<unknown>();
+      return failing;
+    },
+  });
+  toast.promise(save, {
+    loading: 'Saving',
+    success: project => {
+      expectTypeOf(project).toEqualTypeOf<Project>();
+      return project.name;
+    },
+    error: failing,
+  });
+  toast.promise(async () => Promise.resolve(42), {
+    loading: 'Counting',
+    success: count => {
+      expectTypeOf(count).toEqualTypeOf<number>();
+      return count.toFixed();
+    },
+    error: failing,
+  });
+  // Literal types are kept, a rejected promise gives never, and any stays any.
+  toast.promise(Promise.resolve('ready' as const), {
+    loading: 'L',
+    success: value => {
+      expectTypeOf(value).toEqualTypeOf<'ready'>();
+      return value;
+    },
+    error: failing,
+  });
+  toast.promise(Promise.reject(new Error('x')), {
+    loading: 'L',
+    success: value => {
+      expectTypeOf(value).toEqualTypeOf<never>();
+      return 'S';
+    },
+    error: failing,
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any must pass through as any
+  const anyPromise = Promise.resolve(1) as Promise<any>;
+  toast.promise(anyPromise, {
+    loading: 'L',
+    success: value => {
+      expectTypeOf(value).toBeAny();
+      return 'S';
+    },
+    error: failing,
+  });
+
+  // Content is any ReactNode, static or from a function.
+  const element = createElement('strong', null, 'Done');
+  toast.promise(save(), { loading: null, success: false, error: 0 });
+  toast.promise(save(), { loading: element, success: element, error: () => element });
+  // Required means present: ReactNode includes undefined, so an explicit undefined is accepted.
+  toast.promise(save(), { loading: undefined, success: undefined, error: undefined });
+
+  // Explicit type arguments.
+  toast.promise<number>(Promise.resolve(1), {
+    loading: 'L',
+    success: n => n.toFixed(),
+    error: 'E',
+  });
+  // @ts-expect-error -- the explicit type argument does not match the promise
+  toast.promise<string>(save(), { loading: 'L', success: 'S', error: 'E' });
+
+  // A typed messages value.
+  const messages: ToastPromiseMessages<Project> = {
+    loading: 'L',
+    success: project => project.name,
+    error: 'E',
+  };
+  toast.promise(save(), messages);
+
+  // Every message is required.
+  // @ts-expect-error -- loading is missing
+  toast.promise(save(), { success: 'S', error: 'E' });
+  // @ts-expect-error -- success is missing
+  toast.promise(save(), { loading: 'L', error: 'E' });
+  // @ts-expect-error -- error is missing
+  toast.promise(save(), { loading: 'L', success: 'S' });
+  // @ts-expect-error -- no other keys
+  toast.promise(save(), { loading: 'L', success: 'S', error: 'E', finally: 'F' });
+
+  // Message functions take what the promise gives them.
+  // @ts-expect-error -- success receives a Project, not a number
+  toast.promise(save(), { loading: 'L', success: (count: number) => count.toFixed(), error: 'E' });
+  // @ts-expect-error -- error receives unknown, not an Error
+  toast.promise(save(), { loading: 'L', success: 'S', error: (err: Error) => err.message });
+  // @ts-expect-error -- loading is a node, not a function
+  toast.promise(save(), { loading: () => 'L', success: 'S', error: 'E' });
+  // @ts-expect-error -- success must return a node
+  toast.promise(save(), { loading: 'L', success: project => project, error: 'E' });
+
+  // The input is a Promise, or a function that returns one.
+  // @ts-expect-error -- not a promise
+  toast.promise(42, { loading: 'L', success: 'S', error: 'E' });
+  // @ts-expect-error -- the function does not return a promise
+  toast.promise(() => 42, { loading: 'L', success: 'S', error: 'E' });
+  const thenable: PromiseLike<number> = Promise.resolve(1);
+  // @ts-expect-error -- a PromiseLike is not a Promise
+  toast.promise(thenable, { loading: 'L', success: 'S', error: 'E' });
+
+  // Options are ToastOptions, with explicit undefined, and no store-owned fields (AC-API-5).
+  toast.promise(
+    save(),
+    { loading: 'L', success: 'S', error: 'E' },
+    { id: undefined, description: 'D', duration: undefined, position: undefined }
+  );
+  // @ts-expect-error -- promiseToken
+  toast.promise(save(), { loading: 'L', success: 'S', error: 'E' }, { promiseToken: Symbol() });
+  // @ts-expect-error -- phase
+  toast.promise(save(), { loading: 'L', success: 'S', error: 'E' }, { phase: 'exiting' });
+  // @ts-expect-error -- promiseToken is not a creation option either
+  toast('Smuggled', { promiseToken: Symbol() });
 }

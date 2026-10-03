@@ -98,9 +98,23 @@ export interface CustomToastOptions {
   progress?: never;
 }
 
+/**
+ * The content of each state of a `toast.promise` toast. All three keys are required. Each is read
+ * once, when `toast.promise` is called. Content is any React node, used as given.
+ */
 export interface ToastPromiseMessages<T> {
+  /** Shown while the promise is pending. */
   loading: ReactNode;
+  /**
+   * Shown when the promise resolves: a node, or a function that receives the resolved value. If
+   * the function throws, the toast shows `error` for the thrown value instead.
+   */
   success: ReactNode | ((data: T) => ReactNode);
+  /**
+   * Shown when the promise rejects: a node, or a function that receives the rejection reason,
+   * which can be any value. If the function throws, the toast is dismissed and the exception is
+   * reported (through `reportError` where available).
+   */
   error: ReactNode | ((error: unknown) => ReactNode);
 }
 
