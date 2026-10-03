@@ -150,6 +150,26 @@ describe('listener ownership (§10, §32)', () => {
     expect(listeners.counts()).toEqual(ONE_EACH);
   });
 
+  it('focus restoration adds no listener (P-16)', () => {
+    const listeners = trackListeners();
+    render(<Toaster />);
+    showVisible('a');
+    showVisible('b');
+    act(() => (document.querySelector('.ret-toast__close') as HTMLButtonElement).focus());
+    act(() => {
+      toast.dismiss('b');
+    });
+    flush();
+    expect(document.activeElement).toBe(document.querySelector('.ret-toast__close'));
+    act(() => {
+      toast.dismiss('a');
+    });
+    expect(document.activeElement).toBe(document.querySelector('section'));
+    flush();
+    expect(listeners.counts()).toEqual(ONE_EACH);
+    expect(listeners.added()).toBe(4);
+  });
+
   it('StrictMode replay leaves no duplicate listeners', async () => {
     const listeners = trackListeners();
     render(

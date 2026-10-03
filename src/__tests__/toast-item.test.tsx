@@ -175,10 +175,15 @@ describe('icon and control accessibility (§17.2, D-19)', () => {
     expect(document.querySelectorAll('[role="alert"], [aria-keyshortcuts], [inert]')).toHaveLength(
       0
     );
-    // Only the toast itself takes focus from script, for the hotkey (§18), and stays out of the
-    // Tab order. The region does not, yet.
-    expect([...document.querySelectorAll('[tabindex]')]).toEqual([itemOf('Saved')]);
-    expect(itemOf('Saved')).toHaveAttribute('tabindex', '-1');
+    // Only the region, for focus restoration, and the toast itself, for the hotkey (§18), take focus
+    // from script, and both stay out of the Tab order.
+    expect([...document.querySelectorAll('[tabindex]')]).toEqual([
+      screen.getByRole('region'),
+      itemOf('Saved'),
+    ]);
+    for (const element of document.querySelectorAll('[tabindex]')) {
+      expect(element).toHaveAttribute('tabindex', '-1');
+    }
     // The toast is not a live region; only the Toaster's two persistent regions are (§17.1).
     expect(itemOf('Saved').closest('[aria-live]')).toBeNull();
     expect(itemOf('Saved').querySelector('[aria-live]')).toBeNull();
@@ -878,17 +883,15 @@ describe('inert exiting toasts (§9 rule 4)', () => {
     }
   });
 
-  it('moves no focus itself (focus restoration is a later P-16 slice)', () => {
-    // This pins only that making a toast inert does not move focus on its own. jsdom keeps focus
-    // inside an inert subtree, which real browsers do not; that is not the behaviour wanted. Focus
-    // restoration (§18) will replace this with focus moving before the toast becomes inert.
+  it('moves focus out before it is inert, and leaves no focus behind (§18)', () => {
+    // Restoration itself is covered in focus-restoration.test.tsx. jsdom keeps focus inside an
+    // inert subtree, which real browsers do not, so this checks focus was moved, not lost.
     render(<Toaster />);
     showVisible('t', { id: 't' });
     const close = closeButtons()[0] as HTMLButtonElement;
     act(() => close.focus());
-    expect(document.activeElement).toBe(close);
     act(() => dismiss('t'));
     expect(itemOf('t')).toHaveAttribute('inert');
-    expect(document.activeElement).toBe(close);
+    expect(document.activeElement).toBe(screen.getByRole('region'));
   });
 });

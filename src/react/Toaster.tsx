@@ -156,12 +156,14 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   // Resolved to strings on every render, so a new `labels` object with the same text changes no
   // prop below the region.
   const { region, close, warningPrefix, errorPrefix } = resolveLabels(labels);
+  // The region takes focus from script only, as the last place focus restoration can go (§18).
   return (
     <section
       ref={section}
       className={className ? `ret-toaster ${className}` : 'ret-toaster'}
       aria-label={region}
       data-theme={THEMES.includes(theme) ? theme : 'system'}
+      tabIndex={-1}
     >
       {/* Persistent and empty until something is announced (§17.1), on the server too (§23). */}
       <div role="status" aria-live="polite" aria-atomic="false" style={VISUALLY_HIDDEN} />

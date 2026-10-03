@@ -27,21 +27,21 @@ describe('<Toaster /> on the server (§23)', () => {
     expect(typeof window).toBe('undefined');
   });
 
-  it('renders only the named region and its empty live regions', () => {
+  it('renders only the named region, which takes focus from script only, and its empty live regions', () => {
     expect(renderToString(<Toaster />)).toBe(
-      `<section class="ret-toaster" aria-label="Notifications" data-theme="system">${LIVE_REGIONS}</section>`
+      `<section class="ret-toaster" aria-label="Notifications" data-theme="system" tabindex="-1">${LIVE_REGIONS}</section>`
     );
   });
 
   it('renders the className and theme hooks', () => {
     expect(renderToString(<Toaster className="mine" theme="dark" />)).toBe(
-      `<section class="ret-toaster mine" aria-label="Notifications" data-theme="dark">${LIVE_REGIONS}</section>`
+      `<section class="ret-toaster mine" aria-label="Notifications" data-theme="dark" tabindex="-1">${LIVE_REGIONS}</section>`
     );
   });
 
   it('names the region from labels', () => {
     expect(renderToString(<Toaster labels={{ region: 'Benachrichtigungen', close: '' }} />)).toBe(
-      `<section class="ret-toaster" aria-label="Benachrichtigungen" data-theme="system">${LIVE_REGIONS}</section>`
+      `<section class="ret-toaster" aria-label="Benachrichtigungen" data-theme="system" tabindex="-1">${LIVE_REGIONS}</section>`
     );
   });
 

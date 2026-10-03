@@ -135,6 +135,37 @@ describe('render counts (§32, D-16)', () => {
     expect(rendersSince()).toEqual({});
   });
 
+  it('renders nothing more when the dismissed toast held focus, wherever focus moves (P-16)', () => {
+    const { commits } = mountWithToasts();
+    const item = (id: string) =>
+      [...document.querySelectorAll('li')].find(li => li.textContent?.includes(id)) as HTMLElement;
+    const close = (id: string) => item(id).querySelector('button') as HTMLButtonElement;
+
+    // Unfocused, for comparison.
+    let before = commits();
+    act(() => dismiss('c'));
+    expect(rendersSince()).toEqual({ c: 1 });
+    expect(commits()).toBe(before + 1);
+
+    // Focused: restoration moves focus to a's close button, rendering nothing itself.
+    act(() => close('b').focus());
+    before = commits();
+    act(() => dismiss('b'));
+    expect(document.activeElement).toBe(close('a'));
+    expect(rendersSince()).toEqual({ b: 1 });
+    expect(commits()).toBe(before + 1);
+
+    // To the region: the last toast at bottom-left, with every other toast exiting.
+    act(() => dismiss('a'));
+    rendersSince();
+    act(() => close('x').focus());
+    before = commits();
+    act(() => dismiss('x'));
+    expect(document.activeElement).toBe(document.querySelector('section'));
+    expect(rendersSince()).toEqual({ x: 1 });
+    expect(commits()).toBe(before + 1);
+  });
+
   it('renders nothing for the DOM events that pause toasts (P-15)', () => {
     const { commits } = mountWithToasts();
     const snapshot = getSnapshot();

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { activeElementOf, deepActiveElement } from './focus';
+import { activeElementOf, deepActiveElement, isEligibleToast, toastItems } from './focus';
 import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect';
 
 const MODIFIERS = ['altKey', 'ctrlKey', 'metaKey', 'shiftKey'] as const;
@@ -59,20 +59,10 @@ const isPlainEscape = (event: KeyboardEvent): boolean =>
 /** An element that may take or release focus. */
 type Focusable = Element & Partial<Pick<HTMLOrSVGElement, 'focus' | 'blur'>>;
 
-/**
- * The first toast of the region that is not exiting, in DOM order, which is visual order (§12),
- * across every position: `:scope > ol > li:not([data-phase="exiting"])`. Only the region's own
- * lists and their items count, because custom content may contain list items of its own. Walked
- * rather than queried, since jsdom does not match `:scope` inside a shadow root.
- */
+/** The first toast of the region that is not exiting, in DOM order, which is visual order (§12). */
 function firstEligibleToast(region: HTMLElement): HTMLElement | null {
-  for (const list of region.children) {
-    if (list.tagName !== 'OL') continue;
-    for (const item of list.children) {
-      if (item.tagName === 'LI' && item.getAttribute('data-phase') !== 'exiting') {
-        return item as HTMLElement;
-      }
-    }
+  for (const item of toastItems(region)) {
+    if (isEligibleToast(item)) return item;
   }
   return null;
 }

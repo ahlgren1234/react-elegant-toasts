@@ -3,6 +3,7 @@ import { dismiss, entered, exited } from '../store/store';
 import type { ToastView } from '../store/types';
 import { warnInaccessiblePersistent } from '../store/warnings';
 import { useAnnouncement } from './announcer';
+import { registerAction, registerClose, restoreFocusFrom } from './focus';
 import { CLOSE_ICON, typeIcon } from './icons';
 import { useFocusWithinPause } from './useFocusWithinPause';
 import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect';
@@ -41,11 +42,23 @@ export const ToastItem = memo(function ToastItem({
 
   // An exiting toast is inert (§9 rule 4), and only an exiting one: revival removes it. Set here,
   // not as a prop: React 18 drops `inert={true}` and React 19 treats `""` as false, and a prop would
-  // be applied before any layout effect. Focus restoration (§18) must run before this toggle, in
-  // this layout phase, while the focused control can still be found inside the toast. Keep that
-  // order. React never touches the attribute, because it is not rendered.
+  // be applied before any layout effect. React never touches the attribute, because it is not
+  // rendered.
+  //
+  // Focus restoration (§18) runs first, in the same effect, while the focused control can still be
+  // found inside the toast: only on the change from entering or visible to exiting, never on a
+  // mount, which also keeps a StrictMode replay from restoring again, and never in a cleanup, so
+  // an unmount restores nothing. Keep that order, and `inert` set whatever restoration achieved.
+  const committedPhase = useRef<ToastView['phase'] | null>(null);
   useIsomorphicLayoutEffect(() => {
-    ref.current?.toggleAttribute('inert', phase === 'exiting');
+    const previous = committedPhase.current;
+    committedPhase.current = phase;
+    const item = ref.current;
+    if (!item) return;
+    if (phase === 'exiting' && (previous === 'entering' || previous === 'visible')) {
+      restoreFocusFrom(item);
+    }
+    item.toggleAttribute('inert', phase === 'exiting');
   }, [phase]);
 
   // Reports the end of an enter or exit. The store ignores a report that no longer matches the
@@ -81,7 +94,13 @@ export const ToastItem = memo(function ToastItem({
   // An explicit icon replaces the type's, and `null` removes it. Either way it is decorative.
   const icon = custom ? undefined : options.icon !== undefined ? options.icon : typeIcon(view.type);
   const close = closeButton && (
-    <button type="button" className="ret-toast__close" aria-label={closeLabel} onClick={onClose}>
+    <button
+      ref={registerClose}
+      type="button"
+      className="ret-toast__close"
+      aria-label={closeLabel}
+      onClick={onClose}
+    >
       {CLOSE_ICON}
     </button>
   );
@@ -121,7 +140,7 @@ export const ToastItem = memo(function ToastItem({
         )}
       </div>
       {action && (
-        <button type="button" className="ret-toast__action" onClick={onAction}>
+        <button ref={registerAction} type="button" className="ret-toast__action" onClick={onAction}>
           {action.label}
         </button>
       )}

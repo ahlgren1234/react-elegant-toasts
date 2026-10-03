@@ -749,11 +749,13 @@ The docs (§31) state this boundary explicitly. The demo's custom-toast example 
   - It does nothing when there are no rendered toasts.
 - **Tab** moves through the controls in DOM order, which matches visual order (§12).
 - **Escape**, while focus is inside the region, returns focus to the element that had it before the hotkey (or to the document if that element has gone). **Escape never dismisses a toast.**
-- **Focus restoration when the focused toast is removed:**
-  1. The equivalent control in the next toast.
+- **Focus restoration when the focused toast is removed:** when a toast that holds focus starts to exit, focus moves before the toast becomes inert, and stays in the region:
+  1. The equivalent control in the next toast: its close button or action from the same control, the toast itself from the toast. Focus in custom content has no equivalent.
   2. Otherwise, the previous toast.
-  3. Otherwise, the element that had focus before the hotkey.
-  4. Otherwise, the region.
+  3. Otherwise, the region, which takes focus from script only (`tabindex="-1"`).
+
+  Next and previous are the adjacent toasts that are not exiting, in DOM order across every position. Removal restoration never uses the element that had focus before the hotkey: Escape returns focus there, from the region too.
+
 - **There is no focus trap.** The region is never modal.
 - The hotkey listener is attached by the active Toaster and removed on detach.
 

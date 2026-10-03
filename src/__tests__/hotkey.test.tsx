@@ -322,7 +322,7 @@ describe('the target (§12, §18)', () => {
     expect(document.activeElement).toBe(itemOf('plain'));
   });
 
-  it('takes focus from script but stays out of the Tab order; the region does not take focus', () => {
+  it('takes focus from script but stays out of the Tab order, like the region', () => {
     mount();
     show('plain', { id: 'plain' });
     act(() => {
@@ -333,8 +333,9 @@ describe('the target (§12, §18)', () => {
       act(() => item.focus());
       expect(item).toHaveFocus();
     }
+    // The region takes focus only as the last place of focus restoration, never from the hotkey.
     const region = screen.getByRole('region');
-    expect(region).not.toHaveAttribute('tabindex');
+    expect(region).toHaveAttribute('tabindex', '-1');
     expect(region).not.toHaveAttribute('aria-keyshortcuts');
   });
 });
