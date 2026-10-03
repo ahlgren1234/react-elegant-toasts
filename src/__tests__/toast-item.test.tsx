@@ -18,7 +18,9 @@ const viewOf = (id: string) =>
   Object.values(getSnapshot().byPosition)
     .flat()
     .find(view => view.id === id);
-const itemOf = (text: string) => screen.getByText(text).closest('li') as HTMLLIElement;
+// Text queries for a toast skip the hidden announcement copy in the live regions (§17.1).
+const inToasts = { ignore: 'script, style, [aria-live] *' };
+const itemOf = (text: string) => screen.getByText(text, inToasts).closest('li') as HTMLLIElement;
 const classesOf = (element: Element | null) =>
   [...(element?.children ?? [])].map(child => child.className);
 const closeButtons = () => screen.queryAllByRole('button', { name: 'Close notification' });
@@ -158,7 +160,7 @@ describe('icon and control accessibility (§17.2, D-19)', () => {
     expect(screen.queryByRole('img')).toBeNull();
   });
 
-  it('uses native buttons named by their label and "Close notification", and no P-16 semantics', () => {
+  it('uses native buttons named by their label and "Close notification", and no later P-16 semantics', () => {
     render(<Toaster />);
     show('Saved', { id: 's', action: { label: <span>Undo</span>, onClick: () => undefined } });
     const action = screen.getByRole('button', { name: 'Undo' });
@@ -170,10 +172,11 @@ describe('icon and control accessibility (§17.2, D-19)', () => {
     expect(action).toHaveClass('ret-toast__action', { exact: true });
     expect(close).toHaveClass('ret-toast__close', { exact: true });
     expect(
-      document.querySelectorAll(
-        '[role="alert"], [aria-live], [aria-keyshortcuts], [inert], [tabindex]'
-      )
+      document.querySelectorAll('[role="alert"], [aria-keyshortcuts], [inert], [tabindex]')
     ).toHaveLength(0);
+    // The toast is not a live region; only the Toaster's two persistent regions are (§17.1).
+    expect(itemOf('Saved').closest('[aria-live]')).toBeNull();
+    expect(itemOf('Saved').querySelector('[aria-live]')).toBeNull();
   });
 });
 
@@ -413,7 +416,7 @@ describe('the action (§15)', () => {
     flush();
     expect(recordOf('a')).toBeUndefined();
     expect(reasons).toEqual([['a replaced', 'action']]);
-    expect(screen.getByText('b replaced')).toBeInTheDocument();
+    expect(screen.getByText('b replaced', inToasts)).toBeInTheDocument();
   });
 
   it('does nothing while the toast is exiting', () => {
@@ -482,7 +485,8 @@ describe('lifecycle fallbacks (§9 rule 3)', () => {
     render(<Toaster />);
     show('t', { id: 't', onDismiss });
     expect(itemOf('t')).toHaveAttribute('data-phase', 'entering');
-    expect(vi.getTimerCount()).toBe(1);
+    // The enter fallback, and the retention timer of the toast's announcement (§17.1).
+    expect(vi.getTimerCount()).toBe(2);
     flush();
     expect(phaseOf('t')).toBe('visible');
     expect(itemOf('t')).toHaveAttribute('data-phase', 'visible');
@@ -491,7 +495,8 @@ describe('lifecycle fallbacks (§9 rule 3)', () => {
     expect(itemOf('t')).toHaveAttribute('data-phase', 'exiting');
     flush();
     expect(recordOf('t')).toBeUndefined();
-    expect(screen.queryByText('t')).toBeNull();
+    // The toast is gone; its announcement stays for its own retention period.
+    expect(screen.queryByText('t', inToasts)).toBeNull();
     expect(onDismiss).toHaveBeenCalledWith(expect.objectContaining({ id: 't' }), 'programmatic');
   });
 
@@ -534,7 +539,7 @@ describe('lifecycle fallbacks (§9 rule 3)', () => {
     expect(phaseOf('B')).toBe('queued');
     flush();
     expect(recordOf('A')).toBeUndefined();
-    expect(screen.queryByText('A')).toBeNull();
+    expect(screen.queryByText('A', inToasts)).toBeNull();
     expect(itemOf('B')).toHaveAttribute('data-phase', 'entering');
     flush();
     expect(phaseOf('B')).toBe('visible');
@@ -543,13 +548,15 @@ describe('lifecycle fallbacks (§9 rule 3)', () => {
 
   it('keeps one pending fallback per toast, cancelling it when the phase changes or on unmount', async () => {
     const { unmount } = render(<Toaster />);
+    // Each count is one lifecycle fallback plus the retention timer of each announcement (§17.1).
     show('t', { id: 't' });
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(1 + 1);
     act(() => dismiss('t'));
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(1 + 1);
     show('t', { id: 't' });
     expect(phaseOf('t')).toBe('entering');
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(1 + 2);
+    // Unmounting cancels the fallback and the pending announcements alike.
     unmount();
     expect(vi.getTimerCount()).toBe(0);
     await settle();
@@ -601,10 +608,11 @@ describe('lifecycle fallbacks (§9 rule 3)', () => {
       </StrictMode>
     );
     show('t', { id: 't', onDismiss });
-    expect(vi.getTimerCount()).toBe(1);
+    // One fallback and one announcement retention timer, however often effects replay.
+    expect(vi.getTimerCount()).toBe(2);
     flush();
     act(() => dismiss('t'));
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(2);
     flush();
     // The first notification is the Toaster attaching, before the toast exists.
     expect(phases).toEqual(['none', 'entering', 'visible', 'exiting', 'none']);

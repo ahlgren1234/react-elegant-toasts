@@ -6,6 +6,7 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { memo, Profiler, type ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster, toast } from '../index';
+import { ANNOUNCEMENT_RETENTION_MS } from '../react/announcer';
 import {
   dismiss,
   entered,
@@ -25,6 +26,7 @@ vi.mock('../react/ToastItem', async importOriginal => {
     view: ToastView;
     closeButton: boolean;
     closeLabel: string | undefined;
+    announcePrefix: string | undefined;
   }) => ReactElement;
   const item = actual.ToastItem as unknown as { $$typeof?: symbol; type?: Render };
   const memoised = item.$$typeof === Symbol.for('react.memo');
@@ -184,6 +186,76 @@ describe('render counts (§32, D-16)', () => {
     rerender(<Toaster labels={{ close: '' }} />);
     rerender(<Toaster />);
     expect(rendersSince()).toEqual({});
+  });
+
+  it('renders nothing when a new labels object resolves to the same prefixes', () => {
+    const labels = { warningPrefix: 'Note:', errorPrefix: 'Oops:' };
+    const { rerender } = render(<Toaster labels={{ ...labels }} />);
+    act(() => {
+      toast.warning('w', { id: 'w' });
+      toast.error('e', { id: 'e' });
+      toast('d', { id: 'd' });
+    });
+    rendersSince();
+    rerender(<Toaster labels={{ ...labels }} />);
+    rerender(<Toaster labels={{ ...labels, region: 'Notifications' }} />);
+    expect(rendersSince()).toEqual({});
+  });
+
+  it('re-renders, on a prefix change, only the toasts of that type', () => {
+    const { rerender } = render(<Toaster />);
+    act(() => {
+      toast.warning('w', { id: 'w' });
+      toast.error('e', { id: 'e' });
+      toast('d', { id: 'd' });
+      toast.custom('c', { id: 'c' });
+    });
+    rendersSince();
+    rerender(<Toaster labels={{ warningPrefix: 'Note:' }} />);
+    expect(rendersSince()).toEqual({ w: 1 });
+    rerender(<Toaster labels={{ warningPrefix: 'Note:', errorPrefix: 'Oops:' }} />);
+    expect(rendersSince()).toEqual({ e: 1 });
+  });
+
+  it('re-renders no other toast when one is announced', () => {
+    const { commits } = mountWithToasts();
+    const before = commits();
+    const polite = document.querySelector('section > [aria-live="polite"]') as HTMLElement;
+    const assertive = document.querySelector('section > [aria-live="assertive"]') as HTMLElement;
+    act(() => {
+      toast.error('b failed', { id: 'b' });
+    });
+    expect(assertive).toHaveTextContent('Error: b failed');
+    expect(polite).not.toHaveTextContent('b failed');
+    expect(rendersSince()).toEqual({ b: 1 });
+    // One commit for the replacement; the announcement itself commits nothing.
+    expect(commits()).toBe(before + 1);
+  });
+
+  it('renders and commits nothing when announcements expire', () => {
+    let commits = 0;
+    render(
+      <Profiler id="toaster" onRender={() => commits++}>
+        <Toaster />
+      </Profiler>
+    );
+    act(() => {
+      toast('a', { id: 'a', duration: Infinity });
+      toast.error('b', { id: 'b', duration: Infinity });
+    });
+    act(() => {
+      for (const id of ['a', 'b']) entered(id);
+    });
+    const regions = [...document.querySelectorAll('section > [aria-live]')];
+    expect(regions.map(region => region.childNodes.length)).toEqual([1, 1]);
+    rendersSince();
+    const before = commits;
+    act(() => {
+      vi.advanceTimersByTime(ANNOUNCEMENT_RETENTION_MS);
+    });
+    expect(regions.map(region => region.childNodes.length)).toEqual([0, 0]);
+    expect(rendersSince()).toEqual({});
+    expect(commits).toBe(before);
   });
 
   it('re-renders, on a close label change, only the toasts that show a close button', () => {

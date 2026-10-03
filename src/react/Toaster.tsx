@@ -19,6 +19,7 @@ import {
 } from '../store/store';
 import type { ToasterToken, ToastView } from '../store/types';
 import type { ToasterProps, ToastPosition, ToastTheme } from '../types';
+import { AnnouncerContext, createAnnouncer, VISUALLY_HIDDEN } from './announcer';
 import { resolveCloseButton, resolveLabels } from './defaults';
 import { ToastItem } from './ToastItem';
 import { useEnvironmentPause } from './useEnvironmentPause';
@@ -34,18 +35,24 @@ interface PositionListProps {
   readonly closeButton: boolean | undefined;
   /** The close button's resolved name. */
   readonly closeLabel: string;
+  /** The resolved prefixes of warning and error announcements. */
+  readonly warningPrefix: string;
+  readonly errorPrefix: string;
 }
 
 // One position's toasts (§12). The store lists them oldest first. The newest toast is nearest the
 // anchored edge, and DOM order is visual order: top positions reverse the list, bottom positions
 // keep it. Memoised on the store's list, which keeps its identity while it is unchanged. Each
-// item gets its close button already resolved, and its name only when it shows, so a changed
-// Toaster default or label re-renders only the items it changes.
+// item gets its close button already resolved, and its name only when it shows, and only its own
+// type's announcement prefix, so a changed Toaster default or label re-renders only the items it
+// changes.
 const PositionList = memo(function PositionList({
   position,
   views,
   closeButton,
   closeLabel,
+  warningPrefix,
+  errorPrefix,
 }: PositionListProps) {
   const ordered = useMemo(
     () => (position.startsWith('top-') ? [...views].reverse() : views),
@@ -62,6 +69,13 @@ const PositionList = memo(function PositionList({
             view={view}
             closeButton={shown}
             closeLabel={shown ? closeLabel : undefined}
+            announcePrefix={
+              view.type === 'warning'
+                ? warningPrefix
+                : view.type === 'error'
+                  ? errorPrefix
+                  : undefined
+            }
           />
         );
       })}
@@ -130,27 +144,38 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   useEffect(() => attach(token), [token]);
   const owner = snapshot.active === token;
   useEnvironmentPause(owner);
+  // Writes into this Toaster's live regions. Its pending announcements go with it.
+  const [announcer] = useState(createAnnouncer);
+  useEffect(() => () => announcer.dispose(), [announcer]);
 
   if (!owner && snapshot.active !== null) return null;
   // Resolved to strings on every render, so a new `labels` object with the same text changes no
   // prop below the region.
-  const { region, close } = resolveLabels(labels);
+  const { region, close, warningPrefix, errorPrefix } = resolveLabels(labels);
   return (
     <section
       className={className ? `ret-toaster ${className}` : 'ret-toaster'}
       aria-label={region}
       data-theme={THEMES.includes(theme) ? theme : 'system'}
     >
-      {owner &&
-        POSITIONS.map(position => (
-          <PositionList
-            key={position}
-            position={position}
-            views={snapshot.byPosition[position]}
-            closeButton={closeButton}
-            closeLabel={close}
-          />
-        ))}
+      {/* Persistent and empty until something is announced (§17.1), on the server too (§23). */}
+      <div role="status" aria-live="polite" aria-atomic="false" style={VISUALLY_HIDDEN} />
+      <div aria-live="assertive" aria-atomic="false" style={VISUALLY_HIDDEN} />
+      {owner && (
+        <AnnouncerContext.Provider value={announcer}>
+          {POSITIONS.map(position => (
+            <PositionList
+              key={position}
+              position={position}
+              views={snapshot.byPosition[position]}
+              closeButton={closeButton}
+              closeLabel={close}
+              warningPrefix={warningPrefix}
+              errorPrefix={errorPrefix}
+            />
+          ))}
+        </AnnouncerContext.Provider>
+      )}
     </section>
   );
 };

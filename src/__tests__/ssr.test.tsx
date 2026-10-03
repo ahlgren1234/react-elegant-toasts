@@ -13,26 +13,34 @@ beforeEach(() => {
   error = vi.spyOn(console, 'error');
 });
 
+// The two persistent live regions (§17.1): present and empty in the server HTML, so hydration
+// matches and they exist before anything is announced.
+const HIDDEN =
+  'position:absolute;width:1px;height:1px;margin:-1px;border:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap';
+const LIVE_REGIONS =
+  `<div role="status" aria-live="polite" aria-atomic="false" style="${HIDDEN}"></div>` +
+  `<div aria-live="assertive" aria-atomic="false" style="${HIDDEN}"></div>`;
+
 describe('<Toaster /> on the server (§23)', () => {
   it('runs without a window', () => {
     expect(typeof window).toBe('undefined');
   });
 
-  it('renders only the empty, named region', () => {
+  it('renders only the named region and its empty live regions', () => {
     expect(renderToString(<Toaster />)).toBe(
-      '<section class="ret-toaster" aria-label="Notifications" data-theme="system"></section>'
+      `<section class="ret-toaster" aria-label="Notifications" data-theme="system">${LIVE_REGIONS}</section>`
     );
   });
 
   it('renders the className and theme hooks', () => {
     expect(renderToString(<Toaster className="mine" theme="dark" />)).toBe(
-      '<section class="ret-toaster mine" aria-label="Notifications" data-theme="dark"></section>'
+      `<section class="ret-toaster mine" aria-label="Notifications" data-theme="dark">${LIVE_REGIONS}</section>`
     );
   });
 
   it('names the region from labels', () => {
     expect(renderToString(<Toaster labels={{ region: 'Benachrichtigungen', close: '' }} />)).toBe(
-      '<section class="ret-toaster" aria-label="Benachrichtigungen" data-theme="system"></section>'
+      `<section class="ret-toaster" aria-label="Benachrichtigungen" data-theme="system">${LIVE_REGIONS}</section>`
     );
   });
 

@@ -2,6 +2,7 @@ import { Fragment, memo, useEffect, useRef, type MouseEvent } from 'react';
 import { dismiss, entered, exited } from '../store/store';
 import type { ToastView } from '../store/types';
 import { warnInaccessiblePersistent } from '../store/warnings';
+import { useAnnouncement } from './announcer';
 import { CLOSE_ICON, typeIcon } from './icons';
 import { useFocusWithinPause } from './useFocusWithinPause';
 
@@ -15,6 +16,8 @@ interface ToastItemProps {
   readonly closeButton: boolean;
   /** The close button's name, from the Toaster's labels, while the close button shows. */
   readonly closeLabel: string | undefined;
+  /** The announcement prefix of a warning or error toast, from the Toaster's labels (§17.1). */
+  readonly announcePrefix: string | undefined;
 }
 
 // One rendered toast (§12, §17.2, §21). Memoised on its view, which the store keeps while nothing
@@ -27,11 +30,13 @@ export const ToastItem = memo(function ToastItem({
   view,
   closeButton,
   closeLabel,
+  announcePrefix,
 }: ToastItemProps) {
   const { id, phase, custom, persistent, options } = view;
   const { action } = options;
   const ref = useRef<HTMLLIElement>(null);
   useFocusWithinPause(ref, id);
+  useAnnouncement(ref, view, announcePrefix);
 
   // Reports the end of an enter or exit. The store ignores a report that no longer matches the
   // toast's phase, so a replacement, revival or detach in between completes nothing stale.
