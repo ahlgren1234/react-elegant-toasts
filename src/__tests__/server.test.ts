@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { toast } from '../index';
-import { getServerSnapshot, getSnapshot, inspectRecords, upsert } from '../store/store';
+import {
+  claimAnnouncement,
+  getServerSnapshot,
+  getSnapshot,
+  inspectRecords,
+  upsert,
+} from '../store/store';
 
 let warn: MockInstance<typeof console.warn>;
 
@@ -128,6 +134,13 @@ describe('on the server (§8.3)', () => {
       toast.dismiss('unknown');
     }).not.toThrow();
     expect(inspectRecords()).toEqual([]);
+  });
+
+  it('claims no announcement, without touching a browser global', () => {
+    toast('Hello', { id: 'hello' });
+    expect(claimAnnouncement('hello', 0)).toBe(false);
+    expect(inspectRecords()).toEqual([]);
+    expect(getSnapshot()).toBe(getServerSnapshot());
   });
 
   it('keeps a constant, empty server snapshot', () => {

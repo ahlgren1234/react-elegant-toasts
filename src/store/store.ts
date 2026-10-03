@@ -476,6 +476,7 @@ export function upsert(input: ToastInput): ToastId | undefined {
         phase: 'queued',
         exit: undefined,
         pausedBy: NO_REASONS,
+        announcedRevision: undefined,
       });
     }
 
@@ -632,6 +633,29 @@ export function exited(id: ToastId): void {
     // Leaving the position frees its slot; the old position and any destination fill it now.
     promote();
   });
+}
+
+/**
+ * Claims the announcement of a rendered toast's current revision (§17.1): true the first time,
+ * false ever after, so a toast is announced once when it is rendered and once per replacement,
+ * however often it is re-rendered, relocated or taken over by another Toaster. Only the record's
+ * current revision can be claimed, and only while it is rendered: a stale or speculative revision,
+ * a queued toast or an unknown ID claims nothing and changes nothing.
+ *
+ * Bookkeeping, not a command: nothing rendered changes, so no subscriber is notified, and no
+ * timer, pause, queue, lifecycle or ownership state is touched.
+ */
+export function claimAnnouncement(id: ToastId, revision: number): boolean {
+  const record = records.get(id);
+  if (
+    record?.revision !== revision ||
+    record.phase === 'queued' ||
+    record.announcedRevision === revision
+  ) {
+    return false;
+  }
+  put({ ...record, announcedRevision: revision });
+  return true;
 }
 
 // Pause reasons combine as sets (§10, D-07, D-09): setting a reason twice and clearing it once
