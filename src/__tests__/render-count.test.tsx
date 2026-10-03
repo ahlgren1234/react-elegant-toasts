@@ -21,7 +21,11 @@ const renders = vi.hoisted(() => new Map<string, number>());
 
 vi.mock('../react/ToastItem', async importOriginal => {
   const actual = await importOriginal<typeof import('../react/ToastItem')>();
-  type Render = (props: { view: ToastView; closeButton: boolean }) => ReactElement;
+  type Render = (props: {
+    view: ToastView;
+    closeButton: boolean;
+    closeLabel: string | undefined;
+  }) => ReactElement;
   const item = actual.ToastItem as unknown as { $$typeof?: symbol; type?: Render };
   const memoised = item.$$typeof === Symbol.for('react.memo');
   const inner = memoised ? (item.type as Render) : (actual.ToastItem as unknown as Render);
@@ -158,5 +162,41 @@ describe('render counts (§32, D-16)', () => {
     expect(rendersSince()).toEqual({ implicit: 1 });
     rerender(<Toaster closeButton={false} progress />);
     expect(rendersSince()).toEqual({});
+  });
+
+  it('renders nothing when a new labels object resolves to the same strings', () => {
+    const { rerender } = render(<Toaster labels={{ region: 'Alerts', close: 'Fermer' }} />);
+    act(() => {
+      toast('a', { id: 'a' });
+      toast('b', { id: 'b', closeButton: false });
+      toast.custom('custom', { id: 'custom', closeButton: true });
+    });
+    rendersSince();
+
+    rerender(<Toaster labels={{ region: 'Alerts', close: 'Fermer' }} />);
+    rerender(<Toaster labels={{ close: 'Fermer', region: 'Alerts', errorPrefix: undefined }} />);
+    expect(rendersSince()).toEqual({});
+    // Fields that toasts do not render, and invalid values that resolve to the same text.
+    rerender(<Toaster labels={{ region: 'Updates', close: 'Fermer', warningPrefix: 'Note:' }} />);
+    expect(rendersSince()).toEqual({});
+    rerender(<Toaster labels={{ close: 'Close notification' }} />);
+    rendersSince();
+    rerender(<Toaster labels={{ close: '' }} />);
+    rerender(<Toaster />);
+    expect(rendersSince()).toEqual({});
+  });
+
+  it('re-renders, on a close label change, only the toasts that show a close button', () => {
+    const { rerender } = render(<Toaster labels={{ close: 'Fermer' }} />);
+    act(() => {
+      toast('a', { id: 'a' });
+      toast('b', { id: 'b', closeButton: false });
+      toast.custom('custom', { id: 'custom' });
+      toast.custom('custom on', { id: 'custom-on', closeButton: true });
+    });
+    rendersSince();
+
+    rerender(<Toaster labels={{ close: 'Schließen' }} />);
+    expect(rendersSince()).toEqual({ a: 1, 'custom-on': 1 });
   });
 });

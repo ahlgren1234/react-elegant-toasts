@@ -30,6 +30,12 @@ describe('<Toaster /> on the server (§23)', () => {
     );
   });
 
+  it('names the region from labels', () => {
+    expect(renderToString(<Toaster labels={{ region: 'Benachrichtigungen', close: '' }} />)).toBe(
+      '<section class="ret-toaster" aria-label="Benachrichtigungen" data-theme="system"></section>'
+    );
+  });
+
   it('attaches nothing, stores nothing and logs nothing', () => {
     renderToString(<Toaster maxVisible={2} position="bottom-left" />);
     renderToString(<Toaster />);

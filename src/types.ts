@@ -158,12 +158,27 @@ export interface ToasterProps {
    * have no progress setting.
    */
   progress?: boolean | undefined;
+  /**
+   * The keyboard shortcut that moves focus to the first toast shown: the names of the modifier
+   * properties to hold (`"altKey"`, `"ctrlKey"`, `"metaKey"`, `"shiftKey"`) plus one
+   * `KeyboardEvent.code` value. Defaults to `["altKey", "KeyT"]` (Alt+T), which matches the
+   * physical key on any keyboard layout. Escape then returns focus to where it was. `false`
+   * disables the shortcut.
+   */
   hotkey?: readonly string[] | false | undefined;
+  /**
+   * Text the toaster gives assistive technology, for localisation. Each field left out, or not a
+   * string with visible text, keeps its default.
+   */
   labels?:
     | {
+        /** The name of the toaster's landmark region. Defaults to `"Notifications"`. */
         region?: string | undefined;
+        /** The name of the library close button. Defaults to `"Close notification"`. */
         close?: string | undefined;
+        /** Read before the text of warning toasts. Defaults to `"Warning:"`. */
         warningPrefix?: string | undefined;
+        /** Read before the text of error toasts. Defaults to `"Error:"`. */
         errorPrefix?: string | undefined;
       }
     | undefined;

@@ -19,32 +19,33 @@ import {
 } from '../store/store';
 import type { ToasterToken, ToastView } from '../store/types';
 import type { ToasterProps, ToastPosition, ToastTheme } from '../types';
-import { resolveCloseButton } from './defaults';
+import { resolveCloseButton, resolveLabels } from './defaults';
 import { ToastItem } from './ToastItem';
 import { useEnvironmentPause } from './useEnvironmentPause';
 
 const createToken = (): ToasterToken => ({});
 
 const THEMES: readonly unknown[] = ['light', 'dark', 'system'] satisfies readonly ToastTheme[];
-// The region's name until `labels` arrives (§6.5, §17.2).
-const REGION_LABEL = 'Notifications';
 
 interface PositionListProps {
   readonly position: ToastPosition;
   readonly views: readonly ToastView[];
   /** The Toaster's `closeButton` prop, as given. */
   readonly closeButton: boolean | undefined;
+  /** The close button's resolved name. */
+  readonly closeLabel: string;
 }
 
 // One position's toasts (§12). The store lists them oldest first. The newest toast is nearest the
 // anchored edge, and DOM order is visual order: top positions reverse the list, bottom positions
 // keep it. Memoised on the store's list, which keeps its identity while it is unchanged. Each
-// item gets its close button already resolved, so a changed Toaster default re-renders only the
-// items it changes.
+// item gets its close button already resolved, and its name only when it shows, so a changed
+// Toaster default or label re-renders only the items it changes.
 const PositionList = memo(function PositionList({
   position,
   views,
   closeButton,
+  closeLabel,
 }: PositionListProps) {
   const ordered = useMemo(
     () => (position.startsWith('top-') ? [...views].reverse() : views),
@@ -53,9 +54,17 @@ const PositionList = memo(function PositionList({
   if (ordered.length === 0) return null;
   return (
     <StackList position={position}>
-      {ordered.map(view => (
-        <ToastItem key={view.id} view={view} closeButton={resolveCloseButton(view, closeButton)} />
-      ))}
+      {ordered.map(view => {
+        const shown = resolveCloseButton(view, closeButton);
+        return (
+          <ToastItem
+            key={view.id}
+            view={view}
+            closeButton={shown}
+            closeLabel={shown ? closeLabel : undefined}
+          />
+        );
+      })}
     </StackList>
   );
 });
@@ -106,6 +115,7 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   duration,
   closeButton,
   theme,
+  labels,
   className,
 }: ToasterProps) => {
   const [token] = useState(createToken);
@@ -122,10 +132,13 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   useEnvironmentPause(owner);
 
   if (!owner && snapshot.active !== null) return null;
+  // Resolved to strings on every render, so a new `labels` object with the same text changes no
+  // prop below the region.
+  const { region, close } = resolveLabels(labels);
   return (
     <section
       className={className ? `ret-toaster ${className}` : 'ret-toaster'}
-      aria-label={REGION_LABEL}
+      aria-label={region}
       data-theme={THEMES.includes(theme) ? theme : 'system'}
     >
       {owner &&
@@ -135,6 +148,7 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
             position={position}
             views={snapshot.byPosition[position]}
             closeButton={closeButton}
+            closeLabel={close}
           />
         ))}
     </section>

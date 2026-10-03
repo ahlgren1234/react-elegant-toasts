@@ -5,8 +5,6 @@ import { warnInaccessiblePersistent } from '../store/warnings';
 import { CLOSE_ICON, typeIcon } from './icons';
 import { useFocusWithinPause } from './useFocusWithinPause';
 
-// The close button's name until `labels` arrives (§6.5, §17.2).
-const CLOSE_LABEL = 'Close notification';
 // The lifecycle fallback (§9 rule 3) until motion arrives (P-18): with no animation to wait for,
 // an enter or exit completes on the next task.
 const LIFECYCLE_FALLBACK_MS = 0;
@@ -15,15 +13,21 @@ interface ToastItemProps {
   readonly view: ToastView;
   /** Whether the close button shows, already resolved against the Toaster default. */
   readonly closeButton: boolean;
+  /** The close button's name, from the Toaster's labels, while the close button shows. */
+  readonly closeLabel: string | undefined;
 }
 
 // One rendered toast (§12, §17.2, §21). Memoised on its view, which the store keeps while nothing
-// render-visible changes, and on its resolved close button, so a change to one toast, or to a
-// Toaster default it does not use, re-renders no other toast (§32, D-16). The content is keyed by
-// `revision`: a replacement re-keys the content without remounting the toast or its controls (§7,
-// §14). Clicking the toast body never dismisses it (D-17). An exiting toast's controls do nothing
-// (§9 rule 4).
-export const ToastItem = memo(function ToastItem({ view, closeButton }: ToastItemProps) {
+// render-visible changes, and on its resolved close button and its name, so a change to one toast,
+// or to a Toaster default or label it does not use, re-renders no other toast (§32, D-16). The
+// content is keyed by `revision`: a replacement re-keys the content without remounting the toast
+// or its controls (§7, §14). Clicking the toast body never dismisses it (D-17). An exiting toast's
+// controls do nothing (§9 rule 4).
+export const ToastItem = memo(function ToastItem({
+  view,
+  closeButton,
+  closeLabel,
+}: ToastItemProps) {
   const { id, phase, custom, persistent, options } = view;
   const { action } = options;
   const ref = useRef<HTMLLIElement>(null);
@@ -62,7 +66,7 @@ export const ToastItem = memo(function ToastItem({ view, closeButton }: ToastIte
   // An explicit icon replaces the type's, and `null` removes it. Either way it is decorative.
   const icon = custom ? undefined : options.icon !== undefined ? options.icon : typeIcon(view.type);
   const close = closeButton && (
-    <button type="button" className="ret-toast__close" aria-label={CLOSE_LABEL} onClick={onClose}>
+    <button type="button" className="ret-toast__close" aria-label={closeLabel} onClick={onClose}>
       {CLOSE_ICON}
     </button>
   );
