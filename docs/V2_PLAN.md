@@ -1520,6 +1520,19 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - window blur and document visibility
   - StrictMode idempotency
 - Defects: D-07, D-09.
+- Decisions made in P-15:
+  - **Scope.** P-15 adds only the DOM triggers for the four §10 reasons, through P-11's `setGlobalPause`, `setStackPause` and `setToastPause`. The store, the snapshot and the views are unchanged, and pause changes still notify nobody.
+  - **Window focus and document visibility.** Only the active Toaster listens, with exactly three global listeners: `window` `blur` and `focus`, and `document` `visibilitychange`. A waiting Toaster neither seeds nor listens. On becoming active, the owner seeds both global reasons from the current state, `window-blur` from `!document.hasFocus()` and `document-hidden` from `document.hidden`, before it listens. It writes on and off alike, so a stale reason left by an earlier owner is corrected. Cleanup removes the listeners but leaves both reasons as they are, which keeps P-11's rule that they survive detach; the next owner seeds them again.
+  - **Stack hover.** Hover is scoped to the rendered position `<ol>`, with native `pointerenter` and `pointerleave` and no `pointerType` filtering. The list owns the reason: its cleanup clears its position's hover. So a list that unmounts under the pointer, for example when its last toast leaves before any `pointerleave`, leaves no hover behind.
+  - **Focus-within.** Focus-within is scoped to each toast's root `<li>`, with native `focusin` and `focusout`. A `focusout` whose `relatedTarget` is inside the same `<li>` is ignored, so a move between the toast's own controls never clears and re-sets the reason. Cleanup clears `focus-within`. This covers unmount and relocation, where no useful `focusout` arrives (a relocated toast keeps its record but leaves its `<li>` behind).
+  - **Consumer-driven DOM changes.** Focus events alone are not enough, because removing the focused node fires no `focusout`. This happens when a replacement re-keys the content, when a custom ↔ normal replacement removes the focused control, and when custom content re-renders itself without a new revision. So while focus is inside a toast, a `MutationObserver` watches that `<li>` (`childList` and `subtree`) and reconciles. It is connected only while the toast holds focus, and it is disconnected when focus leaves and on cleanup. Reconciliation always writes the DOM's answer, whether the `<li>` contains the active element. It never infers focus from the toast's `revision`.
+  - **DOM tree, not React tree.** Containment is decided by the actual DOM subtree; React-tree ancestry is not used. Focus in content portalled outside the toast's `<li>` is not focus-within that toast. Likewise, a pointer over content portalled outside the position's `<ol>` is not hover on that stack. This is the ownership model chosen for 2.0.
+  - **Shadow roots and realms.** Reconciliation reads the active element of the `<li>`'s own root, from `getRootNode()`: the `activeElement` of that `Document` or `ShadowRoot`. A Toaster mounted in a shadow root therefore sees the focused descendant, not the shadow host that the document reports as active. The `MutationObserver` comes from the window of the toast's `ownerDocument`, so it belongs to the realm the toast renders in.
+  - **Listeners (§32).** "A fixed number of global listeners" counts the Toaster's listeners on `window` and `document`. P-15 adds exactly three, and only the active Toaster holds them. The pointer pair on each rendered position list and the focus pair on each rendered toast are element-scoped. They are allowed, and they live and die with their elements. The observer is focus-scoped, so in practice at most one is connected, because only one element has focus. Queued toasts are not rendered and have no element listeners or observer. StrictMode replay leaves no duplicate listener or observer.
+  - **Test environment.** jsdom reports `document.hasFocus()` as `false` until something is focused, which would start every Toaster with `window-blur` on. `setupTests.ts` therefore makes it return `true` in every jsdom test and restores it afterwards. Tests of an unfocused start override it.
+  - Tests are in `src/__tests__/environment-pause.test.tsx`. They cover listener ownership, seeding and handover; StrictMode; D-07 and D-09 DOM regressions; hover cleanup; focus-within through re-keys, custom content, relocation, portals and a shadow-root mount; and listener and observer cleanup. `render-count.test.tsx` checks that the pause events render nothing (§32, D-16).
+  - **Not in P-15:** the hotkey, `inert` and focus restoration (P-16); progress and the `data-paused` attribute (P-20); swipe (P-21); and real-browser verification (P-22). The checks that jsdom cannot make are listed under P-22.
+  - There are no public API changes: the export surface is still the two values and eleven types.
 
 **P-16 Accessibility layer**
 
@@ -1570,6 +1583,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
+- Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
+  - switching the browser or window away and back while a toast holds focus
+  - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
+  - what each browser does with focus when the focused node is removed
+  - pointer-boundary behaviour when a stack appears under a stationary pointer
+  - real `blur` and `visibilitychange` behaviour in every supported browser
 
 **P-23 Compatibility and SSR verification**
 

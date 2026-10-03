@@ -1,10 +1,27 @@
-import { memo, useEffect, useMemo, useState, useSyncExternalStore, type ReactElement } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { POSITIONS } from '../store/options';
-import { attach, configure, getServerSnapshot, getSnapshot, subscribe } from '../store/store';
+import {
+  attach,
+  configure,
+  getServerSnapshot,
+  getSnapshot,
+  setStackPause,
+  subscribe,
+} from '../store/store';
 import type { ToasterToken, ToastView } from '../store/types';
 import type { ToasterProps, ToastPosition, ToastTheme } from '../types';
 import { resolveCloseButton } from './defaults';
 import { ToastItem } from './ToastItem';
+import { useEnvironmentPause } from './useEnvironmentPause';
 
 const createToken = (): ToasterToken => ({});
 
@@ -35,13 +52,44 @@ const PositionList = memo(function PositionList({
   );
   if (ordered.length === 0) return null;
   return (
-    <ol className="ret-toaster__list" data-position={position}>
+    <StackList position={position}>
       {ordered.map(view => (
         <ToastItem key={view.id} view={view} closeButton={resolveCloseButton(view, closeButton)} />
       ))}
-    </ol>
+    </StackList>
   );
 });
+
+interface StackListProps {
+  readonly position: ToastPosition;
+  readonly children: ReactNode;
+}
+
+// A position's `<ol>`, which exists only while the position has toasts. A pointer over it pauses
+// the whole stack (§10). The listeners are native, so hover follows the DOM, not React portals.
+// The list owns the reason: when it unmounts, for example as its last toast leaves under the
+// pointer, the hover goes with it, since no `pointerleave` will ever arrive.
+function StackList({ position, children }: StackListProps) {
+  const ref = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const list = ref.current;
+    if (!list) return;
+    const onPointerEnter = () => setStackPause(position, true);
+    const onPointerLeave = () => setStackPause(position, false);
+    list.addEventListener('pointerenter', onPointerEnter);
+    list.addEventListener('pointerleave', onPointerLeave);
+    return () => {
+      list.removeEventListener('pointerenter', onPointerEnter);
+      list.removeEventListener('pointerleave', onPointerLeave);
+      setStackPause(position, false);
+    };
+  }, [position]);
+  return (
+    <ol ref={ref} className="ret-toaster__list" data-position={position}>
+      {children}
+    </ol>
+  );
+}
 
 // Attaches this Toaster to the store, which decides which mounted Toaster is active (§8.5), and
 // renders the store's snapshot while it is the active one. Before any Toaster is active, including
@@ -70,8 +118,9 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
     configure(token, { maxVisible, position, duration });
   }, [token, maxVisible, position, duration]);
   useEffect(() => attach(token), [token]);
-
   const owner = snapshot.active === token;
+  useEnvironmentPause(owner);
+
   if (!owner && snapshot.active !== null) return null;
   return (
     <section

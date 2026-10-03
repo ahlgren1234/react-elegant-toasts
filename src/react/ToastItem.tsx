@@ -1,8 +1,9 @@
-import { Fragment, memo, useEffect, type MouseEvent } from 'react';
+import { Fragment, memo, useEffect, useRef, type MouseEvent } from 'react';
 import { dismiss, entered, exited } from '../store/store';
 import type { ToastView } from '../store/types';
 import { warnInaccessiblePersistent } from '../store/warnings';
 import { CLOSE_ICON, typeIcon } from './icons';
+import { useFocusWithinPause } from './useFocusWithinPause';
 
 // The close button's name until `labels` arrives (§6.5, §17.2).
 const CLOSE_LABEL = 'Close notification';
@@ -25,6 +26,8 @@ interface ToastItemProps {
 export const ToastItem = memo(function ToastItem({ view, closeButton }: ToastItemProps) {
   const { id, phase, custom, persistent, options } = view;
   const { action } = options;
+  const ref = useRef<HTMLLIElement>(null);
+  useFocusWithinPause(ref, id);
 
   // Reports the end of an enter or exit. The store ignores a report that no longer matches the
   // toast's phase, so a replacement, revival or detach in between completes nothing stale.
@@ -67,14 +70,14 @@ export const ToastItem = memo(function ToastItem({ view, closeButton }: ToastIte
   // Custom toasts are chrome-less (§6.4): their content, and the close button only when asked for.
   if (custom) {
     return (
-      <li className={className} data-phase={phase} data-position={view.position}>
+      <li ref={ref} className={className} data-phase={phase} data-position={view.position}>
         <Fragment key={view.revision}>{view.content}</Fragment>
         {close}
       </li>
     );
   }
   return (
-    <li className={className} data-phase={phase} data-position={view.position}>
+    <li ref={ref} className={className} data-phase={phase} data-position={view.position}>
       {icon != null && (
         <span className="ret-toast__icon" aria-hidden="true">
           {icon}
