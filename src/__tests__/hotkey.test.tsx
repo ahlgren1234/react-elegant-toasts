@@ -1,8 +1,9 @@
-// The hotkey (§18, P-16): exact matching on `code` and the four modifiers, the one keydown listener
-// of the active Toaster, the first toast that is not exiting as its target, and where focus came
-// from. The record of that origin is internal and is only read by Escape (a later slice), so these
-// tests observe it through the reads of the deep active element: one per press from outside the
-// region, none from inside. jsdom has no sequential Tab navigation; real Tab order is a P-22 check.
+// The hotkey and Escape (§18, P-16): exact matching on `code` and the four modifiers, the one
+// keydown listener of the active Toaster, the first toast that is not exiting as its target, where
+// focus came from, and Escape returning it there. The record of that origin is internal: it is
+// observed through the reads of the deep active element (one per press from outside the region,
+// none from inside) and through where Escape sends focus. jsdom has no sequential Tab navigation
+// and enforces neither `hidden` nor `inert` on focus; those are P-22 checks.
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import {
   StrictMode,
@@ -14,10 +15,10 @@ import {
 import { createPortal } from 'react-dom';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { Toaster, toast } from '../index';
 import { deepActiveElement } from '../react/focus';
-import { dismiss } from '../store/store';
+import { dismiss, inspectRecords } from '../store/store';
 import type { ToasterProps, ToastOptions } from '../types';
 
 vi.mock('../react/focus', async importOriginal => {
@@ -28,10 +29,38 @@ vi.mock('../react/focus', async importOriginal => {
 const originReads = vi.mocked(deepActiveElement);
 
 const ALT_T = { code: 'KeyT', key: '†', altKey: true };
+const ESCAPE = { key: 'Escape', code: 'Escape' };
 
 // Text queries for a toast skip the hidden announcement copy in the live regions (§17.1).
 const inToasts = { ignore: 'script, style, [aria-live] *' };
 const itemOf = (text: string) => screen.getByText(text, inToasts).closest('li') as HTMLLIElement;
+const recordOf = (id: string) => inspectRecords().find(record => record.id === id);
+
+/** Focus moved into a toast some other way than the hotkey: Tab, a click or script. */
+const focusOn = (element: Element) => act(() => (element as HTMLElement).focus());
+
+/** A button outside the Toaster, removed after the test. */
+function externalButton(name: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.textContent = name;
+  document.body.append(button);
+  onTestFinished(() => button.remove());
+  return button;
+}
+
+/** Makes focus on toasts fail, as a browser may refuse it; other elements still take focus. */
+function refuseToastFocus() {
+  const focus = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus')?.value as (
+    this: HTMLElement,
+    options?: FocusOptions
+  ) => void;
+  return vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
+    this: HTMLElement,
+    options?: FocusOptions
+  ) {
+    if (this.tagName !== 'LI') focus.call(this, options);
+  });
+}
 
 function show(content: ReactNode, options: ToastOptions & { id: string }): void {
   act(() => {
@@ -517,8 +546,384 @@ describe('listener ownership (§18, §32)', () => {
   });
 });
 
+describe('Escape (§18)', () => {
+  it('returns focus to the recorded element from the toast, its close button and its action', () => {
+    const { outside } = mount();
+    show('a', { id: 'a', action: { label: 'Undo', onClick: () => undefined } });
+    expect(press(ALT_T)).toBe(false);
+    const item = itemOf('a');
+    const [action, close] = [...item.querySelectorAll('button')] as HTMLButtonElement[];
+    for (const control of [item, close, action] as HTMLElement[]) {
+      focusOn(control);
+      expect(press(ESCAPE)).toBe(false);
+      expect(outside).toHaveFocus();
+    }
+  });
+
+  it('returns focus from custom content, and from an open shadow root inside it', () => {
+    function Widget() {
+      const ref = useRef<HTMLDivElement>(null);
+      useLayoutEffect(() => {
+        const shadow = ref.current?.attachShadow({ mode: 'open' });
+        shadow?.append(document.createElement('button'));
+      }, []);
+      return <div ref={ref} data-testid="widget" />;
+    }
+    const { outside } = mount();
+    act(() => {
+      toast.custom(
+        <>
+          <button type="button">custom</button>
+          <Widget />
+        </>,
+        { id: 'c' }
+      );
+    });
+    expect(press(ALT_T)).toBe(false);
+
+    focusOn(screen.getByRole('button', { name: 'custom' }));
+    expect(press(ESCAPE)).toBe(false);
+    expect(outside).toHaveFocus();
+
+    const deep = screen.getByTestId('widget').shadowRoot?.querySelector('button') as HTMLElement;
+    focusOn(deep);
+    expect(press(ESCAPE, deep)).toBe(false);
+    expect(outside).toHaveFocus();
+  });
+
+  it('never dismisses anything', () => {
+    const onDismiss = vi.fn();
+    mount();
+    show('a', { id: 'a', duration: Infinity, onDismiss });
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(press(ALT_T)).toBe(false);
+    expect(press(ESCAPE, itemOf('a'))).toBe(false);
+    focusOn(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(recordOf('a')).toMatchObject({ phase: 'visible', exit: undefined });
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('does nothing from outside the region, so a repeated Escape does nothing more', () => {
+    const { outside } = mount();
+    show('a', { id: 'a' });
+    expect(press(ALT_T)).toBe(false);
+    expect(press(ESCAPE)).toBe(false);
+    expect(outside).toHaveFocus();
+    expect(press({ ...ESCAPE, repeat: true })).toBe(true);
+    expect(outside).toHaveFocus();
+
+    // Nor from focus in another shadow root outside the Toaster.
+    const host = document.createElement('div');
+    document.body.append(host);
+    onTestFinished(() => host.remove());
+    const inner = document.createElement('button');
+    host.attachShadow({ mode: 'open' }).append(inner);
+    focusOn(inner);
+    expect(press(ESCAPE, inner)).toBe(true);
+    expect(host.shadowRoot?.activeElement).toBe(inner);
+  });
+
+  it('matches the Escape key itself, unmodified and outside an IME composition', () => {
+    mount();
+    show('a', { id: 'a' });
+    const item = itemOf('a');
+    for (const init of [
+      { ...ESCAPE, shiftKey: true },
+      { ...ESCAPE, ctrlKey: true },
+      { ...ESCAPE, altKey: true },
+      { ...ESCAPE, metaKey: true },
+      { ...ESCAPE, isComposing: true },
+      // The legacy name, and the physical key typing something else.
+      { key: 'Esc', code: 'Escape' },
+      { key: 'Unidentified', code: 'Escape' },
+    ]) {
+      focusOn(item);
+      expect(press(init)).toBe(true);
+      expect(item).toHaveFocus();
+    }
+    // A key remapped to Escape by the system is still Escape.
+    expect(press({ key: 'Escape', code: 'CapsLock' })).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('does nothing when a handler has already prevented it, custom content included', () => {
+    const preventEscape = (event: ReactKeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault();
+    };
+    const stopEscape = (event: ReactKeyboardEvent) => {
+      if (event.key === 'Escape') event.stopPropagation();
+    };
+    mount();
+    act(() => {
+      toast.custom(
+        <>
+          <input aria-label="prevents" onKeyDown={preventEscape} />
+          <input aria-label="stops" onKeyDown={stopEscape} />
+        </>,
+        { id: 'c' }
+      );
+    });
+    const preventDefault = vi.spyOn(KeyboardEvent.prototype, 'preventDefault');
+    const prevents = screen.getByRole('textbox', { name: 'prevents' });
+    focusOn(prevents);
+    expect(press(ESCAPE)).toBe(false);
+    expect(prevents).toHaveFocus();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+
+    const stops = screen.getByRole('textbox', { name: 'stops' });
+    focusOn(stops);
+    expect(press(ESCAPE)).toBe(true);
+    expect(stops).toHaveFocus();
+  });
+
+  it('releases focus to the document when nothing was recorded, focusing no region or toast', () => {
+    mount();
+    show('a', { id: 'a' });
+    focusOn(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('releases focus from an open shadow root inside custom content, not just from its host', () => {
+    function Widget() {
+      const ref = useRef<HTMLDivElement>(null);
+      useLayoutEffect(() => {
+        ref.current?.attachShadow({ mode: 'open' }).append(document.createElement('button'));
+      }, []);
+      return <div ref={ref} data-testid="widget" />;
+    }
+    mount();
+    act(() => {
+      toast.custom(<Widget />, { id: 'c' });
+    });
+    const widget = screen.getByTestId('widget');
+    const deep = widget.shadowRoot?.querySelector('button') as HTMLElement;
+    focusOn(deep);
+    expect(press(ESCAPE, deep)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+    expect(widget.shadowRoot?.activeElement).toBeNull();
+  });
+
+  it('releases focus to the document when the recorded element has gone', () => {
+    mount();
+    show('a', { id: 'a' });
+    const gone = externalButton('gone');
+    focusOn(gone);
+    expect(press(ALT_T)).toBe(false);
+    gone.remove();
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('releases focus to the document when the recorded element no longer takes focus', () => {
+    mount();
+    show('a', { id: 'a' });
+    const disabled = externalButton('disabled');
+    focusOn(disabled);
+    expect(press(ALT_T)).toBe(false);
+    disabled.disabled = true;
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+
+    // A focus that does nothing, as a browser may for a hidden or inert element.
+    const refusing = externalButton('refusing');
+    focusOn(refusing);
+    expect(press(ALT_T)).toBe(false);
+    vi.spyOn(refusing, 'focus').mockImplementation(() => undefined);
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('leaves the event alone when focus cannot leave the region', () => {
+    mount();
+    show('a', { id: 'a' });
+    focusOn(itemOf('a'));
+    vi.spyOn(HTMLElement.prototype, 'blur').mockImplementation(() => undefined);
+    expect(press(ESCAPE)).toBe(true);
+    expect(itemOf('a')).toHaveFocus();
+  });
+
+  it('keeps the record: Escape returns to it again, until a hotkey from outside replaces it', () => {
+    const { outside } = mount();
+    show('a', { id: 'a' });
+    expect(press(ALT_T)).toBe(false);
+    expect(press(ESCAPE)).toBe(false);
+    expect(outside).toHaveFocus();
+
+    focusOn(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(outside).toHaveFocus();
+
+    // A hotkey from inside the region keeps it.
+    focusOn(itemOf('a').querySelector('button') as HTMLElement);
+    expect(press(ALT_T)).toBe(false);
+    expect(press(ESCAPE)).toBe(false);
+    expect(outside).toHaveFocus();
+
+    const later = externalButton('later');
+    focusOn(later);
+    expect(press(ALT_T)).toBe(false);
+    expect(press(ESCAPE)).toBe(false);
+    expect(later).toHaveFocus();
+  });
+
+  it('does not return to where a refused hotkey came from', () => {
+    const { outside } = mount();
+    show('a', { id: 'a' });
+    const refused = refuseToastFocus();
+    expect(press(ALT_T)).toBe(true);
+    expect(outside).toHaveFocus();
+    refused.mockRestore();
+
+    focusOn(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('keeps the earlier record when a later hotkey is refused', () => {
+    const { outside: earlier } = mount();
+    show('a', { id: 'a' });
+    expect(press(ALT_T)).toBe(false);
+    expect(press(ESCAPE)).toBe(false);
+    expect(earlier).toHaveFocus();
+
+    const later = externalButton('later');
+    focusOn(later);
+    const refused = refuseToastFocus();
+    expect(press(ALT_T)).toBe(true);
+    expect(later).toHaveFocus();
+    refused.mockRestore();
+
+    focusOn(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(earlier).toHaveFocus();
+  });
+
+  it('works for a Toaster mounted in an open shadow root', () => {
+    const outside = externalButton('outside');
+    const host = document.createElement('div');
+    document.body.append(host);
+    const shadow = host.attachShadow({ mode: 'open' });
+    const container = document.createElement('div');
+    shadow.append(container);
+    const root = createRoot(container);
+    try {
+      act(() => root.render(<Toaster />));
+      show('a', { id: 'a' });
+      const item = shadow.querySelector('li') as HTMLLIElement;
+      focusOn(outside);
+      expect(press(ALT_T)).toBe(false);
+      expect(press(ESCAPE, item)).toBe(false);
+      expect(outside).toHaveFocus();
+      expect(shadow.activeElement).toBeNull();
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+    }
+  });
+
+  it('still works with hotkey={false}, releasing focus to the document', () => {
+    mount({ hotkey: false });
+    show('a', { id: 'a' });
+    focusOn(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('with a hotkey of ["Escape"], focuses the toasts from outside and returns from inside', () => {
+    const { outside } = mount({ hotkey: ['Escape'] });
+    show('a', { id: 'a' });
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(outside).toHaveFocus();
+  });
+
+  it('releases the focus-within pause, so the timer resumes with the time it had left', () => {
+    mount();
+    show('a', { id: 'a', duration: 1000 });
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(press(ALT_T)).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(recordOf('a')?.phase).toBe('visible');
+
+    expect(press(ESCAPE)).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    expect(recordOf('a')?.phase).toBe('visible');
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(recordOf('a')?.phase).toBe('exiting');
+  });
+
+  it("does not use the former owner's record after a handover", async () => {
+    const outside = externalButton('outside');
+    const { rerender } = render(
+      <>
+        <Toaster key="first" />
+        <Toaster key="second" />
+      </>
+    );
+    await settle();
+    show('a', { id: 'a' });
+    focusOn(outside);
+    expect(press(ALT_T)).toBe(false);
+
+    rerender(<Toaster key="second" />);
+    await settle();
+    focusOn(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('does not use an unmounted Toaster’s record after a remount', async () => {
+    const outside = externalButton('outside');
+    const first = render(<Toaster />);
+    show('a', { id: 'a' });
+    focusOn(outside);
+    expect(press(ALT_T)).toBe(false);
+    first.unmount();
+    await settle();
+
+    render(<Toaster />);
+    await settle();
+    focusOn(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('works under StrictMode, with one keydown listener', async () => {
+    const listeners = trackKeydown();
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    );
+    await settle();
+    const outside = screen.getByRole('button', { name: 'outside' });
+    show('a', { id: 'a' });
+    focusOn(outside);
+    expect(press(ALT_T)).toBe(false);
+    expect(press(ESCAPE)).toBe(false);
+    expect(outside).toHaveFocus();
+    expect(listeners.live()).toHaveLength(1);
+  });
+});
+
 describe('hydration (§23)', () => {
-  it('hydrates without a mismatch, then the hotkey works', async () => {
+  it('hydrates without a mismatch, then the hotkey and Escape work', async () => {
     const html = renderToString(<Toaster />);
     const container = document.createElement('div');
     container.innerHTML = html;
@@ -533,6 +938,8 @@ describe('hydration (§23)', () => {
     show('a', { id: 'a' });
     expect(press(ALT_T)).toBe(false);
     expect(document.activeElement).toBe(itemOf('a'));
+    expect(press(ESCAPE)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
     expect(error).not.toHaveBeenCalled();
     act(() => root.unmount());
     container.remove();

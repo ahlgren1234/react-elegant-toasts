@@ -263,6 +263,39 @@ describe('render counts (§32, D-16)', () => {
     expect(rendersSince()).toEqual({});
   });
 
+  it('renders and commits nothing when Escape returns focus to the recorded element (P-16)', () => {
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    const { commits } = mountWithToasts();
+    act(() => outside.focus());
+    act(() => {
+      fireEvent.keyDown(outside, { code: 'KeyT', altKey: true });
+    });
+    const before = commits();
+    rendersSince();
+    act(() => {
+      fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+    });
+    expect(document.activeElement).toBe(outside);
+    expect(commits()).toBe(before);
+    expect(rendersSince()).toEqual({});
+    outside.remove();
+  });
+
+  it('renders and commits nothing when Escape releases focus to the document (P-16)', () => {
+    const { commits } = mountWithToasts();
+    const item = document.querySelector('li') as HTMLLIElement;
+    act(() => item.focus());
+    const before = commits();
+    rendersSince();
+    act(() => {
+      fireEvent.keyDown(item, { key: 'Escape' });
+    });
+    expect(document.activeElement).toBe(document.body);
+    expect(commits()).toBe(before);
+    expect(rendersSince()).toEqual({});
+  });
+
   it('re-renders no toast when the hotkey changes, or is given again as a new array (P-16)', () => {
     const { rerender } = render(<Toaster hotkey={['altKey', 'KeyT']} />);
     act(() => {
