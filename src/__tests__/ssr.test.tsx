@@ -45,6 +45,14 @@ describe('<Toaster /> on the server (§23)', () => {
     );
   });
 
+  it('renders the same region whatever the hotkey, and reads no DOM for it (P-16)', () => {
+    const markup = renderToString(<Toaster />);
+    for (const hotkey of [['ctrlKey', 'KeyY'], false, ['F6']] as const) {
+      expect(renderToString(<Toaster hotkey={hotkey} />)).toBe(markup);
+    }
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('attaches nothing, stores nothing and logs nothing', () => {
     renderToString(<Toaster maxVisible={2} position="bottom-left" />);
     renderToString(<Toaster />);

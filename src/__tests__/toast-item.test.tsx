@@ -172,9 +172,13 @@ describe('icon and control accessibility (§17.2, D-19)', () => {
     }
     expect(action).toHaveClass('ret-toast__action', { exact: true });
     expect(close).toHaveClass('ret-toast__close', { exact: true });
-    expect(
-      document.querySelectorAll('[role="alert"], [aria-keyshortcuts], [inert], [tabindex]')
-    ).toHaveLength(0);
+    expect(document.querySelectorAll('[role="alert"], [aria-keyshortcuts], [inert]')).toHaveLength(
+      0
+    );
+    // Only the toast itself takes focus from script, for the hotkey (§18), and stays out of the
+    // Tab order. The region does not, yet.
+    expect([...document.querySelectorAll('[tabindex]')]).toEqual([itemOf('Saved')]);
+    expect(itemOf('Saved')).toHaveAttribute('tabindex', '-1');
     // The toast is not a live region; only the Toaster's two persistent regions are (§17.1).
     expect(itemOf('Saved').closest('[aria-live]')).toBeNull();
     expect(itemOf('Saved').querySelector('[aria-live]')).toBeNull();

@@ -89,14 +89,26 @@ export const ToastItem = memo(function ToastItem({
   // Custom toasts are chrome-less (§6.4): their content, and the close button only when asked for.
   if (custom) {
     return (
-      <li ref={ref} className={className} data-phase={phase} data-position={view.position}>
+      <li
+        ref={ref}
+        className={className}
+        data-phase={phase}
+        data-position={view.position}
+        tabIndex={-1}
+      >
         <Fragment key={view.revision}>{view.content}</Fragment>
         {close}
       </li>
     );
   }
   return (
-    <li ref={ref} className={className} data-phase={phase} data-position={view.position}>
+    <li
+      ref={ref}
+      className={className}
+      data-phase={phase}
+      data-position={view.position}
+      tabIndex={-1}
+    >
       {icon != null && (
         <span className="ret-toast__icon" aria-hidden="true">
           {icon}

@@ -250,6 +250,36 @@ describe('render counts (§32, D-16)', () => {
     expect(commits()).toBe(before + 1);
   });
 
+  it('renders and commits nothing for a hotkey press (P-16)', () => {
+    const { commits } = mountWithToasts();
+    const before = commits();
+    act(() => {
+      fireEvent.keyDown(document.body, { code: 'KeyT', altKey: true });
+    });
+    // The newest toast at the first position in DOM order (top-right) takes focus.
+    expect(document.activeElement?.tagName).toBe('LI');
+    expect(document.activeElement).toHaveTextContent(/^c$/);
+    expect(commits()).toBe(before);
+    expect(rendersSince()).toEqual({});
+  });
+
+  it('re-renders no toast when the hotkey changes, or is given again as a new array (P-16)', () => {
+    const { rerender } = render(<Toaster hotkey={['altKey', 'KeyT']} />);
+    act(() => {
+      toast('a', { id: 'a' });
+      toast('x', { id: 'x', position: 'bottom-left' });
+    });
+    act(() => {
+      entered('a');
+      entered('x');
+    });
+    rendersSince();
+    for (const hotkey of [['altKey', 'KeyT'], ['ctrlKey', 'KeyY'], false, undefined] as const) {
+      rerender(<Toaster hotkey={hotkey} />);
+      expect(rendersSince()).toEqual({});
+    }
+  });
+
   it('renders and commits nothing when announcements expire', () => {
     let commits = 0;
     render(
