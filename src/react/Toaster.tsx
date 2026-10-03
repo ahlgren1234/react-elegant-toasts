@@ -5,6 +5,7 @@ import type { ToasterToken, ToastView } from '../store/types';
 import type { ToasterProps, ToastPosition, ToastTheme } from '../types';
 import { resolveCloseButton } from './defaults';
 import { ToastItem } from './ToastItem';
+import { useEnvironmentPause } from './useEnvironmentPause';
 
 const createToken = (): ToasterToken => ({});
 
@@ -70,8 +71,9 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
     configure(token, { maxVisible, position, duration });
   }, [token, maxVisible, position, duration]);
   useEffect(() => attach(token), [token]);
-
   const owner = snapshot.active === token;
+  useEnvironmentPause(owner);
+
   if (!owner && snapshot.active !== null) return null;
   return (
     <section
