@@ -22,14 +22,19 @@ const extraToasterWarnings = () =>
   warn.mock.calls.filter(([message]) => String(message).includes('More than one <Toaster />'));
 
 beforeEach(() => {
+  // These tests are about ownership and the queue, not the lifecycle: the clock is held, so the
+  // renderer's lifecycle fallbacks (P-14) run only when a test advances it.
+  vi.useFakeTimers();
   warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 
 describe('<Toaster /> ownership (§8.5)', () => {
-  it('produces no DOM output yet (rendering arrives in P-14)', () => {
+  it('renders the toasts once it is active', () => {
     create('hello');
     const { container } = render(<Toaster position="bottom-center" />);
-    expect(container.childNodes).toHaveLength(0);
+    expect(container.querySelectorAll('section')).toHaveLength(1);
+    expect(container.querySelectorAll('li')).toHaveLength(1);
+    expect(container.querySelector('li')).toHaveTextContent('hello');
   });
 
   it('becomes active on mount and detaches on unmount', async () => {
@@ -128,12 +133,15 @@ describe('<Toaster maxVisible> (§11)', () => {
     for (let index = 1; index <= count; index++) create(`t${index}`);
   };
 
-  it('applies maxVisible from the first mount, without DOM output', () => {
+  it('applies maxVisible from the first mount, rendering only the promoted toasts', () => {
     createMany(4);
     const { container } = render(<Toaster maxVisible={2} />);
     expect(renderedIds()).toEqual(['t1', 't2']);
     expect(phaseOf('t3')).toBe('queued');
-    expect(container.childNodes).toHaveLength(0);
+    expect([...container.querySelectorAll('li')].map(item => item.textContent)).toEqual([
+      't2',
+      't1',
+    ]);
   });
 
   it('applies maxVisible under StrictMode with one notification and no warning', async () => {
@@ -227,7 +235,6 @@ describe('<Toaster /> and timers (§8.4)', () => {
   const timerOf = (id: string) => inspectRecords().find(record => record.id === id)?.timer;
 
   it('keeps remaining time through StrictMode replay, without duplicates or warnings', async () => {
-    vi.useFakeTimers();
     const onAutoClose = vi.fn();
     upsert({ type: 'default', custom: false, content: 't', options: { id: 't', onAutoClose } });
     const first = render(<Toaster />);
@@ -246,7 +253,12 @@ describe('<Toaster /> and timers (§8.4)', () => {
     expect(phaseOf('t')).toBe('entering');
     expect(timerOf('t')).toEqual({ duration: 5000, remaining: 3000, runningSince: null });
 
-    entered('t');
+    // The lifecycle fallback reports the enter: one fallback, then one store timer, despite replay.
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(phaseOf('t')).toBe('visible');
     expect(vi.getTimerCount()).toBe(1);
     vi.advanceTimersByTime(2999);
     expect(phaseOf('t')).toBe('visible');

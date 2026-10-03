@@ -210,7 +210,8 @@ describe('replacement (§14)', () => {
   });
 
   it('moves a queued toast to the back of its new position', () => {
-    create('Job', { id: 'job' });
+    // Explicit: an omitted position here would be pending, and a pending one never moves (§11).
+    create('Job', { id: 'job', position: 'top-right' });
     create('Other');
     create('Job moved', { id: 'job', position: 'bottom-right' });
     expect(record('job')).toMatchObject({ position: 'bottom-right', seq: 3, phase: 'queued' });
