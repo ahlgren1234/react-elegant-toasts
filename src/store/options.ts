@@ -41,11 +41,11 @@ type Source = { readonly [Key in keyof ToastOptions]?: unknown };
 const isFunction = (value: unknown): value is (...args: never[]) => unknown =>
   typeof value === 'function';
 
-const isPosition = (value: unknown): value is ToastPosition =>
+export const isPosition = (value: unknown): value is ToastPosition =>
   (POSITIONS as readonly unknown[]).includes(value);
 
 /** Finite values at or below 0 become 0; `Infinity` is persistent; anything else is omitted. */
-function normaliseDuration(value: unknown): number | undefined {
+export function normaliseDuration(value: unknown): number | undefined {
   if (value === Infinity) return Infinity;
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return Math.max(0, value);

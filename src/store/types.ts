@@ -35,6 +35,10 @@ export type ToasterToken = object;
 export interface ToasterConfig {
   /** Rendered toasts per position (§11): a whole number of at least 1. */
   readonly maxVisible: number;
+  /** The position of definitions that omit one (§6.3, §6.5). */
+  readonly position: ToastPosition;
+  /** The duration of definitions that omit one, normalised like a per-toast duration (§10). */
+  readonly duration: number;
 }
 
 /** The per-toast options the store keeps, copied field by field from the public options (D-02). */
@@ -66,10 +70,21 @@ export interface ToastRecord {
   readonly content: ReactNode;
   readonly description: ReactNode;
   readonly position: ToastPosition;
+  /**
+   * The definition omitted `position` while no Toaster was active, so `position` is only the
+   * built-in placeholder until a Toaster becomes active and supplies its default.
+   */
+  readonly positionPending: boolean;
   readonly options: StoredOptions;
   readonly phase: ToastPhase;
   readonly exit: ToastExit | undefined;
   readonly timer: ToastTimer;
+  /**
+   * The definition omitted `duration` while no Toaster was active, so `timer` holds the built-in
+   * fallback until a Toaster becomes active and supplies its default. Never set for loading toasts,
+   * which are persistent whatever the default.
+   */
+  readonly durationPending: boolean;
   /** Active toast-scoped pause reasons, without duplicates. Carried over on replacement. */
   readonly pausedBy: readonly ToastPauseReason[];
   /**
@@ -91,6 +106,8 @@ export interface ToastView {
   readonly position: ToastPosition;
   readonly phase: Exclude<ToastPhase, 'queued'>;
   readonly options: StoredOptions;
+  /** Whether the effective duration is persistent: loading, or `Infinity` given or by default. */
+  readonly persistent: boolean;
 }
 
 export interface StoreSnapshot {

@@ -4,10 +4,11 @@ import type { ReactNode } from 'react';
 import type { DismissReason, ToastId, ToastPosition, ToastSnapshot } from '../types';
 import { isServer } from './env';
 import { generateId, resetIds } from './ids';
-import { normaliseOptions, POSITIONS } from './options';
+import { isPosition, normaliseDuration, normaliseOptions, POSITIONS } from './options';
 import {
   cancel,
   cancelAll,
+  DEFAULT_DURATION,
   expiredTimer,
   freshTimer,
   now,
@@ -44,6 +45,12 @@ const NO_TOASTER_CAP = 100;
 // Rendered toasts per position (§11).
 const DEFAULT_MAX_VISIBLE = 4;
 const NO_REASONS: readonly ToastPauseReason[] = Object.freeze([]);
+// The configuration of a Toaster that has configured nothing, and the final fallbacks.
+const DEFAULT_CONFIG: ToasterConfig = Object.freeze({
+  maxVisible: DEFAULT_MAX_VISIBLE,
+  position: DEFAULT_POSITION,
+  duration: DEFAULT_DURATION,
+});
 
 function emptySnapshot(): StoreSnapshot {
   const byPosition = {} as Record<ToastPosition, readonly ToastView[]>;
@@ -148,6 +155,7 @@ const VIEW_KEYS = [
   'position',
   'phase',
   'options',
+  'persistent',
 ] as const satisfies readonly (keyof ToastView)[];
 
 /**
@@ -169,6 +177,7 @@ function viewOf(
     position: record.position,
     phase: record.phase,
     options: record.options,
+    persistent: record.timer.duration === Infinity,
   };
   if (previous && VIEW_KEYS.every(key => previous[key] === next[key])) return previous;
   return Object.freeze(next);
@@ -234,9 +243,76 @@ function requeueAt(record: ToastRecord, position: ToastPosition): void {
   put({ ...record, position, seq: nextSeq++, phase: 'queued', exit: undefined });
 }
 
+/** The active Toaster's configuration, or the defaults when it has configured nothing (§8.5). */
+function activeConfig(): ToasterConfig {
+  return (active === null ? undefined : configs.get(active)) ?? DEFAULT_CONFIG;
+}
+
 /** How many rendered toasts each position may hold under the active Toaster (§11). */
 function capacity(): number {
-  return (active === null ? undefined : configs.get(active))?.maxVisible ?? DEFAULT_MAX_VISIBLE;
+  return activeConfig().maxVisible;
+}
+
+/**
+ * The position of a new definition. An omitted one is the active Toaster's default (§6.3). With no
+ * Toaster active there is no default yet: the placeholder is marked pending and resolved when one
+ * becomes active (`resolvePendingDefaults`).
+ */
+function definitionPosition(
+  explicit: ToastPosition | undefined
+): Pick<ToastRecord, 'position' | 'positionPending'> {
+  if (explicit !== undefined) return { position: explicit, positionPending: false };
+  if (active === null) return { position: DEFAULT_POSITION, positionPending: true };
+  return { position: activeConfig().position, positionPending: false };
+}
+
+/**
+ * The fresh timer of a new definition (§10, §14). An omitted duration is the active Toaster's
+ * default; with no Toaster active the built-in fallback is a placeholder, marked pending. Loading
+ * toasts are persistent whatever the default, so their duration is never pending.
+ */
+function definitionTimer(
+  type: ToastRecord['type'],
+  explicit: number | undefined
+): Pick<ToastRecord, 'timer' | 'durationPending'> {
+  if (explicit !== undefined || type === 'loading') {
+    return { timer: freshTimer(resolveDuration(type, explicit)), durationPending: false };
+  }
+  if (active === null) {
+    return { timer: freshTimer(resolveDuration(type, undefined)), durationPending: true };
+  }
+  return {
+    timer: freshTimer(resolveDuration(type, activeConfig().duration)),
+    durationPending: false,
+  };
+}
+
+/**
+ * Gives definitions made while no Toaster was active the new owner's defaults, before promotion.
+ * Pending records are always queued and their timers have never run, so this is resolution, not a
+ * relocation or a retiming: `seq`, `revision` and phase stay, and no callback fires.
+ */
+function resolvePendingDefaults(): void {
+  const { position, duration } = activeConfig();
+  for (const record of [...records.values()]) {
+    if (!record.positionPending && !record.durationPending) continue;
+    put({
+      ...record,
+      ...(record.positionPending && { position, positionPending: false }),
+      ...(record.durationPending && {
+        timer: freshTimer(resolveDuration(record.type, duration)),
+        durationPending: false,
+      }),
+    });
+  }
+}
+
+/** Makes a Toaster the active one: it supplies pending defaults, then promotes the queue (§8.5). */
+function activate(token: ToasterToken): void {
+  active = token;
+  endNoToasterPeriod();
+  resolvePendingDefaults();
+  promote();
 }
 
 /** Any value other than a whole number of at least 1, Infinity included, falls back to 4. */
@@ -370,16 +446,17 @@ export function upsert(input: ToastInput): ToastId | undefined {
       return undefined;
     }
 
-    // Not a merge: an omitted position is the default one, even on replacement (§14).
-    const position = normalised.position ?? DEFAULT_POSITION;
+    // Not a merge: an omitted position or duration is the Toaster default, even on replacement
+    // (§14). Every definition starts a fresh timer: creation, and every replacement (§10, §14).
+    const { position, positionPending } = definitionPosition(normalised.position);
     const definition = {
       type: input.type,
       custom: input.custom,
       content: input.content,
       description: normalised.description,
       options: normalised.options,
-      // Every definition starts a fresh timer: creation, and every replacement (§10, §14).
-      timer: freshTimer(resolveDuration(input.type, normalised.options.duration)),
+      positionPending,
+      ...definitionTimer(input.type, normalised.options.duration),
       // Only toast.promise passes a token. Any other public call clears the previous owner's (§14).
       promiseToken: input.promiseToken,
     };
@@ -416,16 +493,29 @@ function replace(
   existing: ToastRecord,
   definition: Pick<
     ToastRecord,
-    'type' | 'custom' | 'content' | 'description' | 'options' | 'timer' | 'promiseToken'
+    | 'type'
+    | 'custom'
+    | 'content'
+    | 'description'
+    | 'options'
+    | 'positionPending'
+    | 'timer'
+    | 'durationPending'
+    | 'promiseToken'
   >,
   position: ToastPosition
 ): void {
   const replaced: ToastRecord = { ...existing, ...definition, revision: existing.revision + 1 };
-  const relocating = position !== existing.position;
+  // A pending position is only a placeholder, so it never establishes a move: a toast relocates
+  // only between two resolved, different positions (§11). Pending positions exist only while no
+  // Toaster is active, so only queued toasts can have one.
+  const relocating =
+    !existing.positionPending && !definition.positionPending && position !== existing.position;
   switch (existing.phase) {
     case 'queued':
+      // Not a relocation: it keeps its `seq`, so its place in the queue (§11), at the new position.
       if (relocating) requeueAt(replaced, position);
-      else put(replaced);
+      else put({ ...replaced, position });
       return;
     case 'entering':
     case 'visible':
@@ -481,8 +571,9 @@ export function ownsToast(id: ToastId, token: symbol): boolean {
 
 /**
  * Replaces an owned loading toast with its settled state. The definition is the loading toast's
- * own: its options were normalised once at creation and are never read again, so the position,
- * description and options stay (with a fresh options object) and only the type and content change.
+ * own: its options were normalised once at creation and are never read again, so the position
+ * (pending or not), description and options stay (with a fresh options object) and only the type
+ * and content change. An omitted duration is the Toaster default for the settled toast (§13).
  * Ownership is checked again here, inside the command, so a stale settlement changes nothing.
  */
 export function settleOwned(
@@ -502,7 +593,8 @@ export function settleOwned(
         content,
         description: record.description,
         options: Object.freeze({ ...record.options }),
-        timer: freshTimer(resolveDuration(type, record.options.duration)),
+        positionPending: record.positionPending,
+        ...definitionTimer(type, record.options.duration),
         promiseToken: undefined,
       },
       record.position
@@ -587,9 +679,7 @@ export function attach(token: ToasterToken): () => void {
     if (pendingDetach.delete(token)) return;
     if (token === active || waiting.includes(token)) return;
     if (active === null) {
-      active = token;
-      endNoToasterPeriod();
-      promote();
+      activate(token);
     } else {
       waiting.push(token);
       warnExtraToaster(token);
@@ -609,14 +699,28 @@ export function attach(token: ToasterToken): () => void {
 /**
  * Stores a Toaster's configuration. The active Toaster's applies at once: a higher `maxVisible`
  * promotes queued toasts, and a lower one removes nothing, so a position may stay above the new
- * limit until its toasts leave (§11). A waiting Toaster's applies when it takes over.
+ * limit until its toasts leave (§11). A changed `position` or `duration` applies to later
+ * definitions only: toasts that already have their defaults keep them. Pending defaults exist only
+ * while no Toaster is active, so there are none to resolve here. A waiting Toaster's configuration
+ * applies when it takes over. Invalid values fall back to the defaults, silently.
  */
 export function configure(
   token: ToasterToken,
-  config: { readonly maxVisible?: number | undefined }
+  config: {
+    readonly maxVisible?: number | undefined;
+    readonly position?: ToastPosition | undefined;
+    readonly duration?: number | undefined;
+  }
 ): void {
   command(() => {
-    configs.set(token, Object.freeze({ maxVisible: resolveMaxVisible(config.maxVisible) }));
+    configs.set(
+      token,
+      Object.freeze({
+        maxVisible: resolveMaxVisible(config.maxVisible),
+        position: isPosition(config.position) ? config.position : DEFAULT_POSITION,
+        duration: normaliseDuration(config.duration) ?? DEFAULT_DURATION,
+      })
+    );
     if (token === active) promote();
   });
 }
@@ -647,11 +751,9 @@ function completeDetach(token: ToasterToken): void {
     if (record.pausedBy.length > 0) put({ ...record, pausedBy: NO_REASONS });
   }
   // Then the earliest waiting Toaster, if any, takes over and promotes the queue (§8.5).
-  active = waiting.shift() ?? null;
-  if (active !== null) {
-    endNoToasterPeriod();
-    promote();
-  }
+  const next = waiting.shift();
+  if (next === undefined) active = null;
+  else activate(next);
 }
 
 // ---------------------------------------------------------------------------------------------
