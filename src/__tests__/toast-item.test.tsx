@@ -1,9 +1,10 @@
 // Toast chrome, interaction and lifecycle fallbacks (P-14): the normal shell and the chrome-less
 // custom wrapper, render-side Toaster defaults, icons, the action and close controls, the
-// no-animation lifecycle fallbacks and the inaccessible-persistent-toast warning. The clock is
-// fake: a fallback runs only when a test advances it (`flush`).
+// no-animation lifecycle fallbacks, the inaccessible-persistent-toast warning and inert exiting
+// toasts (P-16). The clock is fake: a fallback runs only when a test advances it (`flush`).
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode, type MouseEvent, type ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { resolveCloseButton, resolveProgress } from '../react/defaults';
 import { Toaster, toast } from '../index';
@@ -705,5 +706,185 @@ describe('inaccessible persistent toasts (§17.2)', () => {
     render(<Toaster closeButton={false} />);
     show('stuck', { id: 'stuck', duration: Infinity });
     expect(persistentWarnings()).toHaveLength(0);
+  });
+});
+
+// `inert` is owned by the item, not rendered by React, so these tests also check that no render
+// removes it and that revival does. jsdom stores the attribute but enforces nothing: it neither
+// blocks focus or clicks nor moves focus out. Real browsers are checked in P-22.
+describe('inert exiting toasts (§9 rule 4)', () => {
+  it('is inert exactly while exiting: not entering or visible, from the dismissal until removal', () => {
+    render(<Toaster />);
+    show('t', { id: 't' });
+    const item = itemOf('t');
+    expect(item).toHaveAttribute('data-phase', 'entering');
+    expect(item).not.toHaveAttribute('inert');
+    flush();
+    expect(item).toHaveAttribute('data-phase', 'visible');
+    expect(item).not.toHaveAttribute('inert');
+
+    // Within the dismissal's own commit, with no fallback run.
+    act(() => dismiss('t'));
+    expect(item).toHaveAttribute('data-phase', 'exiting');
+    expect(item).toHaveAttribute('inert');
+    flush();
+    expect(recordOf('t')).toBeUndefined();
+    expect(item.isConnected).toBe(false);
+  });
+
+  it('is inert when the timer expires', () => {
+    render(<Toaster />);
+    showVisible('t', { id: 't', duration: 1000 });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(recordOf('t')).toMatchObject({ phase: 'exiting', exit: { reason: 'timeout' } });
+    expect(itemOf('t')).toHaveAttribute('inert');
+  });
+
+  it('is inert from the first commit when dismissed before it was ever rendered', () => {
+    render(<Toaster />);
+    act(() => {
+      toast('t', { id: 't' });
+      dismiss('t');
+    });
+    expect(itemOf('t')).toHaveAttribute('data-phase', 'exiting');
+    expect(itemOf('t')).toHaveAttribute('inert');
+  });
+
+  it('is not removed by an unrelated render while the toast stays exiting', () => {
+    const { rerender } = render(<Toaster />);
+    showVisible('t', { id: 't' });
+    act(() => dismiss('t'));
+    const item = itemOf('t');
+    // A new close label re-renders the item, and React rewrites the attributes it owns.
+    rerender(<Toaster labels={{ close: 'Dismiss' }} />);
+    expect(screen.getByRole('button', { name: 'Dismiss', hidden: true }).closest('li')).toBe(item);
+    expect(item).toHaveAttribute('data-phase', 'exiting');
+    expect(item).toHaveAttribute('inert');
+  });
+
+  it('makes the old node inert on a relocation, and mounts the destination without it', () => {
+    render(<Toaster />);
+    showVisible('t', { id: 't', position: 'top-right' });
+    const old = itemOf('t');
+    show('t', { id: 't', position: 'bottom-left' });
+    expect(itemOf('t')).toBe(old);
+    expect(old).toHaveAttribute('data-phase', 'exiting');
+    expect(old).toHaveAttribute('inert');
+
+    flush();
+    const moved = itemOf('t');
+    expect(old.isConnected).toBe(false);
+    expect(moved).not.toBe(old);
+    expect(moved).toHaveAttribute('data-position', 'bottom-left');
+    expect(moved).toHaveAttribute('data-phase', 'entering');
+    expect(moved).not.toHaveAttribute('inert');
+  });
+
+  it('keeps an exiting toast inert when it is replaced at another position', () => {
+    render(<Toaster />);
+    showVisible('t', { id: 't', position: 'top-right' });
+    act(() => dismiss('t'));
+    const item = itemOf('t');
+    show('again', { id: 't', position: 'bottom-left' });
+    expect(recordOf('t')).toMatchObject({ phase: 'exiting', exit: { reason: 'relocate' } });
+    expect(itemOf('again')).toBe(item);
+    expect(item).toHaveAttribute('inert');
+  });
+
+  it('removes inert from the same node on revival', () => {
+    render(<Toaster />);
+    showVisible('t', { id: 't' });
+    act(() => dismiss('t'));
+    const item = itemOf('t');
+    expect(item).toHaveAttribute('inert');
+
+    show('revived', { id: 't' });
+    expect(itemOf('revived')).toBe(item);
+    expect(item).toHaveAttribute('data-phase', 'entering');
+    expect(item).not.toHaveAttribute('inert');
+    flush();
+    expect(item).toHaveAttribute('data-phase', 'visible');
+    expect(item).not.toHaveAttribute('inert');
+  });
+
+  it('never makes a toast inert for an in-place replacement, normal or custom, on the same node', () => {
+    render(<Toaster />);
+    show('first', { id: 't' });
+    const item = itemOf('first');
+    // While entering.
+    show('second', { id: 't' });
+    expect(itemOf('second')).toBe(item);
+    expect(item).toHaveAttribute('data-phase', 'entering');
+    expect(item).not.toHaveAttribute('inert');
+    flush();
+    // While visible: normal → custom → normal.
+    act(() => {
+      toast.custom(<span>custom</span>, { id: 't' });
+    });
+    expect(itemOf('custom')).toBe(item);
+    expect(item).toHaveClass('ret-toast--custom');
+    expect(item).not.toHaveAttribute('inert');
+    show('normal', { id: 't' });
+    expect(itemOf('normal')).toBe(item);
+    expect(item).not.toHaveAttribute('inert');
+    expect(phaseOf('t')).toBe('visible');
+  });
+
+  it('applies and removes inert under StrictMode', () => {
+    render(
+      <StrictMode>
+        <Toaster />
+      </StrictMode>
+    );
+    showVisible('t', { id: 't' });
+    const item = itemOf('t');
+    expect(item).not.toHaveAttribute('inert');
+    act(() => dismiss('t'));
+    expect(item).toHaveAttribute('inert');
+    show('revived', { id: 't' });
+    expect(itemOf('revived')).toBe(item);
+    expect(item).not.toHaveAttribute('inert');
+    act(() => dismiss('t'));
+    expect(item).toHaveAttribute('inert');
+    flush();
+    expect(recordOf('t')).toBeUndefined();
+  });
+
+  it('applies inert when the Toaster is mounted in a shadow root', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const shadow = host.attachShadow({ mode: 'open' });
+    const container = document.createElement('div');
+    shadow.append(container);
+    const root = createRoot(container);
+    try {
+      act(() => root.render(<Toaster />));
+      showVisible('t', { id: 't' });
+      const item = shadow.querySelector('li') as HTMLLIElement;
+      expect(item).not.toHaveAttribute('inert');
+      act(() => dismiss('t'));
+      expect(item).toHaveAttribute('inert');
+      show('revived', { id: 't' });
+      expect(item).not.toHaveAttribute('inert');
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+    }
+  });
+
+  it('moves no focus itself (focus restoration is a later P-16 slice)', () => {
+    // This pins only that making a toast inert does not move focus on its own. jsdom keeps focus
+    // inside an inert subtree, which real browsers do not; that is not the behaviour wanted. Focus
+    // restoration (§18) will replace this with focus moving before the toast becomes inert.
+    render(<Toaster />);
+    showVisible('t', { id: 't' });
+    const close = closeButtons()[0] as HTMLButtonElement;
+    act(() => close.focus());
+    expect(document.activeElement).toBe(close);
+    act(() => dismiss('t'));
+    expect(itemOf('t')).toHaveAttribute('inert');
+    expect(document.activeElement).toBe(close);
   });
 });

@@ -3,6 +3,7 @@
 import { renderToString } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { Toaster } from '../index';
+import { useIsomorphicLayoutEffect } from '../react/useIsomorphicLayoutEffect';
 import { getServerSnapshot, getSnapshot, inspectRecords } from '../store/store';
 
 let warn: MockInstance<typeof console.warn>;
@@ -52,5 +53,19 @@ describe('<Toaster /> on the server (§23)', () => {
     expect(inspectRecords()).toEqual([]);
     expect(warn).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
+  });
+});
+
+describe('useIsomorphicLayoutEffect on the server (§23)', () => {
+  it('logs no layout-effect warning and does not run the effect', () => {
+    const effect = vi.fn();
+    function Probe() {
+      useIsomorphicLayoutEffect(effect, []);
+      return <i />;
+    }
+    expect(renderToString(<Probe />)).toBe('<i></i>');
+    expect(effect).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
   });
 });

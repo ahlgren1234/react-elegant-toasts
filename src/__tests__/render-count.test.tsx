@@ -86,6 +86,24 @@ describe('render counts (§32, D-16)', () => {
     expect(rendersSince()).toEqual({ c: 1 });
   });
 
+  it('adds no render or commit when inert is applied on exit or removed on revival (P-16)', () => {
+    const { commits } = mountWithToasts();
+    const before = commits();
+    act(() => dismiss('c'));
+    const exiting = document.querySelector('li[data-phase="exiting"]') as HTMLLIElement;
+    expect(exiting).toHaveAttribute('inert');
+    expect(rendersSince()).toEqual({ c: 1 });
+    expect(commits()).toBe(before + 1);
+
+    act(() => {
+      toast('c again', { id: 'c' });
+    });
+    expect(exiting).toHaveAttribute('data-phase', 'entering');
+    expect(exiting).not.toHaveAttribute('inert');
+    expect(rendersSince()).toEqual({ c: 1 });
+    expect(commits()).toBe(before + 2);
+  });
+
   it('renders only the new toast when one is added to a list', () => {
     mountWithToasts();
     act(() => {

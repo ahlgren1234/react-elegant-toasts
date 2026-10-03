@@ -5,6 +5,7 @@ import { warnInaccessiblePersistent } from '../store/warnings';
 import { useAnnouncement } from './announcer';
 import { CLOSE_ICON, typeIcon } from './icons';
 import { useFocusWithinPause } from './useFocusWithinPause';
+import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect';
 
 // The lifecycle fallback (§9 rule 3) until motion arrives (P-18): with no animation to wait for,
 // an enter or exit completes on the next task.
@@ -24,8 +25,8 @@ interface ToastItemProps {
 // render-visible changes, and on its resolved close button and its name, so a change to one toast,
 // or to a Toaster default or label it does not use, re-renders no other toast (§32, D-16). The
 // content is keyed by `revision`: a replacement re-keys the content without remounting the toast
-// or its controls (§7, §14). Clicking the toast body never dismisses it (D-17). An exiting toast's
-// controls do nothing (§9 rule 4).
+// or its controls (§7, §14). Clicking the toast body never dismisses it (D-17). An exiting toast is
+// inert, and its controls also do nothing where `inert` is not enforced (§9 rule 4).
 export const ToastItem = memo(function ToastItem({
   view,
   closeButton,
@@ -37,6 +38,15 @@ export const ToastItem = memo(function ToastItem({
   const ref = useRef<HTMLLIElement>(null);
   useFocusWithinPause(ref, id);
   useAnnouncement(ref, view, announcePrefix);
+
+  // An exiting toast is inert (§9 rule 4), and only an exiting one: revival removes it. Set here,
+  // not as a prop: React 18 drops `inert={true}` and React 19 treats `""` as false, and a prop would
+  // be applied before any layout effect. Focus restoration (§18) must run before this toggle, in
+  // this layout phase, while the focused control can still be found inside the toast. Keep that
+  // order. React never touches the attribute, because it is not rendered.
+  useIsomorphicLayoutEffect(() => {
+    ref.current?.toggleAttribute('inert', phase === 'exiting');
+  }, [phase]);
 
   // Reports the end of an enter or exit. The store ignores a report that no longer matches the
   // toast's phase, so a replacement, revival or detach in between completes nothing stale.
