@@ -4,7 +4,7 @@
 import type { ToastId, ToastType } from '../types';
 import type { ToastTimer } from './types';
 
-/** The default for finite toasts (§10). `<Toaster duration>` arrives with later defaults work. */
+/** The default for finite toasts (§10), used when the active Toaster supplies none. */
 export const DEFAULT_DURATION = 5000;
 // The longest delay setTimeout honours. Longer delays overflow and fire at once, so they are split.
 const MAX_DELAY = 2_147_483_647;

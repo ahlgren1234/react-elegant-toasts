@@ -1,6 +1,6 @@
-// Deduplicated development warnings (§8.3, §8.4, §8.5). Production logs nothing.
+// Deduplicated development warnings (§8.3, §8.4, §8.5, §17.2). Production logs nothing.
 import { isDev } from './env';
-import type { ToasterToken } from './types';
+import type { StoredOptions, ToasterToken } from './types';
 
 const PREFIX = '[react-elegant-toasts]';
 // Internal detail, not part of the public API: how long a Toaster has to attach before the
@@ -12,6 +12,9 @@ let noToasterWarned = false;
 let capWarned = false;
 let serverWarned = false;
 let extraToastersWarned = new WeakSet<ToasterToken>();
+// Keyed by the definition's options object: every definition gets a fresh one (creation,
+// replacement and promise settlement), and remounts and StrictMode replays keep it.
+let inaccessibleWarned = new WeakSet<StoredOptions>();
 
 function warn(message: string): void {
   console.warn(`${PREFIX} ${message}`);
@@ -69,6 +72,20 @@ export function warnServer(): void {
   );
 }
 
+/**
+ * Called by the renderer for a persistent normal toast that, as rendered, has no close button and
+ * no action, so it cannot be dismissed with a keyboard. Warns at most once per definition.
+ */
+export function warnInaccessiblePersistent(definition: StoredOptions): void {
+  if (inaccessibleWarned.has(definition) || !isDev()) return;
+  inaccessibleWarned.add(definition);
+  warn(
+    'A persistent toast has no close button and no action, so keyboard and screen-reader users ' +
+      'cannot dismiss it. Give it a close button (closeButton: true) or an action, or a finite ' +
+      'duration.'
+  );
+}
+
 export function resetWarnings(): void {
   if (noToasterTimer !== undefined) clearTimeout(noToasterTimer);
   noToasterTimer = undefined;
@@ -76,4 +93,5 @@ export function resetWarnings(): void {
   capWarned = false;
   serverWarned = false;
   extraToastersWarned = new WeakSet();
+  inaccessibleWarned = new WeakSet();
 }

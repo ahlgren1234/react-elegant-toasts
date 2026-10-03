@@ -172,7 +172,7 @@ function prepareConsumer(tmp, tarball) {
   const consumer = path.join(tmp, 'consumer-vite');
   fs.cpSync(fixtureDir, consumer, {
     recursive: true,
-    filter: source => !['node_modules', 'dist'].includes(path.basename(source)),
+    filter: source => !['node_modules', 'dist', 'dist-render'].includes(path.basename(source)),
   });
   const manifests = ['package.json', 'package-lock.json'].map(name => ({
     name,
@@ -464,6 +464,11 @@ function checkFixture(consumer, installed) {
   const bundled = cssFiles.map(file => fs.readFileSync(path.join(assets, file), 'utf8')).join('\n');
   assert(bundled.includes(CSS_MARKER), `the Vite CSS output does not contain ${CSS_MARKER}`);
   ok(`${cssFiles.join(', ')} contains ${CSS_MARKER} from the packed styles.css`);
+
+  step('Render a toast from the packed package in jsdom');
+  const jsdom = readJson(path.join(consumer, 'node_modules', 'jsdom', 'package.json')).version;
+  npm(['run', 'test:render'], { cwd: consumer, label: `render check (jsdom ${jsdom})` });
+  ok(`the fixture app rendered, showed and closed a toast (jsdom ${jsdom})`);
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ret-validate-package-'));

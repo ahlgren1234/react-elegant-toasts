@@ -165,7 +165,7 @@ describe('normal toast options (§6.3)', () => {
     for (const key of ['closeButton', 'progress', 'duration', 'icon']) {
       expect(key in optionsOf(id)).toBe(false);
     }
-    // P-11's internal timer fallback still applies until P-14 wires <Toaster duration>.
+    // With no Toaster active, the built-in defaults are placeholders until one supplies its own.
     expect(record(id)?.timer.duration).toBe(5000);
     expect(record(id)?.position).toBe('top-right');
   });

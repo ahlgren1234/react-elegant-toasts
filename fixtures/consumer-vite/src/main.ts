@@ -1,12 +1,17 @@
 // Consumes the packed package through its public entry points only.
 import 'react-elegant-toasts/styles.css';
 import { createElement } from 'react';
-import { Toaster, toast } from 'react-elegant-toasts';
+import { toast } from 'react-elegant-toasts';
+import { mountApp, showToast } from './app';
 import { messages } from './types';
 
-export const toaster = createElement(Toaster, { position: 'bottom-center', theme: 'system' });
+const container = document.getElementById('root');
+if (container) {
+  mountApp(container);
+  showToast();
+}
 
-// Exercises every toast method for typing and bundling. Never invoked: rendering arrives in P-14.
+// Exercises every toast method for typing and bundling. Never invoked.
 export function exercise(): void {
   const id = toast('Default', { description: 'Secondary', duration: Infinity });
   toast.success('Saved', {
