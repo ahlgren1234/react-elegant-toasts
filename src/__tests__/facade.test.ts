@@ -637,26 +637,3 @@ describe('facade members', () => {
     expect(listener).toHaveBeenCalledTimes(2);
   });
 });
-
-describe('toast.promise (still the P-08 stub until P-13)', () => {
-  const messages = { loading: 'Loading', success: 'Done', error: 'Failed' };
-
-  it('returns undefined, creates no toast and never invokes function input', () => {
-    const input = vi.fn(() => Promise.resolve('value'));
-    expect(toast.promise(input, messages)).toBeUndefined();
-    expect(input).not.toHaveBeenCalled();
-    expect(inspectRecords()).toEqual([]);
-  });
-
-  it('never observes a promise', () => {
-    const promise = Promise.resolve('value');
-    const observers = [
-      vi.spyOn(promise, 'then'),
-      vi.spyOn(promise, 'catch'),
-      vi.spyOn(promise, 'finally'),
-    ];
-    expect(toast.promise(promise, messages, { id: 'promised' })).toBeUndefined();
-    for (const observer of observers) expect(observer).not.toHaveBeenCalled();
-    expect(inspectRecords()).toEqual([]);
-  });
-});

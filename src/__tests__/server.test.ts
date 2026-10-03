@@ -77,6 +77,51 @@ describe('on the server (§8.3)', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('rejects toast.promise without reading, invoking or observing anything', async () => {
+    const randomUUID = vi.spyOn(globalThis.crypto, 'randomUUID');
+    const read = vi.fn();
+    const messages = Object.defineProperties(
+      {},
+      { loading: { get: read }, success: { get: read }, error: { get: read } }
+    ) as never;
+    const options = Object.defineProperties({}, { id: { get: read }, duration: { get: read } });
+    const input = vi.fn(() => Promise.resolve(1));
+    // A promise that never settles, so nothing unhandled is left behind.
+    const promise = new Promise<number>(() => undefined);
+    const observers = [
+      vi.spyOn(promise, 'then'),
+      vi.spyOn(promise, 'catch'),
+      vi.spyOn(promise, 'finally'),
+    ];
+    const success = vi.fn(() => 'Done');
+    const error = vi.fn(() => 'Failed');
+
+    expect(toast.promise(input, messages, options)).toBeUndefined();
+    expect(toast.promise(promise, messages, { id: 'explicit' })).toBeUndefined();
+    expect(
+      toast.promise(Promise.resolve(1), { loading: 'L', success, error }, { id: 'explicit' })
+    ).toBeUndefined();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(input).not.toHaveBeenCalled();
+    for (const observer of observers) expect(observer).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
+    expect(success).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(randomUUID).not.toHaveBeenCalled();
+    expect(inspectRecords()).toEqual([]);
+    expect(getSnapshot()).toBe(getServerSnapshot());
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares the one server warning with the other creation calls', () => {
+    toast('One');
+    toast.promise(Promise.resolve(1), { loading: 'L', success: 'S', error: 'E' });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('called on the server'));
+  });
+
   it('ignores dismiss', () => {
     expect(() => {
       toast.dismiss();

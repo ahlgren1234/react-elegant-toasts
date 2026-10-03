@@ -72,6 +72,11 @@ export interface ToastRecord {
   readonly timer: ToastTimer;
   /** Active toast-scoped pause reasons, without duplicates. Carried over on replacement. */
   readonly pausedBy: readonly ToastPauseReason[];
+  /**
+   * Set while one `toast.promise` call owns the toast (§13). Every definition sets it, so a public
+   * replacement clears it; dismissal and settlement clear it too.
+   */
+  readonly promiseToken: symbol | undefined;
 }
 
 /** What rendering needs from a rendered (entering, visible or exiting) toast. */
@@ -100,4 +105,6 @@ export interface ToastInput {
   readonly custom: boolean;
   readonly content: ReactNode;
   readonly options: ToastOptions | CustomToastOptions | undefined;
+  /** Internal: set only by `toast.promise` for its loading toast, never from options (§14). */
+  readonly promiseToken?: symbol | undefined;
 }

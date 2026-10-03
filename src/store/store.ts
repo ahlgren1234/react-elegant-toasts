@@ -1,5 +1,6 @@
 // The external toast store (§5, §7, §8). A plain module singleton: one store per loaded copy of the
 // module, never kept on globalThis. Nothing here runs at import time except creating empty state.
+import type { ReactNode } from 'react';
 import type { DismissReason, ToastId, ToastPosition, ToastSnapshot } from '../types';
 import { isServer } from './env';
 import { generateId, resetIds } from './ids';
@@ -121,13 +122,18 @@ function isolate(run: () => void): void {
   try {
     run();
   } catch (error) {
-    if (typeof globalThis.reportError === 'function') {
-      globalThis.reportError(error);
-    } else {
-      setTimeout(() => {
-        throw error;
-      });
-    }
+    report(error);
+  }
+}
+
+/** Reports a consumer error through `reportError`, or an asynchronous re-throw (§8.2). */
+export function report(error: unknown): void {
+  if (typeof globalThis.reportError === 'function') {
+    globalThis.reportError(error);
+  } else {
+    setTimeout(() => {
+      throw error;
+    });
   }
 }
 
@@ -374,6 +380,8 @@ export function upsert(input: ToastInput): ToastId | undefined {
       options: normalised.options,
       // Every definition starts a fresh timer: creation, and every replacement (§10, §14).
       timer: freshTimer(resolveDuration(input.type, normalised.options.duration)),
+      // Only toast.promise passes a token. Any other public call clears the previous owner's (§14).
+      promiseToken: input.promiseToken,
     };
 
     let id: ToastId;
@@ -408,7 +416,7 @@ function replace(
   existing: ToastRecord,
   definition: Pick<
     ToastRecord,
-    'type' | 'custom' | 'content' | 'description' | 'options' | 'timer'
+    'type' | 'custom' | 'content' | 'description' | 'options' | 'timer' | 'promiseToken'
   >,
   position: ToastPosition
 ): void {
@@ -445,16 +453,69 @@ export function dismiss(id?: ToastId, reason: DismissReason = 'programmatic'): v
   command(() => {
     const targets = id === undefined ? [...records.values()] : [records.get(id)];
     for (const record of targets) {
-      if (!record) continue;
-      if (record.phase === 'queued') {
-        remove(record, reason);
-      } else if (record.phase !== 'exiting') {
-        put({ ...record, phase: 'exiting', exit: { reason } });
-      } else if (record.exit?.reason === 'relocate') {
-        // A relocating toast is still live: dismissing it turns the relocation into a removal.
-        put({ ...record, exit: { reason } });
-      }
+      if (record) dismissRecord(record, reason);
     }
+  });
+}
+
+/** Dismissal ends any promise's ownership: a dismissed toast is never shown again by it (§13). */
+function dismissRecord(record: ToastRecord, reason: DismissReason): void {
+  if (record.phase === 'queued') {
+    remove(record, reason);
+  } else if (record.phase !== 'exiting') {
+    put({ ...record, phase: 'exiting', exit: { reason }, promiseToken: undefined });
+  } else if (record.exit?.reason === 'relocate') {
+    // A relocating toast is still live: dismissing it turns the relocation into a removal.
+    put({ ...record, exit: { reason }, promiseToken: undefined });
+  }
+}
+
+// Promise settlement (§13). Settlement is internal, not a public creation call: it only ever changes
+// the toast its own toast.promise call created, and never creates, revives or relocates a toast.
+
+/** Whether the toast with this ID still belongs to the `toast.promise` call holding `token`. */
+export function ownsToast(id: ToastId, token: symbol): boolean {
+  const record = records.get(id);
+  return record !== undefined && record.promiseToken === token && record.phase !== 'exiting';
+}
+
+/**
+ * Replaces an owned loading toast with its settled state. The definition is the loading toast's
+ * own: its options were normalised once at creation and are never read again, so the position,
+ * description and options stay (with a fresh options object) and only the type and content change.
+ * Ownership is checked again here, inside the command, so a stale settlement changes nothing.
+ */
+export function settleOwned(
+  id: ToastId,
+  token: symbol,
+  type: 'success' | 'error',
+  content: ReactNode
+): void {
+  command(() => {
+    const record = records.get(id);
+    if (!record || !ownsToast(id, token)) return;
+    replace(
+      record,
+      {
+        type,
+        custom: false,
+        content,
+        description: record.description,
+        options: Object.freeze({ ...record.options }),
+        timer: freshTimer(resolveDuration(type, record.options.duration)),
+        promiseToken: undefined,
+      },
+      record.position
+    );
+    if (active === null) armNoToasterWarning(() => active !== null);
+  });
+}
+
+/** Dismisses an owned toast (`programmatic`); does nothing once the promise has lost it. */
+export function dismissOwned(id: ToastId, token: symbol): void {
+  command(() => {
+    const record = records.get(id);
+    if (record && ownsToast(id, token)) dismissRecord(record, 'programmatic');
   });
 }
 
