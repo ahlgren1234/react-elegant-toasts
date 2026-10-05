@@ -1,7 +1,9 @@
-// Stack repositioning in the renderer (§22, P-19 S2, D2 decisions 2 to 6). jsdom lays nothing
-// out, so a stand-in flex column computes each toast root's layout-space offsets from the live
-// DOM, as a browser would, and every inline style write on a toast root is recorded. The seed,
-// the one flush and the release then show up in order, and the rest state is checked directly.
+// Stack repositioning in the renderer (§22, P-19 S2 and S3, D2 decisions 2 to 6). jsdom lays
+// nothing out, so a stand-in flex column computes each toast root's layout-space offsets from the
+// live DOM, as a browser would, and every inline style write on a toast root is recorded. The
+// seed, the one flush and the release then show up in order, and the rest state is checked
+// directly. For interruption (S3), a stand-in for the browser's transitions can hold each released
+// seed in flight, so the computed `transform` reports it, and tests advance or settle it at will.
 import { act, render, screen } from '@testing-library/react';
 import { Profiler, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,6 +29,12 @@ let log: string[] = [];
 let reads = false;
 /** The call stack of every layout read of a toast root or a list, while `traces` is set. */
 let traces: string[] | null = null;
+/**
+ * Each toast root's P-19 offset on screen: its inline seed while seeded, then, while `holding`,
+ * the running transition's current value. Without `holding` a released transition ends at once.
+ */
+const motion = new Map<Element, number>();
+let holding = false;
 
 const titleOf = (item: Element) =>
   item.querySelector('.ret-toast__title')?.textContent ?? item.textContent ?? '';
@@ -100,34 +108,151 @@ function recordStyleWrites() {
   override(HTMLElement.prototype, 'style', {
     get(this: HTMLElement) {
       const real = style.get!.call(this) as CSSStyleDeclaration;
-      if (!isToast(this)) return real;
-      const name = titleOf(this);
-      return new Proxy(real, {
-        get(target, key) {
-          if (key === 'setProperty') {
-            return (property: string, value: string) => {
-              log.push(`seed ${name} ${property}: ${value}`);
-              target.setProperty(property, value);
-            };
-          }
-          if (key === 'removeProperty') {
-            return (property: string) => {
-              log.push(`release ${name} ${property}`);
-              return target.removeProperty(property);
-            };
-          }
-          const value: unknown = Reflect.get(target, key, target);
-          return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
-        },
-        set(target, key, value) {
-          return Reflect.set(target, key, value, target);
-        },
-      });
+      return isToast(this) ? recorded(this, real) : real;
     },
     set(this: HTMLElement, value: string) {
       style.set!.call(this, value);
     },
   });
+}
+
+/** A toast root's inline style, recording its writes and feeding the in-flight model. */
+function recorded(item: Element, real: CSSStyleDeclaration): CSSStyleDeclaration {
+  const name = titleOf(item);
+  return new Proxy(real, {
+    get(target, key) {
+      if (key === 'setProperty') {
+        return (property: string, value: string) => {
+          log.push(`seed ${name} ${property}: ${value}`);
+          if (property === 'transform') {
+            motion.set(item, parseFloat(value.slice('translateY('.length)));
+          }
+          target.setProperty(property, value);
+        };
+      }
+      if (key === 'removeProperty') {
+        return (property: string) => {
+          log.push(`release ${name} ${property}`);
+          if (property === 'transform' && !holding) motion.delete(item);
+          return target.removeProperty(property);
+        };
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
+    },
+    set(target, key, value) {
+      return Reflect.set(target, key, value, target);
+    },
+  });
+}
+
+/** Computed styles report each toast root's P-19 offset as a browser would: a `matrix()`. */
+function reportMotion() {
+  const owner = Object.prototype.hasOwnProperty.call(window, 'getComputedStyle')
+    ? window
+    : (Object.getPrototypeOf(window) as object);
+  const real = window.getComputedStyle.bind(window);
+  override(owner, 'getComputedStyle', {
+    writable: true,
+    value(element: Element, pseudo?: string | null) {
+      const computed = real(element, pseudo);
+      const offset = isToast(element) ? motion.get(element) : undefined;
+      if (offset === undefined) return computed;
+      return new Proxy(computed, {
+        get(target, key) {
+          if (key === 'transform') return `matrix(1, 0, 0, 1, 0, ${offset})`;
+          const value: unknown = Reflect.get(target, key, target);
+          return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
+        },
+      });
+    },
+  });
+}
+
+/** Moves every running transition `share` of the rest of the way to `transform: none`. */
+function progress(share: number) {
+  for (const [item, offset] of motion) {
+    const left = offset * (1 - share);
+    if (Math.abs(left) < 1e-9) motion.delete(item);
+    else motion.set(item, left);
+  }
+}
+
+/** Every transition ends. */
+const settle = () => motion.clear();
+
+/** A toast root's layout position on screen, positive down, with each list's anchor at 0. */
+function layoutOf(item: Element): number {
+  const list = item.parentElement as Element;
+  const top = list.getAttribute('data-position')?.startsWith('top-');
+  return top ? topOf(item) : topOf(item) - listHeight(list);
+}
+
+/** Where a toast root is on screen: its layout position plus its P-19 offset. */
+const visualOf = (item: Element) => layoutOf(item) + (motion.get(item) ?? 0);
+
+interface Retarget {
+  /** Where the toast was on screen, and where its layout put it, just before the commit. */
+  readonly visual: number;
+  readonly layoutBefore: number;
+  readonly offsetBefore: number;
+  /** Its newest layout position, the move's target, and the offset it now runs from. */
+  readonly layoutAfter: number;
+  readonly offsetAfter: number;
+  /** It was moving one way and now moves the other. */
+  readonly reversed: boolean;
+  /** The newest target lies behind it, against the way it was moving. */
+  readonly targetCrossed: boolean;
+}
+
+/**
+ * Runs `step` and checks every toast root that stays in its list: it is exactly where it was on
+ * screen (no snap, to a stale origin or anywhere else), now on its way to its newest layout
+ * position. Returns each one's move, by title.
+ */
+function retarget(step: () => void): Map<string, Retarget> {
+  const before = new Map(
+    [...document.querySelectorAll('.ret-toaster__list > li')].map(item => [
+      item,
+      {
+        list: item.parentElement,
+        visual: visualOf(item),
+        layout: layoutOf(item),
+        offset: motion.get(item) ?? 0,
+      },
+    ])
+  );
+  step();
+  const moves = new Map<string, Retarget>();
+  for (const [item, was] of before) {
+    if (!item.isConnected || item.parentElement !== was.list) continue;
+    const layoutAfter = layoutOf(item);
+    const offsetAfter = motion.get(item) ?? 0;
+    expect(layoutAfter + offsetAfter, `${titleOf(item)} stays where it was`).toBeCloseTo(
+      was.visual,
+      9
+    );
+    const wasHeading = Math.sign(-was.offset);
+    const nowHeading = Math.sign(-offsetAfter);
+    moves.set(titleOf(item), {
+      visual: was.visual,
+      layoutBefore: was.layout,
+      offsetBefore: was.offset,
+      layoutAfter,
+      offsetAfter,
+      reversed: wasHeading !== 0 && nowHeading !== 0 && wasHeading !== nowHeading,
+      targetCrossed: wasHeading !== 0 && Math.sign(layoutAfter - was.visual) === -wasHeading,
+    });
+  }
+  return moves;
+}
+
+/** Every reversal is one the newest target requires (category A), never a stale origin (B). */
+function expectOnlyRequiredReversals(moves: Map<string, Retarget>) {
+  for (const [title, move] of moves) {
+    if (move.reversed)
+      expect(move.targetCrossed, `${title} reverses only for its target`).toBe(true);
+  }
 }
 
 const seeds = () => log.filter(entry => entry.startsWith('seed') && entry.includes('transform'));
@@ -138,8 +263,11 @@ beforeEach(() => {
   log = [];
   reads = false;
   traces = null;
+  motion.clear();
+  holding = false;
   installLayout();
   recordStyleWrites();
+  reportMotion();
 });
 
 afterEach(() => {
@@ -661,5 +789,609 @@ describe('lifecycle and React', () => {
     during(() => show('b', 'top-right', 70));
     expect(seeds()).toEqual(['seed a transform: translateY(-80px)']);
     expectAtRest();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// P-19 S3: interruption and lifecycle hardening.
+// ---------------------------------------------------------------------------------------------
+
+/** Shows a persistent toast without completing its enter: it stays `entering`. */
+function add(id: string, position: ToastPosition = 'top-right', height?: number) {
+  if (height !== undefined) heights.set(id, height);
+  act(() => {
+    toast(id, { id, position, duration: Infinity });
+  });
+}
+
+const EDGES: readonly ToastPosition[] = ['top-right', 'bottom-left'];
+
+describe('interruption: a retarget continues from where the toast is (S3)', () => {
+  beforeEach(() => {
+    holding = true;
+  });
+
+  it('composes the current offset with the new layout delta: one worked example', () => {
+    render(<Toaster />);
+    show('a');
+    // `b` (70px) arrives above `a`: `a` is put back up 80px and starts down to its new place.
+    show('b', 'top-right', 70);
+    expect(motion.get(itemOf('a'))).toBe(-80);
+    progress(0.5);
+    // Halfway: `a` is at 80 − 40 = 40 on screen, heading down to 80.
+    expect(visualOf(itemOf('a'))).toBe(40);
+    // `c` (50px) arrives: `a`'s layout goes from 80 to 140. The seed is the layout delta
+    // (80 − 140) plus the 40px still in flight: −100, so `a` is still at 40 on screen.
+    const moves = retarget(() => show('c'));
+    expect(moves.get('a')).toEqual({
+      visual: 40,
+      layoutBefore: 80,
+      offsetBefore: -40,
+      layoutAfter: 140,
+      offsetAfter: -100,
+      reversed: false,
+      targetCrossed: false,
+    });
+    expect(seeds().slice(-1)).toEqual(['seed a transform: translateY(-100px)']);
+    settle();
+    expect(visualOf(itemOf('a'))).toBe(140);
+    expectAtRest();
+  });
+
+  describe.each(EDGES)('at %s', position => {
+    it('two removals in quick succession', () => {
+      render(<Toaster />);
+      for (const id of ['a', 'b', 'c', 'd']) show(id, position, id === 'b' ? 70 : undefined);
+      settle();
+      close('c');
+      expectOnlyRequiredReversals(retarget(() => advance()));
+      progress(0.4);
+      close('b');
+      const moves = retarget(() => advance());
+      expect([...moves.values()].some(move => move.reversed)).toBe(false);
+      settle();
+      expect(titlesAt(position)).toEqual(position.startsWith('top-') ? ['d', 'a'] : ['a', 'd']);
+      expectAtRest();
+    });
+
+    it('three removals in quick succession, from rest: no reversal at all', () => {
+      render(<Toaster maxVisible={6} />);
+      for (const id of ['a', 'b', 'c', 'd', 'e'])
+        show(id, position, 40 + (id.charCodeAt(0) % 5) * 10);
+      settle();
+      for (const id of ['d', 'c', 'b']) {
+        close(id);
+        const moves = retarget(() => advance());
+        expect([...moves.values()].some(move => move.reversed)).toBe(false);
+        progress(0.3);
+      }
+      settle();
+      expect(titlesAt(position)).toEqual(position.startsWith('top-') ? ['e', 'a'] : ['a', 'e']);
+      expectAtRest();
+    });
+
+    it('removals while the insertions that built the stack are still moving: category A only', () => {
+      render(<Toaster />);
+      for (const id of ['a', 'b', 'c', 'd', 'e'])
+        show(id, position, 40 + (id.charCodeAt(0) % 5) * 10);
+      // Still in flight away from the edge; each removal pulls the targets back toward it, and
+      // the last one past where `a` now is. Default `maxVisible` is 4, so the first removal also
+      // promotes `e`.
+      const reversals: Retarget[] = [];
+      for (const id of ['d', 'c', 'b']) {
+        close(id);
+        const moves = retarget(() => advance());
+        expectOnlyRequiredReversals(moves);
+        reversals.push(...[...moves.values()].filter(move => move.reversed));
+        progress(0.3);
+      }
+      expect(reversals.length).toBeGreaterThan(0);
+      expect(reversals.every(move => move.targetCrossed)).toBe(true);
+      settle();
+      expectAtRest();
+    });
+
+    it('rapid insertion', () => {
+      render(<Toaster />);
+      show('a', position);
+      for (const id of ['b', 'c', 'd']) {
+        const moves = retarget(() => show(id, position, 60));
+        expect([...moves.values()].some(move => move.reversed)).toBe(false);
+        progress(0.25);
+      }
+      settle();
+      expectAtRest();
+    });
+
+    it('insertion then removal: the reversal is the one the newest target requires', () => {
+      render(<Toaster />);
+      show('a', position);
+      show('b', position, 70);
+      progress(0.5);
+      close('b');
+      const moves = retarget(() => advance());
+      const a = moves.get('a')!;
+      // `a` had 40px left to go away from the edge; `b` is gone, so its newest place is back at
+      // the edge, behind it: it must turn round, from where it is, not from where it started.
+      expect(a.reversed).toBe(true);
+      expect(a.targetCrossed).toBe(true);
+      expect(Math.abs(a.offsetAfter)).toBe(40);
+      expectOnlyRequiredReversals(moves);
+      settle();
+      expect(visualOf(itemOf('a'))).toBe(layoutOf(itemOf('a')));
+      expectAtRest();
+    });
+
+    it('removal then insertion', () => {
+      render(<Toaster />);
+      for (const id of ['a', 'b', 'c']) show(id, position);
+      close('b');
+      retarget(() => advance());
+      progress(0.5);
+      const moves = retarget(() => show('d', position, 90));
+      expectOnlyRequiredReversals(moves);
+      settle();
+      expectAtRest();
+    });
+
+    it('a promotion, then another membership change', () => {
+      render(<Toaster maxVisible={2} />);
+      show('a', position);
+      show('b', position, 70);
+      show('c', position, 30);
+      close('a');
+      expectOnlyRequiredReversals(retarget(() => advance()));
+      progress(0.5);
+      expectOnlyRequiredReversals(retarget(() => show('d', position, 40)));
+      close('b');
+      expectOnlyRequiredReversals(retarget(() => advance()));
+      settle();
+      expectAtRest();
+    });
+
+    it('while a neighbour is still entering: it moves too, and still enters', () => {
+      render(<Toaster />);
+      show('a', position);
+      add('b', position, 70);
+      expect(phaseOf('b')).toBe('entering');
+      progress(0.5);
+      expectOnlyRequiredReversals(retarget(() => add('c', position)));
+      expect(phaseOf('b')).toBe('entering');
+      expect(seeds().some(seed => seed.startsWith('seed b '))).toBe(true);
+      advance();
+      expect(phaseOf('b')).toBe('visible');
+      settle();
+      expectAtRest();
+    });
+
+    it('while a neighbour is still exiting: the exiting toast moves, stays inert, then leaves', () => {
+      render(<Toaster />);
+      for (const id of ['a', 'b', 'c']) show(id, position);
+      close('b');
+      progress(0.5);
+      expectOnlyRequiredReversals(retarget(() => add('d', position, 70)));
+      expect(phaseOf('b')).toBe('exiting');
+      expect(itemOf('b').hasAttribute('inert')).toBe(true);
+      expect(seeds().some(seed => seed.startsWith('seed b '))).toBe(true);
+      progress(0.5);
+      expectOnlyRequiredReversals(retarget(() => advance()));
+      expect(phaseOf('b')).toBeUndefined();
+      settle();
+      expectAtRest();
+    });
+  });
+
+  it('never re-seeds a toast in flight whose layout did not change, so its move runs on', () => {
+    render(<Toaster />);
+    for (const id of ['a', 'b', 'c']) show(id);
+    progress(0.5);
+    const b = itemOf('b');
+    const inFlight = motion.get(b);
+    expect(inFlight).toBe(-30);
+    // Removing the furthest toast moves no survivor: `b` keeps its own transition as it was.
+    close('a');
+    log = [];
+    advance();
+    expect(seeds()).toEqual([]);
+    expect(motion.get(b)).toBe(inFlight);
+  });
+});
+
+describe('revival and replacement (S3)', () => {
+  it('a revival with new, taller content moves nothing, and the next move starts fresh', () => {
+    holding = true;
+    render(<Toaster />);
+    show('a');
+    show('b');
+    show('c');
+    progress(0.5);
+    const node = itemOf('b');
+    close('b');
+    log = [];
+    heights.set('b again', 120);
+    act(() => {
+      toast('b again', { id: 'b', duration: Infinity });
+    });
+    advance();
+    expect(itemOf('b again')).toBe(node);
+    expect(phaseOf('b')).toBe('visible');
+    expect(seeds()).toEqual([]);
+    expectAtRest();
+    // The size change itself is not animated; the next membership move is continuous from the
+    // fresh geometry.
+    expectOnlyRequiredReversals(retarget(() => show('d')));
+    settle();
+    expectAtRest();
+  });
+
+  it('a replacement that resizes moves nothing; the next move starts from the new geometry', () => {
+    holding = true;
+    render(<Toaster />);
+    show('a');
+    show('b');
+    log = [];
+    heights.set('b, longer', 140);
+    act(() => {
+      toast('b, longer', { id: 'b', duration: Infinity });
+    });
+    expect(seeds()).toEqual([]);
+    retarget(() => show('c'));
+    settle();
+    expectAtRest();
+  });
+
+  it('a commit at one list never makes another list animate its own size change', () => {
+    render(<Toaster />);
+    show('x', 'bottom-left');
+    show('y', 'bottom-left');
+    show('a', 'top-right');
+    show('b', 'top-right');
+    log = [];
+    heights.set('y, longer', 120);
+    act(() => {
+      toast('y, longer', { id: 'y', position: 'bottom-left', duration: Infinity });
+    });
+    expect(seeds()).toEqual([]);
+  });
+});
+
+describe('relocation (S3)', () => {
+  it.each<[ToastPosition, ToastPosition]>([
+    ['top-right', 'bottom-left'],
+    ['top-right', 'top-left'],
+  ])('from %s to %s: each list moves its own survivors; the arrival is new', (from, to) => {
+    holding = true;
+    render(<Toaster />);
+    show('x', to);
+    show('y', to, 70);
+    for (const id of ['a', 'b', 'c']) show(id, from);
+    const old = itemOf('b');
+    log = [];
+    act(() => {
+      toast('b', { id: 'b', position: to, duration: Infinity });
+    });
+    // The relocation exits from the old list first: its slot is kept, nothing moves yet.
+    expect(seeds()).toEqual([]);
+    expect(old.isConnected).toBe(true);
+    const moves = retarget(() => advance());
+    expectOnlyRequiredReversals(moves);
+    const arrived = itemOf('b');
+    expect(arrived).not.toBe(old);
+    expect(arrived.parentElement).toBe(listAt(to));
+    expect(old.isConnected).toBe(false);
+    // The arrival is never seeded as if it crossed the screen; only survivors move.
+    expect(seeds().some(seed => seed.startsWith('seed b '))).toBe(false);
+    const moved = seeds().map(seed => seed.split(' ')[1]);
+    expect(moved).toContain('a');
+    expect(new Set(moved)).toEqual(new Set(['a', 'x', 'y']));
+    expect(titlesAt(to)).toEqual(to.startsWith('top-') ? ['b', 'y', 'x'] : ['x', 'y', 'b']);
+    settle();
+    expectAtRest();
+  });
+});
+
+/** Lets a Toaster's deferred detach run (a microtask), and the takeover render. */
+async function detached(): Promise<void> {
+  await act(async () => {
+    for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+  });
+}
+
+describe('detach, unmount and ownership (S3)', () => {
+  beforeEach(() => {
+    FakeResizeObserver.current = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+  });
+
+  const live = () => FakeResizeObserver.current.filter(observer => !observer.disconnected);
+
+  it('releases a toast removed mid-move, and keeps no inline style anywhere', () => {
+    holding = true;
+    render(<Toaster />);
+    show('a');
+    show('b');
+    show('c');
+    expect(motion.has(itemOf('a'))).toBe(true);
+    const a = itemOf('a');
+    close('a');
+    advance();
+    expect(a.isConnected).toBe(false);
+    expect(live()).toHaveLength(1);
+    expect([...live()[0]!.observed]).not.toContain(a);
+    expectAtRest();
+  });
+
+  it('disconnects every list observer when the Toaster unmounts mid-move', () => {
+    holding = true;
+    const view = render(<Toaster />);
+    show('a', 'top-right');
+    show('b', 'top-right');
+    show('x', 'bottom-left');
+    show('y', 'bottom-left');
+    expect(live()).toHaveLength(2);
+    view.unmount();
+    expect(live()).toHaveLength(0);
+  });
+
+  it('starts fresh after a remount: no move from geometry the old lists measured', async () => {
+    const first = render(<Toaster />);
+    for (const id of ['a', 'b', 'c']) show(id);
+    first.unmount();
+    await detached();
+    // While no Toaster is mounted the stack changes: `b` is removed.
+    act(() => dismiss('b'));
+    advance();
+    log = [];
+    render(<Toaster />);
+    await detached();
+    advance();
+    expect(seeds()).toEqual([]);
+    expect(titlesAt('top-right')).toEqual(['c', 'a']);
+    // The first membership move after the remount starts from the remounted layout.
+    holding = true;
+    retarget(() => show('d'));
+    expect(seeds()).toEqual([
+      'seed c transform: translateY(-60px)',
+      'seed a transform: translateY(-60px)',
+    ]);
+  });
+
+  it('a takeover renders fresh lists that move nothing on arrival', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const first = render(<Toaster />);
+    render(<Toaster />);
+    for (const id of ['a', 'b']) show(id);
+    const owned = live().length;
+    log = [];
+    first.unmount();
+    await detached();
+    advance();
+    expect(seeds()).toEqual([]);
+    expect(titlesAt('top-right')).toEqual(['b', 'a']);
+    expect(live()).toHaveLength(owned);
+    show('c');
+    expect(seeds()).toEqual([
+      'seed b transform: translateY(-60px)',
+      'seed a transform: translateY(-60px)',
+    ]);
+  });
+});
+
+describe('StrictMode (S3)', () => {
+  beforeEach(() => {
+    FakeResizeObserver.current = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+  });
+
+  /** The same membership scenario, returning its full seed, flush and release log. */
+  function scenario(strict: boolean) {
+    const error = vi.spyOn(console, 'error');
+    const warn = vi.spyOn(console, 'warn');
+    const toaster = <Toaster maxVisible={2} />;
+    const view = render(strict ? <StrictMode>{toaster}</StrictMode> : toaster);
+    log = [];
+    show('a', 'top-right');
+    show('b', 'top-right', 70);
+    show('c', 'top-right', 30);
+    show('x', 'bottom-left');
+    show('y', 'bottom-left');
+    close('a');
+    advance();
+    const logged = [...log];
+    const created = FakeResizeObserver.current.length;
+    const disconnected = FakeResizeObserver.current.filter(o => o.disconnected).length;
+    view.unmount();
+    const leftOver = FakeResizeObserver.current.filter(o => !o.disconnected).length;
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    error.mockRestore();
+    warn.mockRestore();
+    act(() => resetStore());
+    FakeResizeObserver.current = [];
+    return { logged, created, disconnected, leftOver };
+  }
+
+  it('makes exactly the same seeds, flushes and releases as without StrictMode', () => {
+    const normal = scenario(false);
+    const strict = scenario(true);
+    expect(normal.logged.length).toBeGreaterThan(0);
+    expect(strict.logged).toEqual(normal.logged);
+  });
+
+  it('keeps observers balanced: one live per list, the replayed one disconnected, none left', () => {
+    const normal = scenario(false);
+    const strict = scenario(true);
+    expect(normal).toMatchObject({ created: 2, disconnected: 0, leftOver: 0 });
+    // Each list's observer effect is set up, cleaned up and set up again on mount.
+    expect(strict).toMatchObject({ created: 4, disconnected: 2, leftOver: 0 });
+  });
+});
+
+describe('renders, focus and global resources (S3)', () => {
+  it('a ResizeObserver refresh renders nothing', () => {
+    FakeResizeObserver.current = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    let commits = 0;
+    render(
+      <Profiler id="toaster" onRender={() => commits++}>
+        <Toaster />
+      </Profiler>
+    );
+    show('a');
+    show('b');
+    const before = commits;
+    heights.set('a', 90);
+    act(() => FakeResizeObserver.current[0]!.callback());
+    expect(commits).toBe(before);
+  });
+
+  it('interruption renders no more than the same changes without any motion', () => {
+    const run = (withMotion: boolean) => {
+      holding = withMotion;
+      let commits = 0;
+      const view = render(
+        <Profiler id="toaster" onRender={() => commits++}>
+          <Toaster maxVisible={3} />
+        </Profiler>
+      );
+      show('a');
+      show('b', 'top-right', 70);
+      progress(0.5);
+      show('c');
+      progress(0.5);
+      close('b');
+      advance();
+      show('d');
+      show('e');
+      close('a');
+      advance();
+      view.unmount();
+      act(() => resetStore());
+      settle();
+      return commits;
+    };
+    const moving = run(true);
+    expect(seeds()).not.toEqual([]);
+    for (const [target, key, descriptor] of saved.reverse()) {
+      Object.defineProperty(target, key, descriptor);
+    }
+    saved.length = 0;
+    log = [];
+    expect(run(false)).toBe(moving);
+  });
+
+  it('never moves focus: a membership move keeps focus where it is', () => {
+    holding = true;
+    render(
+      <>
+        <button type="button">outside</button>
+        <Toaster closeButton />
+      </>
+    );
+    show('a');
+    show('b');
+    const close = itemOf('a').querySelector('.ret-toast__close') as HTMLButtonElement;
+    act(() => close.focus());
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    show('c');
+    progress(0.5);
+    show('d');
+    expect(seeds().length).toBeGreaterThan(0);
+    expect(focus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(close);
+    focus.mockRestore();
+  });
+
+  /** Closes the toast whose close button has focus, and returns where focus went, by title. */
+  function restoreAfterClose(withMotion: boolean): string {
+    holding = withMotion;
+    const view = render(<Toaster closeButton />);
+    for (const id of ['a', 'b', 'c']) show(id);
+    progress(0.5);
+    const button = itemOf('b').querySelector('.ret-toast__close') as HTMLButtonElement;
+    act(() => button.focus());
+    act(() => button.click());
+    // Restoration happened before `inert`, as the exit began, and repositioning changed nothing.
+    expect(itemOf('b').hasAttribute('inert')).toBe(true);
+    const during = document.activeElement;
+    advance();
+    expect(document.activeElement).toBe(during);
+    const where = `${titleOf(during!.closest('li')!)} ${during!.className}`;
+    view.unmount();
+    act(() => resetStore());
+    settle();
+    return where;
+  }
+
+  it('restores focus on close exactly as without repositioning', () => {
+    const moving = restoreAfterClose(true);
+    expect(seeds()).not.toEqual([]);
+    for (const [target, key, descriptor] of saved.reverse()) {
+      Object.defineProperty(target, key, descriptor);
+    }
+    saved.length = 0;
+    expect(restoreAfterClose(false)).toBe(moving);
+    expect(moving).toBe('a ret-toast__close');
+  });
+
+  it('keeps Alt+T on the first toast while its neighbours move', () => {
+    holding = true;
+    render(<Toaster />);
+    show('a');
+    show('b');
+    progress(0.5);
+    add('c');
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { code: 'KeyT', key: '†', altKey: true, bubbles: true })
+      );
+    });
+    expect(document.activeElement).toBe(itemOf('c'));
+  });
+
+  it('adds no window or document listener, MutationObserver or frame callback', () => {
+    holding = true;
+    const windowAdd = vi.spyOn(window, 'addEventListener');
+    const documentAdd = vi.spyOn(document, 'addEventListener');
+    const raf = vi.spyOn(window, 'requestAnimationFrame');
+    const observers: string[] = [];
+    const Real = window.MutationObserver;
+    vi.stubGlobal(
+      'MutationObserver',
+      class extends Real {
+        constructor(callback: MutationCallback) {
+          super(callback);
+          observers.push(new Error().stack ?? '');
+        }
+      }
+    );
+    render(<Toaster maxVisible={2} />);
+    // The Toaster's own fixed global listeners (P-15 blur, focus, visibilitychange; P-16 keydown).
+    // React DOM adds its own document `selectionchange` listener with the first root.
+    const fixed = [...windowAdd.mock.calls, ...documentAdd.mock.calls]
+      .map(([type]) => type)
+      .filter(type => type !== 'selectionchange')
+      .sort();
+    expect(fixed).toEqual(['blur', 'focus', 'keydown', 'visibilitychange']);
+    windowAdd.mockClear();
+    documentAdd.mockClear();
+    show('a');
+    show('b', 'top-right', 70);
+    progress(0.5);
+    show('c');
+    close('a');
+    advance();
+    show('d', 'bottom-left');
+    show('e', 'bottom-left');
+    expect(seeds()).not.toEqual([]);
+    expect(windowAdd).not.toHaveBeenCalled();
+    expect(documentAdd).not.toHaveBeenCalled();
+    expect(raf).not.toHaveBeenCalled();
+    // P-19 creates none. The only ones are P-15's, one per toast for its focus-within pause.
+    expect(
+      observers.filter(stack => /react\/(reposition|useStackReposition)\.ts/.test(stack))
+    ).toEqual([]);
+    expect(observers.every(stack => stack.includes('useFocusWithinPause'))).toBe(true);
+    expect(observers).toHaveLength(5);
   });
 });

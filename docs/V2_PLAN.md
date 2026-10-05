@@ -1845,7 +1845,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - **Prototype gate:** build both the measured-offset approach and the FLIP/WAAPI approach, choose one within the §22 constraints, and record the decision in the PR.
 - Scope: the chosen technique, including its reduced-motion behaviour.
 - Carried over from P-18. Enter and exit animate `opacity` and the individual `translate` and `scale` on the toast root, and the spinner the individual `rotate` on its icon, so `transform` is free for repositioning. Neighbouring toasts still jump when a toast enters, and when an exiting toast is removed at the end of its exit; smoothing that is P-19's.
-- **Status: S2 done.** D0, D1, D2, S1 and S2 are done. Production uses candidate A, measured layout offsets with a flow-delta CSS transition (D2 below), and stack repositioning is on. S3 is next.
+- **Status: S3 done.** D0, D1, D2 and S1 to S3 are done. Production uses candidate A, measured layout offsets with a flow-delta CSS transition (D2 below), and stack repositioning is on and hardened. S4 is next.
 - Defects: none. Appendix A assigns no defect to P-19.
 - Acceptance: AC-MO-2 is P-19's. P-19 extends AC-MO-3 to reflow. AC-LC-1 to AC-LC-3, AC-POS-1, AC-KB-1, AC-KB-2, AC-Q-2, AC-CSS-1 and AC-CSS-3 must not regress. As with AC-MO-1 in P-18, AC-MO-2's real-browser proof ("reflow", §26) is P-22's.
 - Decisions locked before implementation (D0). They do **not** choose between the two techniques. That is D2's decision.
@@ -2236,7 +2236,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - No console errors. One 404 resource load in the first run did not recur once network logging was on; it is most likely the demo's missing favicon.
       - Rapid and two-step sequences reversed direction only when the target changed, with no frame step larger than the eased curve's first step, but interruption is S3's.
       - The timing stays at 200 ms and `cubic-bezier(0.2, 0, 0, 1)` pending the maintainer's own visual review. This is scripted Chromium evidence, not P-22's real-browser certification.
-  - **S3, interruption and lifecycle hardening:**
+  - **S3, interruption and lifecycle hardening (done):**
     - **Responsibility:** fixes, where needed, for:
       - rapid retargeting;
       - several removals;
@@ -2253,6 +2253,89 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Mutations:** a seed without the current offset (a snap), the stale cache not refreshed, no observer disconnect, revival treated as membership, a render added for animation.
     - **Manual checkpoint:** rapid activity, keyboard close, and Alt+T during moves.
     - **Commit:** `feat: harden stack repositioning`.
+    - **Outcome:** the S2 algorithm needed no change. S3 adds tests and evidence only; production code is unchanged from S2.
+    - **Interruption model:**
+      - In screen coordinates (positive down), a toast is drawn at `V = L + T`: `L` is its layout position and `T` its current P-19 `transform` offset.
+      - At a retarget the seed is `T' = (L_old − L_new) + T_cur`. `displacement()` turns the anchored distances into screen terms at either edge, and `T_cur` is the computed `transform` at that instant, part-way through a running transition included.
+      - So `L_new + T' = L_old + T_cur = V`: the toast stays exactly where it is on screen, then eases to `T = 0`, its newest layout position.
+      - The two preconditions hold:
+        - the cache holds the layout as last measured, refreshed after every list commit and by the ResizeObserver, which runs after layout and before paint;
+        - `T_cur` is read in the same task as the commit, on the same animation-timeline instant.
+    - **Direction reversal:** a reversal is correct, category A, when the newest target lies on the other side of where the toast is now. An insertion followed by a removal is the usual case. A stale-origin reversal (category B) can only come from a break in continuity at the commit, so continuity at the commit instant is the test.
+    - **Tests:** `reposition-render.test.tsx` grows to 70 tests.
+      - **In-flight model:** a stand-in for the browser's transitions holds each released seed as the toast's live offset. It reports that offset through the computed `transform` as a `matrix()`, and tests advance or settle it.
+      - **`retarget()`:** asserts, for every toast that stays in its list, that its on-screen position is identical before and after each commit, to 1e-9, and classifies every reversal.
+      - **Interruption cases:**
+        - one worked example of the composition: `a` is 40px into an 80px move, `c` arrives, and the seed is −100;
+        - at a top and a bottom stack: two removals and three removals from rest (no reversal), removals while the build-up is still moving (category A only, and at least one occurs), rapid insertion, insertion then removal (a required reversal, 40px from where it was), removal then insertion, a promotion followed by further membership changes;
+        - interruption while a neighbour is entering, which still enters, and while one is exiting, which moves, stays inert and then leaves;
+        - a toast in flight whose layout did not change keeps its exact offset and gets no new seed.
+      - **Revival:** with new, taller content on the same node it moves nothing, leaves no inline style, and the next move is continuous.
+      - **Replacement:** a resizing replacement moves nothing, and the next move starts from the new geometry. A commit at one list never animates another list's size change.
+      - **Relocation:** top-right to bottom-left and top-right to top-left.
+        - The old list keeps the exiting toast's slot (nothing moves), then moves its own survivors on removal.
+        - The destination moves its survivors.
+        - The arrival is a new node, never seeded. The old node is detached, and the DOM order is the destination's.
+      - **Detach and unmount:**
+        - a toast removed mid-move is released by its observer;
+        - unmounting the Toaster mid-move disconnects every list observer;
+        - a remount moves nothing on arrival and its first move starts from the remounted layout;
+        - a takeover renders fresh lists that move nothing.
+      - **StrictMode:** a mixed scenario at two lists produces a byte-identical seed, flush and release log with and without StrictMode. Observers balance: 2 created and none disconnected without StrictMode; 4 created, the 2 replayed ones disconnected, and none left after unmount with it. No React warning or error.
+      - **Renders:** a ResizeObserver refresh adds no Profiler commit, and an interruption sequence commits exactly as often as the same changes with no layout or motion.
+      - **Focus:**
+        - a membership move calls no `focus()` and keeps focus where it was;
+        - closing a focused toast's close button restores focus to the same place as without repositioning (the next toast's close), before `inert`;
+        - Alt+T still focuses the first toast while neighbours move.
+      - **Global resources:**
+        - the active Toaster's window and document listeners stay exactly P-15's and P-16's `blur`, `focus`, `visibilitychange` and `keydown` (React DOM's own `selectionchange` aside), and moves add none;
+        - no `requestAnimationFrame`;
+        - no MutationObserver from P-19 code. The only ones are P-15's existing per-toast focus-within observers.
+    - **Mutations,** each detected by the full suite and restored byte-for-byte:
+
+      | Mutation                                                                                                     | Failures                                                 |
+      | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+      | The in-flight offset ignored on retarget                                                                     | 23                                                       |
+      | The ResizeObserver refresh doing nothing                                                                     | 1                                                        |
+      | The cache refreshed only on membership changes                                                               | 3                                                        |
+      | Revival (a phase change) counted as membership                                                               | 1                                                        |
+      | Geometry keyed by toast ID across lists and mounts, so a relocated arrival and a remount reuse old distances | 15, including both relocation tests and the remount test |
+      | No observer disconnect                                                                                       | 4                                                        |
+      | A duplicate reposition pass per commit                                                                       | 48                                                       |
+      | Membership bookkeeping done in render, which diverges under StrictMode's double render                       | 2                                                        |
+      | A ResizeObserver refresh that re-renders                                                                     | 1                                                        |
+      | `focus()` during repositioning                                                                               | 2                                                        |
+      | An interrupted toast keeping its `transform`                                                                 | 21                                                       |
+      | One membership sequence shared by every list and mount                                                       | 1                                                        |
+
+      Stale geometry on a remount cannot arise from the node-keyed `WeakMap` itself. Two mutations stand in for that failure: the ID-keyed one, and the shared sequence one.
+
+    - **Validation:** `format:check`, `lint`, `typecheck`, `typecheck:demo`, the full suite (33 files, 1,221 tests), `validate:package` and `build:demo` all pass. Public exports, the 28 tokens and `src/styles.css` are unchanged.
+    - **Chromium checkpoint (machine-observed only, not a human visual judgement):**
+      - **Setup:** headless Chrome 154 on Windows over CDP, with `?production-css` at 1440×1100, all six positions at once, through the retained harness. The checkpoint script also called the demo's own `toast` module for relocation and content changes.
+      - **Scenarios:**
+        - rapid interruption, dismiss several, burst add;
+        - remove then insert and insert then remove (100 ms apart);
+        - promotion then insertion, revival, add while exiting, dismiss while entering;
+        - a growing replacement then an insertion, a rewrap then an insertion;
+        - relocation top-right to bottom-left and top-left to top-center;
+        - focus restoration and Alt+T.
+      - **Continuity at the commit instant:** every survivor's on-screen top was read just before each membership change (in the same task) and again right after its commit (a microtask after seed and release), on the same `document.timeline` instant. Over about 7,000 such checks, the jump at each retarget equals P-18's scale composition (below) plus a residual of at most 0.06px.
+      - **Control:** with the in-flight offset deliberately dropped (the first mutation) and served by the dev server, the residuals were up to 46.75px, each equal to the dropped offset, so the measure detects stale origins.
+      - **Reversals:** a frame-sampled classifier counted 54 reversals, all category A, and 0 category B. It could not see the control's forward snaps, so continuity at the commit instant is the decisive evidence. Category-B reversals: none.
+      - **Rest and relocation:**
+        - at rest every toast computed `transform: none`, with no inline style;
+        - `offsetParent` was the toast's own list throughout;
+        - relocated arrivals were new nodes in the destination list with `transform: none`, and the old nodes were detached.
+      - **Focus:** focus was restored to the next toast's close, the closed toast was `inert`, focus stayed put while neighbours moved, and Alt+T focused a toast root.
+      - **Console:** no errors. The only failed request was the demo's missing `/favicon.ico` (404).
+    - **Known observations, not stale origins:**
+      - **P-18 `scale` composition (D0 decision 13, observational):**
+        - CSS applies the individual `scale` before `transform`, so a seed on a toast that P-18 is entering or exiting, at `scale` < 1, is drawn scaled.
+        - The toast jumps by `|T'| × (1 − scale)`, at most 2% of the move and 1.79px in the checkpoint, for a toast that is fading in or out.
+        - Correcting it would mean reading P-18's `scale` in P-19, which S1 kept out of scope. It stays an observation for the maintainer and for P-22's real-browser reflow proof.
+      - **No ResizeObserver:** where ResizeObserver is missing, a consumer's custom content that resizes itself without a list commit leaves the cache stale until the next commit. No browser at the support floor lacks it.
+      - **Rounding:** `offset*` metrics are whole pixels, so fractional layouts can leave up to about 1px at a retarget. Every move still ends exactly at `transform: none`.
   - **S4, reduced motion and contract proof:**
     - **Responsibility:** the reduced-motion rule in the existing `@media (prefers-reduced-motion: reduce)` block. The rule sets only the reposition transition's duration to zero.
     - **Tests:**
