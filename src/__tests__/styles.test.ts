@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { LIVE_REGION, VISUALLY_HIDDEN } from '../react/announcer';
+import { libraryAnimationName } from '../react/motion';
 
 const root = path.resolve(__dirname, '../..');
 const STYLES = path.join(root, 'src/styles.css');
@@ -78,6 +79,14 @@ const LAYOUT_TOKENS = [
   '--ret-width',
   '--ret-z-index',
 ];
+// Enter and exit motion (P-18 D0, decision 5; S2), with their defaults.
+const MOTION_DEFAULTS: Readonly<Record<string, string>> = {
+  '--ret-enter-duration': '180ms',
+  '--ret-exit-duration': '120ms',
+  '--ret-enter-easing': 'cubic-bezier(0.2, 0, 0, 1)',
+  '--ret-exit-easing': 'cubic-bezier(0.4, 0, 1, 1)',
+};
+const MOTION_TOKENS = Object.keys(MOTION_DEFAULTS);
 
 // Class names of the 0.x stylesheet, none of which is part of the 2.x contract.
 const LEGACY_CLASSES = [
@@ -224,7 +233,8 @@ describe('namespace (§21, OQ-25)', () => {
 
 describe('tokens (§21, OQ-25)', () => {
   it('declares every documented token on the toaster root, and no other token anywhere', () => {
-    const documented = [...COLOUR_TOKENS, ...LAYOUT_TOKENS].sort();
+    const documented = [...COLOUR_TOKENS, ...LAYOUT_TOKENS, ...MOTION_TOKENS].sort();
+    expect(documented).toHaveLength(28);
     expect(tokensOf(LIGHT.style).sort()).toEqual(documented);
     expect([...new Set(rules.flatMap(rule => tokensOf(rule.style)))].sort()).toEqual(documented);
   });
@@ -248,15 +258,26 @@ describe('tokens (§21, OQ-25)', () => {
     }
   });
 
-  it('defines no motion, stack, progress or swipe token, which later phases own', () => {
+  it('defines exactly four motion tokens, with their defaults, on the root only (P-18 S2)', () => {
     const tokens = rules.flatMap(rule => tokensOf(rule.style));
     expect(
-      tokens.filter(token =>
-        /motion|duration|delay|eas(e|ing)|animation|transition|enter|exit|spin|stack|progress|swipe/.test(
-          token
-        )
-      )
-    ).toEqual([]);
+      tokens.filter(token => /motion|duration|delay|eas(e|ing)|animation|enter|exit/.test(token))
+    ).toEqual(MOTION_TOKENS);
+    for (const [token, value] of Object.entries(MOTION_DEFAULTS)) {
+      // jsdom drops the spaces after commas in a custom property's value.
+      expect(LIGHT.style.getPropertyValue(token).replace(/\s+/g, '')).toBe(
+        value.replace(/\s+/g, '')
+      );
+    }
+    // Not theme values: neither dark block repeats them.
+    for (const block of [DARK, SYSTEM_DARK]) {
+      expect(tokensOf(block.style).filter(token => MOTION_TOKENS.includes(token))).toEqual([]);
+    }
+  });
+
+  it('defines no stack, progress, spinner or swipe token, which later phases own', () => {
+    const tokens = rules.flatMap(rule => tokensOf(rule.style));
+    expect(tokens.filter(token => /transition|spin|stack|progress|swipe/.test(token))).toEqual([]);
   });
 });
 
@@ -993,16 +1014,211 @@ describe('live regions: the hybrid visually hidden class (§17.1, §34, P-17 S5)
   });
 });
 
-describe('motion boundary (P-17; P-18 owns motion)', () => {
-  it('has no keyframes, animations, transitions, transforms or reduced-motion rules', () => {
-    expect(css).not.toMatch(/@keyframes|prefers-reduced-motion/);
-    for (const rule of rules) {
-      expect(
-        [...rule.style].filter(p =>
-          /^(animation|transition|transform|translate|scale|rotate)/.test(p)
-        )
-      ).toEqual([]);
+/** Every `@keyframes` rule in the stylesheet: its name and each frame's key and declarations. */
+function keyframes(): Map<string, { key: string; style: Record<string, string> }[]> {
+  const element = document.createElement('style');
+  element.textContent = css;
+  document.head.append(element);
+  const sheet = element.sheet;
+  element.remove();
+  const found = new Map<string, { key: string; style: Record<string, string> }[]>();
+  const walk = (list: CSSRuleList) => {
+    for (const rule of list) {
+      if (rule instanceof CSSKeyframesRule) {
+        found.set(
+          rule.name,
+          [...rule.cssRules].map(frame => ({
+            key: (frame as CSSKeyframeRule).keyText,
+            style: declarations((frame as CSSKeyframeRule).style),
+          }))
+        );
+      } else if (rule instanceof CSSMediaRule) {
+        walk(rule.cssRules);
+      }
     }
+  };
+  if (sheet) walk(sheet.cssRules);
+  return found;
+}
+
+const PHASES = ['entering', 'visible', 'exiting'] as const;
+
+/** A rendered toast root in `phase` at `position`, normal or custom. */
+function toastIn(
+  phase: (typeof PHASES)[number],
+  position: string,
+  type = 'success'
+): HTMLLIElement {
+  const item = toastOf(type, type === 'custom' ? ['custom'] : ['icon', 'content']);
+  item.setAttribute('data-phase', phase);
+  item.setAttribute('data-position', position);
+  return item;
+}
+
+const ANIMATION = /^animation/;
+const animationOf = (element: Element): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(declared(element)).filter(([property]) => ANIMATION.test(property))
+  );
+
+describe('enter and exit motion (§22, P-18 S2)', () => {
+  const frames = keyframes();
+
+  describe('keyframes', () => {
+    it('are exactly the four library enter and exit animations, all ret- prefixed', () => {
+      expect([...frames.keys()].sort()).toEqual([
+        'ret-enter-bottom',
+        'ret-enter-top',
+        'ret-exit-bottom',
+        'ret-exit-top',
+      ]);
+    });
+
+    it.each([
+      ['ret-enter-top', '0%', '-8px'],
+      ['ret-enter-bottom', '0%', '8px'],
+      ['ret-exit-top', '100%', '-8px'],
+      ['ret-exit-bottom', '100%', '8px'],
+    ])(
+      '%s authors only its moving end (%s): opacity 0, 0 %s of travel, scale 0.98',
+      (name, key, travel) => {
+        expect(frames.get(name)).toEqual([
+          { key, style: { opacity: '0', translate: `0 ${travel}`, scale: '0.98' } },
+        ]);
+      }
+    );
+
+    it('move only opacity and the individual translate and scale, never transform', () => {
+      for (const list of frames.values()) {
+        for (const frame of list) {
+          expect(Object.keys(frame.style).sort()).toEqual(['opacity', 'scale', 'translate']);
+        }
+      }
+    });
+  });
+
+  describe('which animation each toast runs', () => {
+    it.each(POSITIONS.flatMap(position => PHASES.map(phase => [position, phase] as const)))(
+      'a toast at %s while %s',
+      (position, phase) => {
+        const expected = phase === 'visible' ? undefined : libraryAnimationName(phase, position);
+        for (const type of ['success', 'default', 'custom']) {
+          expect(declared(toastIn(phase, position, type))['animation-name']).toBe(expected);
+        }
+      }
+    );
+
+    it('depends only on the vertical edge, never on left, centre or right', () => {
+      for (const phase of ['entering', 'exiting'] as const) {
+        for (const edge of ['top', 'bottom']) {
+          const names = ['left', 'center', 'right'].map(
+            side => declared(toastIn(phase, `${edge}-${side}`))['animation-name']
+          );
+          expect(new Set(names).size).toBe(1);
+          expect(names[0]).toBe(`ret-${phase === 'entering' ? 'enter' : 'exit'}-${edge}`);
+        }
+      }
+    });
+
+    it('gives a visible toast no animation at all, so its settled look is P-17 unchanged', () => {
+      for (const position of POSITIONS) {
+        for (const type of ['success', 'custom']) {
+          expect(animationOf(toastIn('visible', position, type))).toEqual({});
+        }
+      }
+    });
+  });
+
+  describe('timing', () => {
+    it('enters on the enter tokens, once, without delay and without fill', () => {
+      expect(animationOf(toastIn('entering', 'top-right'))).toEqual({
+        'animation-name': 'ret-enter-top',
+        'animation-duration': 'var(--ret-enter-duration)',
+        'animation-timing-function': 'var(--ret-enter-easing)',
+        'animation-delay': '0s',
+        'animation-iteration-count': '1',
+        'animation-fill-mode': 'none',
+      });
+    });
+
+    it('exits on the exit tokens, once, without delay, keeping its last frame until removal', () => {
+      expect(animationOf(toastIn('exiting', 'bottom-left'))).toEqual({
+        'animation-name': 'ret-exit-bottom',
+        'animation-duration': 'var(--ret-exit-duration)',
+        'animation-timing-function': 'var(--ret-exit-easing)',
+        'animation-delay': '0s',
+        'animation-iteration-count': '1',
+        'animation-fill-mode': 'forwards',
+      });
+    });
+
+    it('uses longhands only: no animation shorthand, direction or play state', () => {
+      for (const rule of rules) {
+        expect(Object.keys(declarations(rule.style))).not.toEqual(
+          expect.arrayContaining([expect.stringMatching(/^animation(-direction|-play-state)?$/)])
+        );
+      }
+    });
+
+    it('keeps the names in their own rules, apart from the timing', () => {
+      for (const rule of rules.filter(r => r.style.getPropertyValue('animation-name'))) {
+        expect(Object.keys(declarations(rule.style))).toEqual(['animation-name']);
+      }
+    });
+  });
+
+  describe('boundaries', () => {
+    it('gives custom toasts the root motion and still no card chrome (§6.4)', () => {
+      for (const phase of PHASES) {
+        const item = toastIn(phase, 'top-center', 'custom');
+        expect(
+          Object.keys(declared(item)).filter(
+            property => CARD.test(property) && !ANIMATION.test(property)
+          )
+        ).toEqual([]);
+      }
+      expect(declared(toastIn('exiting', 'top-center', 'custom'))['animation-name']).toBe(
+        'ret-exit-top'
+      );
+    });
+
+    it('authors no settled opacity, translate, scale or transform on any rule', () => {
+      for (const rule of rules) {
+        expect(
+          Object.keys(declarations(rule.style)).filter(property =>
+            /^(opacity|translate|scale|rotate|transform)/.test(property)
+          )
+        ).toEqual([]);
+      }
+    });
+
+    it('never animates the region, the lists, the toast parts or the icon', () => {
+      const item = toastIn('entering', 'top-right');
+      const animated = [
+        regionOf(),
+        ...POSITIONS.map(listAt),
+        ...item.children,
+        ...toastIn('exiting', 'bottom-right', 'loading').children,
+      ];
+      for (const element of animated) expect(animationOf(element)).toEqual({});
+    });
+
+    it('adds no transition, reduced-motion rule or spinner yet (S3, S4)', () => {
+      expect(css).not.toMatch(/transition|prefers-reduced-motion|ret-spin/);
+    });
+
+    it('leaves motion to CSS: no JavaScript reads the reduced-motion preference', () => {
+      const sources = ['react', 'store']
+        .flatMap(dir =>
+          fs.readdirSync(path.join(root, 'src', dir)).map(f => path.join('src', dir, f))
+        )
+        .concat('src/index.ts', 'src/toast.ts', 'src/types.ts');
+      for (const file of sources) {
+        expect(fs.readFileSync(path.join(root, file), 'utf8')).not.toMatch(
+          /matchMedia|prefers-reduced-motion/
+        );
+      }
+    });
   });
 });
 

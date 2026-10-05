@@ -1,14 +1,19 @@
 // Enter and exit completion in the renderer (§9 rule 3, P-18 S1): the toast root's own
 // `animationend` for the library animation of its phase and edge, or the fallback derived from its
-// computed animation, whichever comes first. There is no motion CSS yet, so the computed styles of
-// a running library animation are stubbed. Everything runs on the fake clock; nothing waits for a
-// real animation.
+// computed animation, whichever comes first. jsdom computes no CSS animation, so the computed
+// styles of a running library animation are stubbed, from the stylesheet's own token defaults
+// (P-18 S2). Everything runs on the fake clock; nothing waits for a real animation.
+import fs from 'node:fs';
+import path from 'node:path';
 import { act, render, screen } from '@testing-library/react';
 import { StrictMode, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { Toaster, toast } from '../index';
+import { LIFECYCLE_FALLBACK_MARGIN_MS, libraryAnimationName, parseTime } from '../react/motion';
 import { dismiss, getSnapshot, inspectRecords, subscribe } from '../store/store';
 import type { CustomToastOptions, ToastOptions, ToastPosition } from '../types';
+
+const STYLESHEET = fs.readFileSync(path.resolve(__dirname, '../styles.css'), 'utf8');
 
 const recordOf = (id: string) => inspectRecords().find(record => record.id === id);
 const phaseOf = (id: string) => recordOf(id)?.phase;
@@ -79,31 +84,38 @@ function stubAnimation(byPhase: (phase: string | null, item: Element) => Animati
     });
 }
 
-/** Library motion as S2 will add it: 200 ms in after a 50 ms delay, 150 ms out. */
+/** A motion token's default in the shipped stylesheet (P-18 S2), in ms. */
+function tokenDefault(token: string): number {
+  const value = new RegExp(`${token}:\\s*([^;]+);`).exec(STYLESHEET)?.[1];
+  const ms = value === undefined ? undefined : parseTime(value);
+  if (ms === undefined) throw new Error(`no default for ${token}`);
+  return ms;
+}
+
+const ENTER_MS = tokenDefault('--ret-enter-duration');
+const EXIT_MS = tokenDefault('--ret-exit-duration');
+
+/**
+ * The library motion the stylesheet runs, as a browser computes it: the S2 token defaults,
+ * serialised in seconds, with no delay. jsdom does not compute animations, so this stands in.
+ */
 function libraryMotion() {
   return stubAnimation((phase, item) => {
-    const edge = item.getAttribute('data-position')?.startsWith('top-') ? 'top' : 'bottom';
-    if (phase === 'entering') {
-      return {
-        'animation-name': `ret-enter-${edge}`,
-        'animation-duration': '200ms',
-        'animation-delay': '50ms',
-      };
-    }
-    if (phase === 'exiting') {
-      return {
-        'animation-name': `ret-exit-${edge}`,
-        'animation-duration': '0.15s',
-        'animation-delay': '0s',
-      };
-    }
-    return undefined;
+    if (phase !== 'entering' && phase !== 'exiting') return undefined;
+    return {
+      'animation-name': libraryAnimationName(
+        phase,
+        item.getAttribute('data-position') as ToastPosition
+      ),
+      'animation-duration': `${(phase === 'entering' ? ENTER_MS : EXIT_MS) / 1000}s`,
+      'animation-delay': '0s',
+    };
   });
 }
 
-// The fallbacks the stub implies: end time plus the 100 ms margin.
-const ENTER_FALLBACK = 50 + 200 + 100;
-const EXIT_FALLBACK = 150 + 100;
+// The fallbacks the stylesheet implies: end time plus the 100 ms margin.
+const ENTER_FALLBACK = ENTER_MS + LIFECYCLE_FALLBACK_MARGIN_MS;
+const EXIT_FALLBACK = EXIT_MS + LIFECYCLE_FALLBACK_MARGIN_MS;
 
 /** Shows a toast and completes its enter through its event. */
 function showVisible(id: string, options: Omit<ToastOptions, 'id'> = {}): HTMLLIElement {
@@ -454,5 +466,63 @@ describe('lifecycle edge cases', () => {
     expect(phaseOf('a')).toBe('entering');
     animationEnd(itemOf('a'), 'ret-enter-top');
     expect(phaseOf('a')).toBe('visible');
+  });
+});
+
+describe('focus during a positive exit (§18, P-16, P-18 S2)', () => {
+  beforeEach(() => {
+    computedStyle = libraryMotion();
+  });
+
+  it('times the stub from the stylesheet: 180 ms in, 120 ms out', () => {
+    expect([ENTER_MS, EXIT_MS]).toEqual([180, 120]);
+  });
+
+  it('restores focus and sets inert as the exit starts, then removes only after the exit', () => {
+    const onDismiss = vi.fn();
+    render(<Toaster />);
+    // Top stacks are newest first, so `older` follows `newer` in DOM order.
+    const older = showVisible('older', { onDismiss });
+    const newer = showVisible('newer');
+    const close = older.querySelector('.ret-toast__close') as HTMLButtonElement;
+    act(() => close.focus());
+    expect(document.activeElement).toBe(close);
+
+    act(() => dismiss('older'));
+    // At once, while the exit animation still runs: focus has left for the previous toast, which
+    // has no next toast after it, and the exiting toast is inert.
+    expect(phaseOf('older')).toBe('exiting');
+    expect(older).toHaveAttribute('inert');
+    expect(older.contains(document.activeElement)).toBe(false);
+    expect(document.activeElement).toBe(newer);
+    expect(newer).not.toHaveAttribute('inert');
+
+    // It stays rendered and exiting for the whole exit window.
+    advance(EXIT_FALLBACK - 1);
+    expect(older.isConnected).toBe(true);
+    expect(phaseOf('older')).toBe('exiting');
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(newer);
+
+    // Then the exit's completion removes it.
+    animationEnd(older, 'ret-exit-top');
+    expect(recordOf('older')).toBeUndefined();
+    expect(older.isConnected).toBe(false);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(newer);
+  });
+
+  it('removes a focused toast through the fallback when no animationend arrives', () => {
+    render(<Toaster />);
+    const item = showVisible('t');
+    act(() => item.focus());
+    act(() => dismiss('t'));
+    expect(item).toHaveAttribute('inert');
+    expect(item.contains(document.activeElement)).toBe(false);
+    advance(EXIT_FALLBACK - 1);
+    expect(item.isConnected).toBe(true);
+    advance(1);
+    expect(item.isConnected).toBe(false);
+    expect(document.activeElement).not.toBe(document.body);
   });
 });
