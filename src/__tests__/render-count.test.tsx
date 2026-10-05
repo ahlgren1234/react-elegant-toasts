@@ -215,6 +215,23 @@ describe('render counts (§32, D-16)', () => {
     expect(rendersSince()).toEqual({});
   });
 
+  it('re-renders no toast when the theme changes, which only the region attribute shows (P-17)', () => {
+    const { rerender } = render(<Toaster theme="light" />);
+    act(() => {
+      toast('a', { id: 'a' });
+      toast.success('b', { id: 'b', position: 'bottom-left' });
+      toast.custom('custom', { id: 'custom' });
+    });
+    rendersSince();
+
+    for (const theme of ['dark', 'system', 'light'] as const) {
+      rerender(<Toaster theme={theme} />);
+      expect(document.querySelector('.ret-toaster')).toHaveAttribute('data-theme', theme);
+    }
+    rerender(<Toaster />);
+    expect(rendersSince()).toEqual({});
+  });
+
   it('renders nothing when a new labels object resolves to the same strings', () => {
     const { rerender } = render(<Toaster labels={{ region: 'Alerts', close: 'Fermer' }} />);
     act(() => {

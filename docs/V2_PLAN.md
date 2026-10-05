@@ -1227,7 +1227,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
   - `fixtures/consumer-vite` is committed: Vite 8.3.2, strict TypeScript 5.0.4 with `moduleResolution: "bundler"`, `skipLibCheck: false` and `types: []`, React 18.3.1 and `@types/react` 18.3.18, and no JSX or `@vitejs/plugin-react`. It imports the root entry and `react-elegant-toasts/styles.css`, uses public types, and keeps a `@ts-expect-error` deep type import that must stay blocked.
   - The fixture's committed `package.json` and lockfile never contain the library. The script copies the fixture to the temp directory, runs `npm ci --ignore-scripts --no-audit --no-fund`, and installs the tarball with `npm install --no-save`. It then checks that the fixture manifests are byte-identical and that the package is a real copy inside the consumer, so repository source and the root `node_modules` cannot satisfy any import.
-  - `vite build` must succeed, and its CSS output must contain `CSS_MARKER` (`.toast-progress`), which must also appear in the packed `styles.css`. P-17 updates the marker when the stylesheet is redesigned. Vite's warning that the module-level `"use client"` directive is not preserved in an SPA bundle is expected.
+  - `vite build` must succeed, and its CSS output must contain `CSS_MARKER` (`.toast-progress`), which must also appear in the packed `styles.css`. P-17 updates the marker when the stylesheet is redesigned (S1 made it `.ret-toaster`). Vite's warning that the module-level `"use client"` directive is not preserved in an SPA bundle is expected.
   - The `build-package` job keeps its name and runs `npm ci --ignore-scripts --no-audit --no-fund` and then `npm run validate:package`, with no separate build step. The setup-node cache is keyed on both lockfiles. `scripts/**/*.js` gets Node globals in ESLint. The fixture is formatted but not linted.
   - Dependabot also tracks `fixtures/consumer-vite`. It never updates the fixture's TypeScript, which is the documented minimum, and ignores major React and `@types/react` updates until P-23. Like the rest of the config, it stays inactive until it reaches `main`.
   - P-07 proves:
@@ -1609,6 +1609,18 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - This is visual design sign-off only. P-22 still owns systematic browser verification.
     - D2 does not authorise motion: the motion boundary above still applies.
   - **S1, CSS foundation:** remove the 0.x CSS; establish the final `ret-*` stylesheet, its tokens and the light, dark and system token architecture; add the prefix lint and contract check (AC-CSS-1); update `CSS_MARKER` (P-07).
+    - **Stylesheet:** `src/styles.css` holds only the token and theme layer: `:where(.ret-toaster)` with the light values and `color-scheme`, `:where(.ret-toaster[data-theme='dark'])`, and the same dark values for `:where(.ret-toaster[data-theme='system'])` inside `@media (prefers-color-scheme: dark)`. No component rule exists until S2 to S5, so a page that loads it alone still shows unstyled toasts.
+    - **Tokens:**
+      - colour: `--ret-surface`, `--ret-text`, `--ret-text-muted`, `--ret-border`, `--ret-shadow`, `--ret-focus`, `--ret-action-surface`, `--ret-action-text`, and `--ret-{success,error,warning,info,loading}` with a `-subtle` tint each
+      - layout: `--ret-font-family` (the family only; sizes, weights and line heights are not tokens), `--ret-radius`, `--ret-gap`, `--ret-offset`, `--ret-width`, `--ret-z-index`
+      - Each theme sets every colour token. Values start from the approved D1 palette. Later slices may refine values, and add a token only if a rule needs one.
+    - **AC-CSS-1:**
+      - `scripts/check-styles.js` runs as part of `npm run lint`. It parses the stylesheet with jsdom's CSSOM, which is already a dev dependency, and fails on: a selector without a `ret-` class or with any other class; an ID; an attribute other than `data-theme`, `data-position` or `data-phase`, or one outside a `ret-` compound; unprefixed keyframes or custom properties; `!important`; and any rule kind other than style, `@media`, `@supports` and keyframes.
+      - Later phases extend its attribute list as they document attributes such as `data-paused` (P-20).
+    - **Contract test:** `src/__tests__/styles.test.ts` runs the check on the stylesheet and on failing samples, and checks the exact token set and its scope, that every token default is a single zero-specificity `:where()` with no `!important` (so an ordinary consumer rule such as `.ret-toaster { --ret-surface: … }` overrides it), the theme blocks (dark and system-dark identical), that no JavaScript listens for colour-scheme changes, the motion boundary, and the marker.
+    - **Marker and renders:**
+      - `CSS_MARKER` is now `.ret-toaster`. The 0.x stylesheet had no `ret-` selector, so stale CSS cannot satisfy it.
+      - A render-count test shows that a theme change re-renders no toast.
   - **S2, position, stack and responsive structure:** the six positions, offsets, safe areas, gaps, the z-index token, the pointer-event architecture (empty space clicks through, while the lists keep the P-15 hover pause) and responsive width, with no visual reordering (§12, §18).
   - **S3, toast shell and custom styling:**
     - the card and its parts: icon, content, title, description, action and close, with a close target of at least 24×24 CSS px

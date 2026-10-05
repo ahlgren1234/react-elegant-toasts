@@ -1,225 +1,100 @@
-.toast {
-  position: relative;
-  min-width: 300px;
-  max-width: 500px;
-  padding: 16px;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  background: white;
-  color: #333;
-  transition: opacity 0.3s ease;
-  overflow: hidden;
+/*
+ * react-elegant-toasts 2.x stylesheet, shipped as `react-elegant-toasts/styles.css` (§21).
+ *
+ * Public contract (OQ-25): the documented `--ret-*` custom properties, the `ret-*` classes and the
+ * `data-theme`, `data-position` and `data-phase` attributes. Every selector carries a `ret-` class,
+ * which `npm run lint` checks (scripts/check-styles.js, AC-CSS-1). Defaults sit inside `:where()`,
+ * so any consumer selector overrides them without `!important`.
+ *
+ * Tokens are scoped to `.ret-toaster`, never `:root`. Override them for a Toaster with
+ * `.ret-toaster { --ret-surface: … }`, or for one theme with `.ret-toaster[data-theme="dark"]`
+ * (and the same rule inside `@media (prefers-color-scheme: dark)` for
+ * `.ret-toaster[data-theme="system"]`). Motion tokens belong to P-18 and progress tokens to P-20.
+ */
+
+/* Light theme: the default, so it also covers `system` in a light colour scheme. */
+:where(.ret-toaster) {
+  color-scheme: light;
+
+  --ret-surface: #ffffff;
+  --ret-text: #18181b;
+  --ret-text-muted: #52525b;
+  --ret-border: #e4e4e7;
+  --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 12px rgb(0 0 0 / 0.08);
+  --ret-focus: #2563eb;
+  --ret-action-surface: #18181b;
+  --ret-action-text: #ffffff;
+
+  --ret-success: #15803d;
+  --ret-success-subtle: #dcfce7;
+  --ret-error: #b91c1c;
+  --ret-error-subtle: #fee2e2;
+  --ret-warning: #b45309;
+  --ret-warning-subtle: #fef3c7;
+  --ret-info: #1d4ed8;
+  --ret-info-subtle: #dbeafe;
+  --ret-loading: #52525b;
+  --ret-loading-subtle: #f4f4f5;
+
+  /* The font family only: sizes, weights and line heights stay the library's. `inherit` makes the
+     token take the parent's value, normally none, so the toasts keep the application's font. */
+  --ret-font-family: inherit;
+  --ret-radius: 10px;
+  --ret-gap: 10px;
+  --ret-offset: 16px;
+  --ret-width: 360px;
+  --ret-z-index: 9999;
 }
 
-.toast.success {
-  background: #4caf50;
-  color: white;
+/* Dark theme. The `system` block below repeats these values; the style contract test keeps the
+   two identical. */
+:where(.ret-toaster[data-theme='dark']) {
+  color-scheme: dark;
+
+  --ret-surface: #27272a;
+  --ret-text: #fafafa;
+  --ret-text-muted: #a1a1aa;
+  --ret-border: #3f3f46;
+  --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.4);
+  --ret-focus: #93c5fd;
+  --ret-action-surface: #fafafa;
+  --ret-action-text: #18181b;
+
+  --ret-success: #4ade80;
+  --ret-success-subtle: #1c3a28;
+  --ret-error: #f87171;
+  --ret-error-subtle: #4a2326;
+  --ret-warning: #fbbf24;
+  --ret-warning-subtle: #45351a;
+  --ret-info: #60a5fa;
+  --ret-info-subtle: #1e3354;
+  --ret-loading: #a1a1aa;
+  --ret-loading-subtle: #3f3f46;
 }
 
-.toast.error {
-  background: #f44336;
-  color: white;
-}
-
-.toast.warning {
-  background: #ff9800;
-  color: white;
-}
-
-.toast.info {
-  background: #2196f3;
-  color: white;
-}
-
-.toast-content {
-  display: flex;
-  align-items: flex-start;
-}
-
-.toast-icon {
-  margin-right: 12px;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-}
-
-.toast-message {
-  flex: 1;
-}
-
-.toast-title {
-  font-weight: bold;
-  margin-bottom: 4px;
-}
-
-.toast-progress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.7);
-  transition: width 0.1s linear;
-}
-
-.toast.rtl {
-  direction: rtl;
-}
-
-.toast.rtl .toast-icon {
-  margin-right: 0;
-  margin-left: 12px;
-}
-
-/* Animations */
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-@keyframes slideOut {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes zoomIn {
-  from {
-    transform: scale(0.5);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes zoomOut {
-  from {
-    transform: scale(1);
-    opacity: 1;
-  }
-  to {
-    transform: scale(0.5);
-    opacity: 0;
-  }
-}
-
-@keyframes bounceIn {
-  0% {
-    transform: scale(0.3);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-  70% {
-    transform: scale(0.9);
-    opacity: 0.9;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes bounceOut {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  30% {
-    transform: scale(0.9);
-    opacity: 0.9;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(0.3);
-    opacity: 0;
-  }
-}
-
-.slideIn {
-  animation: slideIn 0.3s ease forwards;
-}
-
-.slideOut {
-  animation: slideOut 0.3s ease forwards;
-}
-
-.fadeIn {
-  animation: fadeIn 0.3s ease forwards;
-}
-
-.fadeOut {
-  animation: fadeOut 0.3s ease forwards;
-}
-
-.zoomIn {
-  animation: zoomIn 0.3s ease forwards;
-}
-
-.zoomOut {
-  animation: zoomOut 0.3s ease forwards;
-}
-
-.bounceIn {
-  animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
-}
-
-.bounceOut {
-  animation: bounceOut 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
-}
-
-/* Position-specific animations */
-.top-right .slideIn,
-.bottom-right .slideIn {
-  animation: slideIn 0.3s ease forwards;
-}
-
-.top-left .slideIn,
-.bottom-left .slideIn {
-  animation: slideIn 0.3s ease forwards reverse;
-}
-
-.top-center .slideIn,
-.bottom-center .slideIn {
-  animation: fadeIn 0.3s ease forwards;
-}
-
-/* Dark mode support */
+/* System theme: follows the colour scheme in CSS, with no JavaScript and no re-render (§21). */
 @media (prefers-color-scheme: dark) {
-  .toast {
-    background: #333;
-    color: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  :where(.ret-toaster[data-theme='system']) {
+    color-scheme: dark;
+
+    --ret-surface: #27272a;
+    --ret-text: #fafafa;
+    --ret-text-muted: #a1a1aa;
+    --ret-border: #3f3f46;
+    --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.4);
+    --ret-focus: #93c5fd;
+    --ret-action-surface: #fafafa;
+    --ret-action-text: #18181b;
+
+    --ret-success: #4ade80;
+    --ret-success-subtle: #1c3a28;
+    --ret-error: #f87171;
+    --ret-error-subtle: #4a2326;
+    --ret-warning: #fbbf24;
+    --ret-warning-subtle: #45351a;
+    --ret-info: #60a5fa;
+    --ret-info-subtle: #1e3354;
+    --ret-loading: #a1a1aa;
+    --ret-loading-subtle: #3f3f46;
   }
 }
