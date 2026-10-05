@@ -3,9 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { Toaster, toast, type ToastOptions, type ToastPosition, type ToastTheme } from '../src';
 import '../src/styles.css';
 import './styles.css';
+
 // P-17 D1: the interim visual prototype for the OQ-24 sign-off. Demo only, not the production
-// stylesheet, and not the P-25 demo rebuild.
-import './p17-prototype.css';
+// stylesheet, and not the P-25 demo rebuild. It loads after the production stylesheet and masks
+// it, so `?production-css` skips it and shows the production stylesheet alone (P-17 review).
+const PRODUCTION_CSS_ONLY = new URLSearchParams(window.location.search).has('production-css');
+if (PRODUCTION_CSS_ONLY) document.documentElement.classList.add('demo-production-css');
+else void import('./p17-prototype.css');
 
 const POSITIONS: readonly ToastPosition[] = [
   'top-left',
@@ -61,6 +65,18 @@ function Prototype() {
       <p className="demo-note">
         Interim harness for the OQ-24 review: a neutral elevated card with a semantic accent. Not
         final styling. Alt+T focuses the first toast, Escape returns focus.
+      </p>
+      <p className="demo-note">
+        {PRODUCTION_CSS_ONLY ? (
+          <>
+            Showing the production stylesheet only, with dashed review outlines.{' '}
+            <a href="?">Show the D1 prototype</a>
+          </>
+        ) : (
+          <>
+            Showing the D1 prototype. <a href="?production-css">Show production CSS only</a>
+          </>
+        )}
       </p>
 
       <div className="demo-controls">

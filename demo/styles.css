@@ -332,3 +332,15 @@ body {
     color: #aaa;
   }
 }
+
+/* P-17 review aid for `?production-css`: outlines show each list's hit area and each toast's box
+   while the production stylesheet is still incomplete. Demo only. */
+.demo-production-css .ret-toaster__list {
+  outline: 1px dotted #d946ef;
+}
+
+.demo-production-css .ret-toast {
+  outline: 1px dashed #64748b;
+  background: Canvas;
+  color: CanvasText;
+}

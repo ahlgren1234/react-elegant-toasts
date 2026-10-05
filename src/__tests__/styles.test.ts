@@ -293,6 +293,136 @@ describe('themes (§21, §23, AC-CSS-2)', () => {
   });
 });
 
+/**
+ * The declarations that the stylesheet's top-level rules give `element`, by selector matching,
+ * later rules winning. Every default has the same zero specificity, so source order decides. This
+ * is the cascade of the stylesheet's own rules, not computed layout.
+ */
+function declared(element: Element): Record<string, string> {
+  return Object.assign(
+    {},
+    ...rules
+      .filter(r => r.media === null && element.matches(r.selector))
+      .map(r => declarations(r.style))
+  ) as Record<string, string>;
+}
+
+function listAt(position: string): HTMLOListElement {
+  const list = document.createElement('ol');
+  list.className = 'ret-toaster__list';
+  list.setAttribute('data-position', position);
+  return list;
+}
+
+const POSITIONS = [
+  'top-left',
+  'top-center',
+  'top-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
+] as const;
+// Placement and box properties that would let the region cover the viewport.
+const OVERLAY =
+  /^(position|inset|top|right|bottom|left|width|height|min-|max-|z-index|pointer-events)/;
+
+describe('positions and stacks (§12, P-17 S2)', () => {
+  it.each(POSITIONS)('places %s in the viewport from its physical edges', position => {
+    const [vertical, horizontal] = position.split('-') as [string, string];
+    const css = declared(listAt(position));
+    expect(css.position).toBe('fixed');
+    const other = vertical === 'top' ? 'bottom' : 'top';
+    expect(css[vertical]).toBe(`calc(var(--ret-offset) + env(safe-area-inset-${vertical}, 0px))`);
+    expect(css[other]).toBeUndefined();
+    if (horizontal === 'center') {
+      expect([css.left, css.right, css['margin-left'], css['margin-right']]).toEqual([
+        '0px',
+        '0px',
+        'auto',
+        'auto',
+      ]);
+    } else {
+      const opposite = horizontal === 'left' ? 'right' : 'left';
+      expect(css[horizontal]).toBe(
+        `calc(var(--ret-offset) + env(safe-area-inset-${horizontal}, 0px))`
+      );
+      expect(css[opposite]).toBeUndefined();
+    }
+  });
+
+  it('stacks each list as a plain column in DOM order, with no reordering anywhere', () => {
+    const css = declared(listAt('top-right'));
+    expect([css.display, css['flex-direction']]).toEqual(['flex', 'column']);
+    for (const rule of rules) {
+      for (const [property, value] of Object.entries(declarations(rule.style))) {
+        expect(property).not.toMatch(/^(order|direction|grid-auto-flow|writing-mode)$/);
+        expect(value).not.toMatch(/reverse|dense/);
+      }
+    }
+  });
+
+  it('resets the list and spaces toasts with the gap token, above the page by the z-index token', () => {
+    const css = declared(listAt('bottom-left'));
+    expect(css).toMatchObject({
+      margin: '0px',
+      padding: '0px',
+      'list-style': 'none',
+      'box-sizing': 'border-box',
+      gap: 'var(--ret-gap)',
+      'z-index': 'var(--ret-z-index)',
+    });
+  });
+
+  it('bounds the stack to --ret-width and to the viewport minus both gutters, so it shrinks', () => {
+    expect(declared(listAt('top-center')).width?.replace(/\s+/g, ' ')).toBe(
+      'min( var(--ret-width), 100% - 2 * var(--ret-offset) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) )'
+    );
+    // Viewport units would include the scrollbar; the fixed list's 100% is the viewport without it.
+    expect(css).not.toMatch(/\d(vw|vh|dvw|svw|lvw)\b/);
+  });
+
+  it('keeps every position physical: no logical inset, margin or size and no direction selector', () => {
+    for (const rule of rules.filter(r => r.selector.includes('ret-toaster__list'))) {
+      expect(rule.selector).not.toMatch(/dir/);
+      expect([...rule.style].filter(p => /inline|block|inset/.test(p))).toEqual([]);
+    }
+  });
+
+  it('gives the region no box or pointer rule, so it never covers the page', () => {
+    const region = document.createElement('section');
+    region.className = 'ret-toaster';
+    for (const theme of ['light', 'dark', 'system']) {
+      region.setAttribute('data-theme', theme);
+      expect(Object.keys(declared(region)).filter(p => OVERLAY.test(p))).toEqual([]);
+    }
+  });
+
+  it('leaves pointer input on for the lists and the toasts', () => {
+    const toast = document.createElement('li');
+    toast.className = 'ret-toast ret-toast--success';
+    for (const element of [listAt('top-right'), toast]) {
+      expect(declared(element)['pointer-events']).not.toBe('none');
+    }
+  });
+
+  it('lets a toast fill its stack with its padding and border inside it', () => {
+    const toast = document.createElement('li');
+    toast.className = 'ret-toast ret-toast--default';
+    expect(declared(toast)['box-sizing']).toBe('border-box');
+  });
+
+  it('matches no live region, which keeps its own inline hiding (§17.1)', () => {
+    for (const attributes of [
+      { role: 'status', 'aria-live': 'polite' },
+      { 'aria-live': 'assertive' },
+    ]) {
+      const region = document.createElement('div');
+      for (const [name, value] of Object.entries(attributes)) region.setAttribute(name, value);
+      expect(rules.filter(r => region.matches(r.selector))).toEqual([]);
+    }
+  });
+});
+
 describe('motion boundary (P-17; P-18 owns motion)', () => {
   it('has no keyframes, animations, transitions, transforms or reduced-motion rules', () => {
     expect(css).not.toMatch(/@keyframes|prefers-reduced-motion/);
@@ -303,6 +433,27 @@ describe('motion boundary (P-17; P-18 owns motion)', () => {
         )
       ).toEqual([]);
     }
+  });
+});
+
+describe('the D1 prototype stays demo-only (P-17)', () => {
+  it('is never referenced by library source, the stylesheet or what builds the package', () => {
+    const library = ['react', 'store']
+      .flatMap(dir =>
+        fs.readdirSync(path.join(root, 'src', dir)).map(f => path.join('src', dir, f))
+      )
+      .concat('src/index.ts', 'src/toast.ts', 'src/types.ts', 'tsup.config.ts');
+    for (const file of library) {
+      expect(fs.readFileSync(path.join(root, file), 'utf8')).not.toMatch(/p17-prototype|demo\//);
+    }
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+      files: string[];
+      exports: unknown;
+    };
+    const shipped = [pkg.scripts.build, pkg.scripts['build:js'], pkg.scripts['build:css']];
+    expect(JSON.stringify([shipped, pkg.files, pkg.exports])).not.toMatch(/prototype|demo/);
+    expect(css).not.toMatch(/PROTOTYPE/);
   });
 });
 

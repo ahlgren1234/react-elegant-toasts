@@ -1622,6 +1622,24 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - `CSS_MARKER` is now `.ret-toaster`. The 0.x stylesheet had no `ret-` selector, so stale CSS cannot satisfy it.
       - A render-count test shows that a theme change re-renders no toast.
   - **S2, position, stack and responsive structure:** the six positions, offsets, safe areas, gaps, the z-index token, the pointer-event architecture (empty space clicks through, while the lists keep the P-15 hover pause) and responsive width, with no visual reordering (§12, §18).
+    - **Lists:**
+      - Each rendered `.ret-toaster__list` is `position: fixed`, with `--ret-z-index`, a reset and a plain flex column spaced by `--ret-gap`.
+      - Placement uses the physical sides: `top`, `bottom`, `left` and `right`, matched on `data-position` prefixes and suffixes, so RTL never moves a position (§20).
+      - Each gutter is `--ret-offset` plus that edge's `env(safe-area-inset-*)`, so the offset stays the minimum distance from the usable viewport.
+      - Centre positions use `left: 0; right: 0` with auto side margins, with no transform.
+    - **Width:** `--ret-width` is a stack's preferred width. The list is `min(--ret-width, 100% − 2 × --ret-offset − left and right safe-area insets)`: never wider than the viewport between its gutters, so narrow screens shrink it. There are no viewport units, which would include the scrollbar.
+    - **Order:** the DOM order is unchanged and shown as it is. Top lists start with the newest toast and bottom lists end with it, so the newest is always at the anchored edge, which is the order the hotkey and focus restoration walk. No `order`, reverse direction or other reordering is used.
+    - **Pointer input:**
+      - The region has no box or pointer rule, so it never covers the page.
+      - Only the lists take pointer input, so the page stays clickable around them.
+      - The gaps between toasts are inside their list, which keeps the P-15 hover pause steady.
+      - Toasts only get `box-sizing: border-box`. Their appearance is S3's.
+    - **Tests:** `styles.test.ts` matches the stylesheet's own rules against each position, the region, the toasts and the live regions (which nothing matches). It checks the placement and gutters of all six positions, the column without reordering, the tokens used, the bounded width, the absence of logical placement properties, the region's lack of a box, pointer input, and that the D1 prototype never reaches library source, the stylesheet or the package build.
+    - **Demo review switch:** `?production-css` skips the D1 prototype and adds outlines that show the lists' hit areas and the toasts' boxes. Without it the demo is unchanged. The prototype now loads as its own demo chunk. The switch stays until the prototype is removed.
+    - **Manual checkpoint (done):**
+      - The maintainer reviewed S2 in Chromium with `?production-css`.
+      - Observed: top stacks put the newest toast at the top edge, and bottom stacks at the bottom edge, with no CSS reordering. On narrow and mobile widths the stacks shrink between sensible gutters, with no horizontal overflow, and centre and edge positions stay stable.
+      - This is visual review evidence, not P-22 browser verification.
   - **S3, toast shell and custom styling:**
     - the card and its parts: icon, content, title, description, action and close, with a close target of at least 24×24 CSS px
     - long-text wrapping and logical properties

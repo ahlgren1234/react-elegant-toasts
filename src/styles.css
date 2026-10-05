@@ -98,3 +98,62 @@
     --ret-loading-subtle: #3f3f46;
   }
 }
+
+/*
+ * Position lists (§12). Each rendered `<ol>` places itself in the viewport; the region itself has
+ * no box, so it never covers the page. Positions are physical, so placement uses `top`, `bottom`,
+ * `left` and `right`, also in RTL (§20). Each list is a plain column: the DOM already puts the
+ * newest toast nearest the anchored edge (first at top positions, last at bottom positions), and
+ * the hotkey and focus restoration walk that same order (§18), so nothing reorders it.
+ *
+ * Gutters are `--ret-offset` plus the safe-area inset of that edge, so the offset stays the
+ * minimum distance from the usable viewport. `--ret-width` is a stack's preferred width; it never
+ * exceeds the viewport minus the gutters on both sides, so narrow screens shrink it instead of
+ * overflowing. Only the lists take pointer input: the page stays clickable around them, and a
+ * pointer moving across the gap between toasts stays inside its list, which keeps the P-15 hover
+ * pause steady.
+ */
+:where(.ret-toaster__list) {
+  position: fixed;
+  z-index: var(--ret-z-index);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ret-gap);
+  box-sizing: border-box;
+  width: min(
+    var(--ret-width),
+    100% - 2 * var(--ret-offset) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)
+  );
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where(.ret-toaster__list[data-position^='top-']) {
+  top: calc(var(--ret-offset) + env(safe-area-inset-top, 0px));
+}
+
+:where(.ret-toaster__list[data-position^='bottom-']) {
+  bottom: calc(var(--ret-offset) + env(safe-area-inset-bottom, 0px));
+}
+
+:where(.ret-toaster__list[data-position$='-left']) {
+  left: calc(var(--ret-offset) + env(safe-area-inset-left, 0px));
+}
+
+:where(.ret-toaster__list[data-position$='-right']) {
+  right: calc(var(--ret-offset) + env(safe-area-inset-right, 0px));
+}
+
+/* Centred by its auto margins between both edges, with no transform (§12). */
+:where(.ret-toaster__list[data-position$='-center']) {
+  right: 0;
+  left: 0;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+/* A toast fills its stack's width, with any padding and border inside it. */
+:where(.ret-toast) {
+  box-sizing: border-box;
+}
