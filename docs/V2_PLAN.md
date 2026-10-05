@@ -1738,6 +1738,50 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: `ret-enter` and `ret-exit`, `animationend` plus the fallbacks, reduced motion, the spinner.
 - Defects: D-13, D-14, D-21.
+- Acceptance: AC-LC-1, AC-LC-2 and AC-MO-3 are automated here. AC-MO-1 is checked structurally here (keyframes, settled end state, left positions without offset) and in real browsers by P-22.
+- Decisions locked before implementation (D0). They are not yet implemented.
+  1. **Lifecycle completion:**
+     - A native `animationend` listener on the toast root (`<li>`), not React's `onAnimationEnd`. jsdom has no `AnimationEvent`, so React's choice of native event name is unreliable there, and a native listener follows the DOM tree like the P-15 listeners.
+     - A completion is accepted only when `event.target` is the toast root itself, the toast is in the matching phase (`entering` for `entered`, `exiting` for `exited`), and the animation name is the library animation for that phase and the toast's edge (decision 7). Events bubbling from custom content, the spinner or, later, progress are ignored.
+     - The store's phase-checked `entered()` and `exited()` stay the final idempotency guard, so the event and the fallback may both arrive and only the first counts.
+     - P-18 changes no lifecycle semantics: the phases, slots, timers, callbacks, revival, relocation and detach of §9 to §16 are unchanged. Only the length of the entering and exiting windows changes.
+  2. **Fallback source:**
+     - The fallback delay is derived from the toast root's resolved computed animation styles, read in the effect that schedules it, never during render. JavaScript holds no copy of the motion durations, so consumer token overrides and the CSS reduced-motion rules always agree with the lifecycle timing (§21, §22).
+     - The calculation reads `animation-name`, `animation-duration` and `animation-delay`, and pairs them by the CSS rule for comma-separated lists: a shorter duration or delay list repeats to the length of the name list. A matching entry's end time is its delay plus its duration.
+     - Only the library animation for the current phase and edge contributes. Other animations on the toast root, including a consumer's, neither extend nor complete the lifecycle (decision 9).
+     - When no matching library animation has a positive end time (none applies, `animation-name: none`, a `0s` duration, reduced motion, or jsdom, whose computed style reports no animation), completion keeps the existing 0 ms `setTimeout`. `requestAnimationFrame` is not used: Vitest fakes it by default, §26 forbids mocking it just to make timers work, and it stops in hidden documents. §9 rule 3's "completes on the next frame" is read as this immediate path, which P-14 already implements as the next task.
+  3. **Fallback margin:** a fixed internal 100 ms, a named implementation constant and not a CSS token. It is added only when a matching library animation has a positive end time, so the 0 ms path stays 0 ms.
+  4. **Reduced motion:** under `prefers-reduced-motion: reduce`, enter and exit motion is off entirely: no translation, no scale and no fade. This is within §22's "only a short fade at most", and it makes the computed fallback 0, so the lifecycle completes through the 0 ms path (§9 rule 3, AC-MO-3). The built-in spinner stops and stays a static indicator (§22). It is CSS only: no `matchMedia` or other JavaScript detection, so there is nothing to hydrate (§23).
+  5. **Public motion tokens:**
+     - Exactly four, added in S2: `--ret-enter-duration`, `--ret-exit-duration`, `--ret-enter-easing` and `--ret-exit-easing`. The names follow the existing subject-then-modifier pattern (`--ret-text-muted`).
+     - They follow the P-17 token model (OQ-25): declared on `:where(.ret-toaster)` with zero specificity and no `!important`, never on `:root`, overridable by any consumer selector, and not theme-specific, so the dark and system blocks keep only the colour tokens.
+     - The public token count becomes 28 after P-18 (P-20's progress tokens come later).
+     - The default values are not locked here. S2 proposes them and they are tuned at its manual checkpoint.
+  6. **Motion property:**
+     - Motion animates `opacity` and the individual `translate` and `scale` properties, never `transform`. The `transform` property stays free for P-19 repositioning and P-21 swipe to compose with later.
+     - **Browser support evidence.** The plan sets no numeric browser floor; P-26 writes the README's browser-support statement (§31), and the browsers verified are current Chromium, WebKit and Firefox (§26, §28, P-22). Normative requirements already imply a floor: `:dir()` (§20) needs Chrome and Edge 120, Safari 16.4 and Firefox 49, and `inert` (§9 rule 4) needs Chrome 102, Safari 15.5 and Firefox 112. Individual `translate` and `scale` need Chrome and Edge 104, Safari and iOS Safari 14.1 and Firefox 72 (MDN browser-compat-data), all below that floor, so they add no new requirement. P-26's browser-support statement must not claim a lower floor.
+  7. **Direction and keyframes:**
+     - Four internal keyframes, by the anchored vertical edge: `ret-enter-top`, `ret-enter-bottom`, `ret-exit-top` and `ret-exit-bottom`. Toasts at top positions enter from above and those at bottom positions from below; each exit reverses its enter. The horizontal placement (left, centre or right) never changes the direction (§20). Each toast root already carries `data-position` and `data-phase`, so no new attribute or custom property is needed.
+     - The settled state has opacity 1, no translate offset and scale 1. The enter keyframes end there, and a `visible` toast has no animation, so nothing is left offset at any position (D-14).
+     - The exit keeps its final state until removal (`animation-fill-mode: forwards`), so the toast never flashes back between `animationend` and its removal.
+     - Enter and exit have different names, so revival (`exiting` → `entering` on the same node, §14) restarts the animation; a change of `animation-direction` alone would not.
+     - Keyframe names are implementation details, not public API: OQ-25's contract covers tokens, classes and the `data-*` attributes only, and §21 lists `ret-enter` and `ret-exit` among its "indicative names". Every keyframe stays `ret-` prefixed (AC-CSS-1).
+  8. **Spinner ownership:** only the library's built-in loading SVG spins (`ret-spin`), marked in S3 with an internal implementation class that is not public CSS API. A consumer icon on a loading toast does not spin because of the type; the DOM cannot otherwise tell library icons from consumer icons (P-17 S4).
+  9. **Animation ownership:** only the library's enter and exit animations take part in lifecycle completion. A consumer animation on the toast root, for example through `className`, never triggers `entered()` or `exited()` and never extends the fallback. What that animation looks like stays the consumer's. Replacing the library keyframes is not a supported customisation in 2.0; the motion tokens are.
+- **Invariants P-18 keeps:**
+  - Timers run only while a toast is `visible`, so enter and exit time never uses up its duration (§9 rule 5, §10).
+  - An exiting toast keeps its slot until `exited()` (§9 rule 6, §11), stays inert (§9 rule 4), and focus restoration runs before `inert` (§18, P-16).
+  - `onDismiss` fires only at removal (§16). Revival re-enters on the same node (§14). Detach finishes exits at once (§8.4).
+  - DOM order stays visual order (§12). No per-frame React state and no animation library (§5, §22, §32). No JavaScript reduced-motion detection.
+  - Custom toasts get the library's enter and exit motion (§6.4, §17.3) but still no card chrome (P-17 S3).
+- **Boundaries:** P-19 owns stack repositioning, including the layout shift when an exiting toast is removed; P-20 progress and its tokens; P-21 swipe, including an exit that continues from the swipe offset; P-22 real-browser verification of motion, `animationend`, reduced motion and D-14; P-26 the public documentation of the motion tokens and reduced-motion behaviour; P-29 the reduced-motion part of the manual accessibility audit.
+- **Sequence:**
+  - **D0, decision record:** this entry. Documentation only.
+  - **S1, completion plumbing:** the native `animationend` listener, the computed-style fallback with the 100 ms margin, and the 0 ms path kept. No CSS, so nothing changes visibly, and jsdom still completes through the 0 ms path.
+  - **S2, enter and exit motion:** the four keyframes, the `data-phase` and `data-position` selectors for normal and custom toasts, and the four public tokens. The P-17 motion-boundary and token-set tests are replaced by the P-18 contract. Manual checkpoint in Chromium.
+  - **S3, built-in spinner:** the internal class on the built-in loading SVG and `ret-spin`.
+  - **S4, reduced motion:** the `prefers-reduced-motion: reduce` block for enter, exit and the spinner. Manual checkpoint with emulated reduced motion in Chromium.
+  - **S5, reconciliation:** the plan and defect status, the carry-forwards above, full validation and the final manual checkpoint.
 
 **P-19 Stack repositioning**
 
