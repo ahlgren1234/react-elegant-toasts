@@ -1206,8 +1206,8 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       for (const element of animated) expect(animationOf(element)).toEqual({});
     });
 
-    it('adds no transition or reduced-motion rule yet (S4)', () => {
-      expect(css).not.toMatch(/transition|prefers-reduced-motion/);
+    it('adds no transition', () => {
+      expect(css).not.toMatch(/transition/);
     });
 
     it('leaves motion to CSS: no JavaScript reads the reduced-motion preference', () => {
@@ -1298,6 +1298,110 @@ describe('the loading spinner (§22, P-18 S3)', () => {
       expect(rule.selector).not.toContain('spinner');
       expect(Object.keys(declarations(rule.style)).filter(p => ANIMATION.test(p))).toEqual([]);
     }
+  });
+});
+
+const REDUCED = '(prefers-reduced-motion: reduce)';
+const reducedRules = rules.filter(r => r.media === REDUCED);
+
+/**
+ * The declarations `element` gets under reduced motion: the top-level rules, then the
+ * reduced-motion block, which the stylesheet places after every motion rule, so it wins at the
+ * same zero specificity (checked below).
+ */
+function declaredReduced(element: Element): Record<string, string> {
+  return Object.assign(
+    declared(element),
+    ...reducedRules.filter(r => element.matches(r.selector)).map(r => declarations(r.style))
+  ) as Record<string, string>;
+}
+
+function spinnerIn(phase: (typeof PHASES)[number], position = 'top-right'): Element {
+  const item = toastIn(phase, position, 'loading');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'ret-toast__spinner');
+  partOf(item, 'icon').append(svg);
+  return svg;
+}
+
+describe('reduced motion (§17.5, §22, P-18 S4)', () => {
+  it('is one media block, after every motion rule, that only removes animation names', () => {
+    expect((css.match(/@media \(prefers-reduced-motion/g) ?? []).length).toBe(1);
+    expect(reducedRules.map(r => r.selector)).toEqual([
+      ":where(.ret-toast[data-phase='entering'], .ret-toast[data-phase='exiting'])",
+      ':where(.ret-toast__spinner)',
+    ]);
+    for (const rule of reducedRules) {
+      expect(declarations(rule.style)).toEqual({ 'animation-name': 'none' });
+    }
+    const animated = rules
+      .map((rule, index) => ({ rule, index }))
+      .filter(
+        ({ rule }) =>
+          rule.media === null && Object.keys(declarations(rule.style)).some(p => ANIMATION.test(p))
+      );
+    const firstReduced = rules.indexOf(reducedRules[0] as (typeof rules)[number]);
+    expect(Math.max(...animated.map(({ index }) => index))).toBeLessThan(firstReduced);
+  });
+
+  it.each(POSITIONS.flatMap(position => PHASES.map(phase => [position, phase] as const)))(
+    'leaves a toast at %s while %s with no library animation',
+    (position, phase) => {
+      for (const type of ['success', 'custom']) {
+        const name = declaredReduced(toastIn(phase, position, type))['animation-name'];
+        expect(name === undefined || name === 'none').toBe(true);
+      }
+    }
+  );
+
+  it('names nothing an entering or exiting toast could run, so the lifecycle completes at once', () => {
+    for (const phase of ['entering', 'exiting'] as const) {
+      for (const position of POSITIONS) {
+        expect(declaredReduced(toastIn(phase, position))['animation-name']).toBe('none');
+      }
+    }
+  });
+
+  it('keeps the spinner still, and changes nothing else about it', () => {
+    for (const phase of PHASES) {
+      const svg = spinnerIn(phase);
+      expect(declared(svg)['animation-name']).toBe('ret-spin');
+      const reduced = declaredReduced(svg);
+      expect(reduced['animation-name']).toBe('none');
+      const withoutName = (values: Record<string, string>) =>
+        Object.entries(values).filter(([property]) => property !== 'animation-name');
+      expect(withoutName(reduced)).toEqual(withoutName(declared(svg)));
+    }
+  });
+
+  it('adds no keyframes, fade, token or settled style of its own', () => {
+    expect([...keyframes().keys()]).toHaveLength(5);
+    for (const rule of reducedRules) {
+      expect(tokensOf(rule.style)).toEqual([]);
+      expect(
+        Object.keys(declarations(rule.style)).filter(p =>
+          /^(opacity|translate|scale|rotate|transform|transition|animation-(duration|delay|fill))/.test(
+            p
+          )
+        )
+      ).toEqual([]);
+    }
+  });
+
+  it('leaves the normal motion as it was outside the media block', () => {
+    expect(animationOf(toastIn('entering', 'top-left'))['animation-name']).toBe('ret-enter-top');
+    expect(animationOf(toastIn('exiting', 'bottom-right'))).toMatchObject({
+      'animation-name': 'ret-exit-bottom',
+      'animation-fill-mode': 'forwards',
+    });
+    expect(declared(spinnerIn('visible'))['animation-name']).toBe('ret-spin');
+  });
+
+  it('is independent of forced colours: neither block touches the other', () => {
+    for (const rule of rules.filter(r => r.media === '(forced-colors: active)')) {
+      expect(Object.keys(declarations(rule.style)).filter(p => ANIMATION.test(p))).toEqual([]);
+    }
+    expect(css).not.toMatch(/forced-color-adjust/);
   });
 });
 

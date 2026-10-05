@@ -539,3 +539,121 @@ describe('focus during a positive exit (§18, P-16, P-18 S2)', () => {
     expect(document.activeElement).not.toBe(document.body);
   });
 });
+
+/**
+ * The computed style a browser resolves under `prefers-reduced-motion: reduce` (P-18 S4): the
+ * stylesheet removes the animation name, while the duration tokens still resolve as usual.
+ */
+function reducedMotion() {
+  return stubAnimation(phase => {
+    if (phase !== 'entering' && phase !== 'exiting') return undefined;
+    return {
+      'animation-name': 'none',
+      'animation-duration': `${(phase === 'entering' ? ENTER_MS : EXIT_MS) / 1000}s`,
+      'animation-delay': '0s',
+    };
+  });
+}
+
+describe('reduced motion (§22, AC-MO-3, AC-LC-2, P-18 S4)', () => {
+  beforeEach(() => {
+    computedStyle = reducedMotion();
+  });
+
+  it('enters on the 0 ms path, with no animationend', () => {
+    render(<Toaster />);
+    show('t', { id: 't', duration: Infinity });
+    expect(phaseOf('t')).toBe('entering');
+    flush();
+    expect(phaseOf('t')).toBe('visible');
+    expect(itemOf('t')).toHaveAttribute('data-phase', 'visible');
+  });
+
+  it('exits on the 0 ms path, with no animationend: removed, onDismiss once', () => {
+    const onDismiss = vi.fn();
+    render(<Toaster />);
+    show('t', { id: 't', onDismiss, duration: Infinity });
+    flush();
+    const item = itemOf('t');
+    act(() => dismiss('t'));
+    expect(item).toHaveAttribute('data-phase', 'exiting');
+    expect(item).toHaveAttribute('inert');
+    flush();
+    expect(recordOf('t')).toBeUndefined();
+    expect(item.isConnected).toBe(false);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledWith(expect.objectContaining({ id: 't' }), 'programmatic');
+  });
+
+  it('keeps the default 5000 ms of visible time, then times out and leaves at once', () => {
+    const onAutoClose = vi.fn();
+    const onDismiss = vi.fn();
+    render(<Toaster />);
+    show('t', { id: 't', onAutoClose, onDismiss });
+    expect(recordOf('t')?.timer.runningSince).toBeNull();
+    flush();
+    expect(recordOf('t')).toMatchObject({ phase: 'visible', timer: { duration: 5000 } });
+    expect(recordOf('t')?.timer.runningSince).not.toBeNull();
+
+    advance(4999);
+    expect(phaseOf('t')).toBe('visible');
+    expect(onAutoClose).not.toHaveBeenCalled();
+    advance(1);
+    expect(recordOf('t')).toMatchObject({ phase: 'exiting', exit: { reason: 'timeout' } });
+    expect(onAutoClose).toHaveBeenCalledTimes(1);
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    flush();
+    expect(recordOf('t')).toBeUndefined();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledWith(expect.objectContaining({ id: 't' }), 'timeout');
+    expect(onAutoClose.mock.invocationCallOrder[0]).toBeLessThan(
+      onDismiss.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  it('restores focus and sets inert as the exit starts, then removes on the 0 ms path', () => {
+    render(<Toaster />);
+    show('older', { id: 'older', duration: Infinity });
+    show('newer', { id: 'newer', duration: Infinity });
+    flush();
+    const older = itemOf('older');
+    const newer = itemOf('newer');
+    const close = older.querySelector('.ret-toast__close') as HTMLButtonElement;
+    act(() => close.focus());
+
+    act(() => dismiss('older'));
+    expect(phaseOf('older')).toBe('exiting');
+    expect(older).toHaveAttribute('inert');
+    expect(document.activeElement).toBe(newer);
+
+    flush();
+    expect(older.isConnected).toBe(false);
+    expect(document.activeElement).toBe(newer);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('is not held up or completed by the spinner', () => {
+    render(<Toaster />);
+    act(() => {
+      toast.loading('loading', { id: 'l' });
+    });
+    const spinner = itemOf('loading').querySelector('.ret-toast__spinner') as Element;
+    animationEnd(spinner, 'ret-spin');
+    expect(phaseOf('l')).toBe('entering');
+    flush();
+    expect(phaseOf('l')).toBe('visible');
+    act(() => dismiss('l'));
+    flush();
+    expect(recordOf('l')).toBeUndefined();
+  });
+
+  it('keeps one fallback timer per transition, at 0 ms', () => {
+    render(<Toaster />);
+    show('t', { id: 't', duration: Infinity });
+    // The enter fallback plus the announcement's retention timer (§17.1).
+    expect(vi.getTimerCount()).toBe(1 + 1);
+    flush();
+    expect(vi.getTimerCount()).toBe(0 + 1);
+  });
+});

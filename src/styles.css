@@ -442,6 +442,24 @@
 }
 
 /*
+ * Reduced motion (§17.5, §22, P-18 D0 decision 4): no enter or exit motion at all, not even a
+ * fade, and a static spinner. Removing the animation name is the whole rule: with no animation
+ * there is nothing to fill, so an exiting toast keeps its ordinary look until it is removed, and
+ * the lifecycle finds no library animation and completes at once (§9 rule 3). The tokens stay as
+ * they are. It comes after every motion rule, so it wins at the same zero specificity. CSS only:
+ * nothing in JavaScript reads the preference.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :where(.ret-toast[data-phase='entering'], .ret-toast[data-phase='exiting']) {
+    animation-name: none;
+  }
+
+  :where(.ret-toast__spinner) {
+    animation-name: none;
+  }
+}
+
+/*
  * Focus (§17.4, §18). The region, each toast root and the library's own action and close buttons
  * show a ring in `--ret-focus` whenever the browser shows focus (`:focus-visible`). Rings are
  * outlines, so they never change layout, and nothing animates them; a moving toast carries its
