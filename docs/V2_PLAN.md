@@ -1845,6 +1845,155 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - **Prototype gate:** build both the measured-offset approach and the FLIP/WAAPI approach, choose one within the §22 constraints, and record the decision in the PR.
 - Scope: the chosen technique, including its reduced-motion behaviour.
 - Carried over from P-18. Enter and exit animate `opacity` and the individual `translate` and `scale` on the toast root, and the spinner the individual `rotate` on its icon, so `transform` is free for repositioning. Neighbouring toasts still jump when a toast enters, and when an exiting toast is removed at the end of its exit; smoothing that is P-19's.
+- **Status: D0 locked.** D1 (both prototypes) is next. The production technique is not chosen yet.
+- Defects: none. Appendix A assigns no defect to P-19.
+- Acceptance: AC-MO-2 is P-19's. P-19 extends AC-MO-3 to reflow. AC-LC-1 to AC-LC-3, AC-POS-1, AC-KB-1, AC-KB-2, AC-Q-2, AC-CSS-1 and AC-CSS-3 must not regress. As with AC-MO-1 in P-18, AC-MO-2's real-browser proof ("reflow", §26) is P-22's.
+- Decisions locked before implementation (D0). They do **not** choose between the two techniques. That is D2's decision.
+  1. **Prototype gate:**
+     - Both techniques the gate names are built and compared before any production implementation: A, measured offsets with CSS transitions, and B, FLIP with the Web Animations API.
+     - Both are demo-only. They use the same harness and the same comparison scenarios, and they may drive the real rendered toast DOM. No prototype code reaches `src/`, the package output or the public contract.
+     - D2 is the maintainer's review and sign-off, and it chooses the production technique. D2 records the winner and its reasons in this entry, and the phase PR records them too (§22).
+  2. **Candidate boundaries:**
+     - **A** measures the layout displacement. The existing P-17 flex column stays authoritative, with toasts in normal flow. The inverse vertical displacement is applied through `transform`, and a CSS transition carries it back to the real layout position. Internal custom properties may be used, and ResizeObserver may keep the geometry fresh. A starts from this flow-delta architecture. It does not move the stack to absolute or manual positioning unless the flow-delta prototype fails a hard criterion (decision 13), and that failure is reported before A is broadened.
+     - **B** measures the displacement FLIP-style and animates it with `Element.animate()`, using explicit keyframes. The library owns its `Animation` references, and `Animation.cancel()` is allowed. It uses no `commitStyles()`, does not depend on `getAnimations()`, and does not need additive or `composite` animation.
+     - **Both** may use layout-space `offset*` measurement, `getComputedStyle` and ResizeObserver. Each falls back to no reposition animation when an API it needs is missing. Neither may affect lifecycle correctness.
+  3. **Trigger scope:**
+     - **Mandatory triggers.** P-19 smooths the repositioning of surviving neighbours whenever a stack's membership changes:
+       - an insertion;
+       - a removal once its exit has completed;
+       - an insertion and a removal in the same committed snapshot, including a promotion (§11);
+       - the same membership changes caused by a relocation, which leaves one list and joins another (§14).
+     - **Not a trigger:** a phase change on its own, including revival on the same node (§14).
+     - Toasts may have any height. No fixed height is assumed.
+     - **Size changes.** A mounted toast changing size, and a responsive or viewport reflow, must never leave stale cached geometry or a stale transform. They must never make the next membership move start from the wrong origin. D0 does not require them to animate. Whether they animate stays open until D2.
+  4. **Geometry:**
+     - Displacement comes from measured layout geometry. It is measured outside render (§23, §32), on the toast's `<li>` root whatever its content, built-in or custom, at any height.
+     - It is measured in layout space, so neither the P-18 individual `translate` and `scale` nor P-19's own transform affects it.
+     - It is correct for stacks anchored at the top and at the bottom.
+     - Reads and writes are batched where practical.
+     - The production metric stays open until D2. The lead candidate is `offsetTop` and `offsetHeight`, taken as the distance from the anchored edge.
+  5. **Interruption:**
+     - During rapid stack changes, a surviving toast never visibly snaps back to a stale animation origin or to its previous layout position, and never passes through a wrong intermediate position.
+     - A new move continues from the toast's current position on screen and ends exactly at its true layout position.
+     - D0 locks only this observable behaviour. The mechanism is specific to each candidate and stays open until D2.
+  6. **Motion property:**
+     - Repositioning displaces toasts visually through the `transform` property only, and only vertically.
+     - P-19 never writes or animates the individual `translate`, `scale` or `rotate`. They stay P-18's, so the two compose (P-18 decision 6).
+     - The toast `<li>` is the reposition root. The transform is never applied to the `.ret-toaster` section or to a `.ret-toaster__list` `<ol>` (§12).
+     - No wrapper element is added (P-17 decision 3). DOM order stays visual order (§12).
+     - P-18's enter and exit keyframes, its tokens and its completion semantics are unchanged.
+     - Whether a production toast must compute to `transform: none` at rest is a strong preference that D1 and D2 evaluate. It is not a hard requirement.
+  7. **Lifecycle, focus and state:**
+     - P-19 changes visual repositioning only. Lifecycle phases, enter and exit completion, queue slots, promotion, timers, pause reasons, callbacks, focus-restoration semantics and the `inert` ordering are all unchanged (§9 to §18).
+     - Reposition motion never gates or delays `entered()`, `exited()`, a removal or a promotion.
+     - It adds no per-frame React state, no React render made only to animate, and no global event listener (§5, §32).
+     - P-19 never moves focus.
+  8. **Reduced motion:**
+     - Under `prefers-reduced-motion: reduce`, repositioning is instant: no translation, no scale and no fade. §22 allows at most a short fade, and this matches P-18 decision 4.
+     - The policy stays in CSS. JavaScript never calls `matchMedia`, contains no reduced-motion media query and never branches on `prefers-reduced-motion`.
+     - JavaScript may read a resolved computed CSS value, as the P-18 fallback already does (P-18 decision 2).
+     - For A, CSS turns the reposition transition off or sets its duration to zero.
+     - For B, an internal duration owned by CSS may resolve to 0, and JavaScript then skips the WAAPI motion. Whether that coupling between CSS and JavaScript is desirable is D2 evidence.
+  9. **Public contract:**
+     - D0 adds no public P-19 surface: no JavaScript API, React prop, export, documented class, documented `data-*` attribute or public token.
+     - The documented token count stays exactly 28 through D0, D1 and D2. Prototype timing is internal.
+     - Internal `--ret-*` implementation properties are allowed where needed. They are undocumented and are not customisation tokens, and tests must tell them apart from the 28 documented tokens.
+     - Internal, undocumented `ret-*` classes are allowed if needed, as P-18's `ret-toast__spinner` is. P-19 adds no new `data-*` hook.
+     - D2 may reopen whether the production reposition duration and easing deserve public tokens, but only on prototype evidence.
+  10. **Primitives:**
+      - **Evidence** (MDN browser-compat-data 8.1.4): both candidates work at the floor implied by P-18 decision 6, which is Chrome and Edge 120, Safari 16.4 and Firefox 112.
+        - Every primitive either candidate needs is supported below that floor: `transform`, CSS transitions, custom properties through CSSOM, `getComputedStyle`, `offset*`, ResizeObserver, `Element.animate()`, `Animation` and `Animation.cancel()`.
+        - `commitStyles()` is unnecessary, because each move ends at the real layout position. Its endpoint behaviour also changed only recently (Chrome 144, Safari 26.2, Firefox 142).
+        - Implicit WAAPI keyframes are marked partial and buggy in Safari, so keyframes are explicit.
+        - `@property` and `CSS.registerProperty` (Firefox 128) and `transition-behavior` (Safari 17.4, Firefox 129) are above the floor and excluded. The stylesheet lint also forbids `@property`.
+        - jsdom has neither ResizeObserver nor `Element.animate()`.
+      - **Allowed where appropriate:** the CSS `transform` property, CSS transitions, custom properties through CSSOM, `getComputedStyle`, layout-space `offset*`, ResizeObserver, `Element.animate()`, library-owned `Animation` objects and `Animation.cancel()`.
+      - **Avoided:**
+        - implicit WAAPI keyframes;
+        - `Animation.commitStyles()`;
+        - reliance on `Element.getAnimations()`;
+        - required additive or `composite` WAAPI;
+        - `@property` and `CSS.registerProperty`;
+        - `transition-behavior`;
+        - `requestAnimationFrame`;
+        - `matchMedia`.
+
+        If a later slice needs one of these, it stops and justifies it before introducing it.
+
+      - **Feature guards:** ResizeObserver and WAAPI are feature-guarded, so jsdom and compatible consumer environments never crash. No reposition capability may become necessary for lifecycle correctness.
+  11. **Existing test guards:**
+      - The P-18 guards keep their intent:
+        - lifecycle completion stays independent of P-19, and its path stays free of P-19 layout reads;
+        - the lifecycle does not depend on `requestAnimationFrame`;
+        - there is no `matchMedia`;
+        - enter and exit stay on the individual properties.
+      - The broad guards ("no transition", "no settled transform" and "no layout read" across the whole toast lifecycle) are narrowed only when the production implementation requires it. Their underlying invariant is never weakened or deleted.
+      - D1 changes no `src` test just to accommodate the demo prototypes.
+  12. **P-21 composition:**
+      - P-19 leaves P-21 swipe a viable way to compose with it. P-21 must not be forced into wrappers, DOM reordering or replacing the P-18 individual motion properties.
+      - D1 compares what each candidate implies for P-21. D2 records the path for the chosen technique as a carry-forward in the P-21 entry.
+      - P-19 implements no swipe.
+  13. **Comparison gate.** D1 compares both candidates on the same harness. D2 is the maintainer's sign-off against this matrix.
+      - **Hard gates:**
+        - insertion;
+        - removal after the exit;
+        - an insertion and a removal in one committed snapshot;
+        - all six positions, top and bottom stacks;
+        - built-in and custom toasts of arbitrary height;
+        - rapid changes with no visible snap-back;
+        - P-18's enter and exit intact while neighbours move;
+        - revival with no layout displacement;
+        - instant reduced motion;
+        - independence from RTL;
+        - lifecycle not gated;
+        - focus and `inert` unchanged;
+        - DOM order unchanged and no wrappers;
+        - degradation that is safe in jsdom by design;
+        - no added React renders for animation;
+        - no new global listeners;
+        - primitives within the floor;
+        - a viable P-21 composition path.
+      - **Strong preferences:**
+        - `transform: none` at rest;
+        - minimal coupling of timing between CSS and JavaScript;
+        - the existing flex layout kept;
+        - the smallest set of primitives;
+        - low implementation complexity;
+        - layout reads batched before writes.
+      - **Observational:**
+        - perceived smoothness and how interruption feels;
+        - sub-pixel behaviour;
+        - the interaction with P-18's `scale: 0.98`;
+        - whether size changes animate;
+        - hover and pointer behaviour across transient gaps;
+        - package-size implications.
+  14. **Sequence and boundaries:**
+      - The sequence is:
+        1. **D0**, decisions (this entry);
+        2. **D1**, both demo-only prototypes;
+        3. **D2**, the maintainer's comparison and choice of technique;
+        4. **S1 to Sn**, the production implementation, defined at D2 and not before;
+        5. a final reconciliation and manual checkpoint;
+        6. the PR, CI and a merge commit into `v2`.
+      - Out of scope:
+        - progress (P-20);
+        - swipe (P-21);
+        - Playwright and real-browser certification (P-22);
+        - React 19 and `<Activity>` (P-23);
+        - the final documentation (P-26);
+        - the final accessibility audit (P-29);
+        - the pointer-triggered close and focus-within question recorded under P-22, which stays P-22's and P-29's;
+        - the collapsed "stacked deck" mode, which stays post-v2 (§37).
+- **Open until D2:**
+  - the production technique, and what happens to the losing prototype;
+  - whether mounted size changes and viewport reflow animate;
+  - the interruption mechanism;
+  - the production geometry metric;
+  - whether `transform: none` at rest is required;
+  - whether B's reduced-motion coupling between CSS and JavaScript is acceptable, if B wins;
+  - whether reposition timing gets public tokens;
+  - the P-21 composition path to record;
+  - the S1 to Sn slice plan.
 
 **P-20 Progress indicator**
 
