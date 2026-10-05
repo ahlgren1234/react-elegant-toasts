@@ -1548,6 +1548,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Defects: D-18, D-22.
   - **D-18 is closed by P-16:** persistent polite and assertive regions, politeness by type, no `role` option and no `role="alert"` on toasts, covered by the announcement and role tests and backed by the structural axe suite.
   - **D-22 stays open** until P-26 rewrites the 0.x README (AC-REL-2). P-16 makes the keyboard and assistive-technology behaviour real but does not touch the README.
+- What P-16 leaves to later phases is recorded in their entries: P-17, P-22, P-23, P-26, P-27 and P-29.
 
 ### Track D: Visual (starts behind the P-17 gate)
 
@@ -1562,6 +1563,10 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - the chrome-less custom wrapper
   - `className` hooks
 - Defects: D-11 (layout), D-20, D-23, D-24.
+- Carried over from P-16. P-16 made two non-control elements focusable from script, and left the live regions styled inline. These are styling requirements, not changes to P-16 behaviour:
+  - The region (`<section tabindex="-1">`) takes focus as the last step of focus restoration (§18). It needs an intentional, accessible `:focus-visible` treatment (§17.4, §17.5).
+  - Each toast root (`<li tabindex="-1">`) takes focus from the hotkey and from focus restoration (§18). It needs one too.
+  - The live regions are hidden by inline styles (`VISUALLY_HIDDEN` in `src/react/announcer.ts`), so they stay hidden even when the stylesheet is not loaded. Review whether they move into the stylesheet and token architecture. Either way they must stay visually hidden and exposed to assistive technology.
 
 **P-18 Enter and exit motion**
 
@@ -1593,6 +1598,19 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - what each browser does with focus when the focused node is removed
   - pointer-boundary behaviour when a stack appears under a stationary pointer
   - real `blur` and `visibilitychange` behaviour in every supported browser
+- Carried over from P-16. jsdom enforces neither `inert` nor real browser focus behaviour, so P-22 verifies these in real browsers. They are checks, not requirements added to P-16. During P-16 the hotkey, Escape and removal restoration were smoke-checked by hand in Chromium only; P-22 is the systematic real-browser verification.
+  - **`inert`:**
+    - what each browser does with focus when a focused toast becomes `inert`
+    - that removal restoration (§18) moves focus before `inert` takes effect
+    - that the browser's own focus fix-up does not then contradict the library's restoration
+    - pointer, click and focus behaviour on an inert exiting toast
+  - **Click without focus (WebKit and Safari).** Safari may not focus a button when it is clicked. Check what happens when a close button is activated without first having focus. Removal restoration starts only from focus inside the toast, so this path is not assumed to restore focus. Report it separately from the keyboard path, where the focused close button is the starting point.
+  - **Revival.** A toast revived in the same commit in which it was exiting: whether the browser's `inert` state can briefly refuse focus although the toast is already eligible again.
+  - **Ordering.** The order, in each browser, of removal restoration, focus events, applying and removing `inert`, and the focus-within pause moving from one toast to another.
+  - **`aria-keyshortcuts`:**
+    - how Chromium, WebKit and Firefox expose the attribute in the DOM and the accessibility tree, where that can be checked
+    - exposure through assistive technology is checked separately, under P-29
+    - axe does not show that the value is exposed or understood
 
 **P-23 Compatibility and SSR verification**
 
@@ -1602,6 +1620,13 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - the compatibility matrix of the packed Vite fixture (`fixtures/consumer-vite`): React 18 and 19, `@types/react` 18 and 19, and TypeScript 5.0 (the minimum) plus the latest supported TypeScript. P-07 added the fixture with React 18 and TypeScript 5.0.4 only.
   - the Node ESM `renderToString` smoke test on the packed package
   - the **Next.js App Router fixture** with its Playwright check
+- Carried over from P-16, for React 19:
+  - Run P-16's lifecycle and effect behaviour under React 19, in particular:
+    - removal restoration before `inert`, in the toast's layout effect
+    - the layout effect that hands the current hotkey to the keydown listener
+  - Test `<Activity>`, or whichever React 19 lifecycle hides content while keeping its state, effects or DOM.
+  - The record of where focus was before the hotkey must be cleared when ownership or the lifecycle changes, also when effects or DOM are kept. A kept effect must never leave a stale record for Escape to return to.
+  - Hiding a toast and showing it again must not run removal restoration, which runs only when a toast starts to exit.
 
 **P-24 Bundle-size baseline and budget**
 
@@ -1618,8 +1643,11 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Labels.** Give a localisation example. The warning and error prefixes are read in announcements only and do not appear in the visible toast.
   - **Custom content.** The library owns the region, the live-region mechanism, the hotkey, Escape focus return and removal focus restoration. The consumer owns roles, accessible names, keyboard operability, focusability and the behaviour of the controls inside custom content. Custom controls get no equivalent-control matching: removal restoration from custom content goes to the previous toast, then the region.
   - **Announcement boundary.** A custom toast's announcement is the DOM `textContent` of its committed revision, which is not the accessibility tree: it includes `aria-hidden`, visually hidden and nested-control text, and later DOM changes without a new revision are not announced. It leaves out the library close button by its `.ret-toast__close` class, which custom markup can imitate. P-26 documents this boundary and decides whether that last case needs its own fix.
+  - **Testing toasts.** Each announcement is a copy of the toast's text in a hidden live-region node, kept for about 7000 ms (§17.1). For that time a generic DOM query such as Testing Library's `getByText("Saved")` finds both the visible toast and the hidden copy. This is the live region working as designed, not a toast rendered twice. Document how to query the visible toast without matching the copy; this repository's own tests, for example, pass `ignore: "script, style, [aria-live] *"`. Do not make the copy `aria-hidden`, shorten its retention or change the live region to make such queries unique.
 
 **P-27 Migration guide** (§30), 0.x → 2.0.
+
+- Note from P-16: in 0.x a toast's text was in the DOM once. In 2.0 its announcement copy is there too, for about 7000 ms, so a test that finds a toast by its text can match twice after upgrading. The guide mentions this and points to the testing note in the P-26 docs rather than repeating it.
 
 **P-28 Release tooling**
 
@@ -1640,6 +1668,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - publish 2.0.0
   - deploy the demo
   - deprecate 0.x on npm
+- Carried over from P-16: check with the screen-reader matrix (§17.6) that an announcement node is kept long enough to be announced reliably. The retention is 7000 ms (`ANNOUNCEMENT_RETENTION_MS` in `src/react/announcer.ts`). If it is not long enough, change it based on real browser and assistive-technology evidence, not jsdom timing.
 
 ## 36. Acceptance criteria for v2.0
 

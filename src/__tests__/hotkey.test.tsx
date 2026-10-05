@@ -10,6 +10,7 @@ import {
   useLayoutEffect,
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactElement,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -1075,6 +1076,20 @@ describe('aria-keyshortcuts (§17.2)', () => {
   });
 });
 
+/**
+ * Renders on the server path (§23). jsdom defines `window`, so a plain `renderToString` here would
+ * take the browser path, where React warns about every layout effect; a real server has no
+ * `window`, so it is hidden for the render only.
+ */
+function renderOnServer(element: ReactElement): string {
+  vi.stubGlobal('window', undefined);
+  try {
+    return renderToString(element);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
+
 describe('hydration (§23)', () => {
   it.each<[string, unknown, string | null]>([
     ['the default', undefined, 'Alt+T'],
@@ -1083,11 +1098,13 @@ describe('hydration (§23)', () => {
     ['no hotkey', false, null],
     ['a hotkey ARIA cannot name', ['Minus'], null],
   ])('hydrates the advertised hotkey without a mismatch: %s', async (_name, hotkey, shortcut) => {
-    const html = renderToString(<Toaster hotkey={hotkey as false} />);
+    // Watches the server render and the hydration alike.
+    const error = vi.spyOn(console, 'error');
+    onTestFinished(() => error.mockRestore());
+    const html = renderOnServer(<Toaster hotkey={hotkey as false} />);
     const container = document.createElement('div');
     container.innerHTML = html;
     document.body.append(container);
-    const error = vi.spyOn(console, 'error');
     const root = await act(async () => {
       const hydrated = hydrateRoot(container, <Toaster hotkey={hotkey as false} />);
       await Promise.resolve();
@@ -1095,17 +1112,19 @@ describe('hydration (§23)', () => {
     });
     await settle();
     expect(container.querySelector('section')?.getAttribute('aria-keyshortcuts')).toBe(shortcut);
-    expect(error).not.toHaveBeenCalled();
+    expect(error.mock.calls).toEqual([]);
     act(() => root.unmount());
     container.remove();
   });
 
   it('hydrates without a mismatch, then the hotkey and Escape work', async () => {
-    const html = renderToString(<Toaster />);
+    // Watches the server render and the hydration alike.
+    const error = vi.spyOn(console, 'error');
+    onTestFinished(() => error.mockRestore());
+    const html = renderOnServer(<Toaster />);
     const container = document.createElement('div');
     container.innerHTML = html;
     document.body.append(container);
-    const error = vi.spyOn(console, 'error');
     const root = await act(async () => {
       const hydrated = hydrateRoot(container, <Toaster />);
       await Promise.resolve();
@@ -1117,7 +1136,7 @@ describe('hydration (§23)', () => {
     expect(document.activeElement).toBe(itemOf('a'));
     expect(press(ESCAPE)).toBe(false);
     expect(document.activeElement).toBe(document.body);
-    expect(error).not.toHaveBeenCalled();
+    expect(error.mock.calls).toEqual([]);
     act(() => root.unmount());
     container.remove();
   });

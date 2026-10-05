@@ -3,10 +3,10 @@
 // lifecycle fallbacks run only when a test advances it, and tests drive `entered` and `exited`
 // themselves when needed. Toast chrome and the fallbacks are covered in toast-item.test.tsx.
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, type ReactElement } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi, type MockInstance } from 'vitest';
 import { Toaster, toast } from '../index';
 import { dismiss, entered, exited, getSnapshot, inspectRecords } from '../store/store';
 import type { ToastPosition } from '../types';
@@ -386,15 +386,31 @@ describe('ownership (§8.5, AC-NT-5)', () => {
   });
 });
 
+/**
+ * Renders on the server path (§23). jsdom defines `window`, so a plain `renderToString` here would
+ * take the browser path, where React warns about every layout effect; a real server has no
+ * `window`, so it is hidden for the render only.
+ */
+function renderOnServer(element: ReactElement): string {
+  vi.stubGlobal('window', undefined);
+  try {
+    return renderToString(element);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
+
 describe('hydration (§23)', () => {
   it('hydrates the server shell without a mismatch, then renders client toasts', async () => {
-    const html = renderToString(<Toaster />);
+    // Watches the server render and the hydration alike.
+    const error = vi.spyOn(console, 'error');
+    onTestFinished(() => error.mockRestore());
+    const html = renderOnServer(<Toaster />);
     const container = document.createElement('div');
     container.innerHTML = html;
     document.body.append(container);
     // A client-side toast created before hydration: queued, so the snapshot is still empty.
     toast('client');
-    const error = vi.spyOn(console, 'error');
 
     const root = await act(async () => {
       const hydrated = hydrateRoot(container, <Toaster />);
@@ -402,7 +418,7 @@ describe('hydration (§23)', () => {
       return hydrated;
     });
     await settle();
-    expect(error).not.toHaveBeenCalled();
+    expect(error.mock.calls).toEqual([]);
     expect(container.querySelectorAll('section')).toHaveLength(1);
     expect(itemsAt('top-right')).toEqual(['client']);
     expect(container.querySelector('li .ret-toast__close')).not.toBeNull();
