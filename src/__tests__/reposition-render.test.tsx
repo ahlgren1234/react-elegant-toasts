@@ -1,4 +1,4 @@
-// Stack repositioning in the renderer (§22, P-19 S2 and S3, D2 decisions 2 to 6). jsdom lays
+// Stack repositioning in the renderer (§22, P-19 S2 to S4, D2 decisions 2 to 7). jsdom lays
 // nothing out, so a stand-in flex column computes each toast root's layout-space offsets from the
 // live DOM, as a browser would, and every inline style write on a toast root is recorded. The
 // seed, the one flush and the release then show up in order, and the rest state is checked

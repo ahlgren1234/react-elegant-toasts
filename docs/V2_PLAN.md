@@ -1845,7 +1845,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - **Prototype gate:** build both the measured-offset approach and the FLIP/WAAPI approach, choose one within the §22 constraints, and record the decision in the PR.
 - Scope: the chosen technique, including its reduced-motion behaviour.
 - Carried over from P-18. Enter and exit animate `opacity` and the individual `translate` and `scale` on the toast root, and the spinner the individual `rotate` on its icon, so `transform` is free for repositioning. Neighbouring toasts still jump when a toast enters, and when an exiting toast is removed at the end of its exit; smoothing that is P-19's.
-- **Status: S4 done.** D0, D1, D2 and S1 to S4 are done. Production uses candidate A, measured layout offsets with a flow-delta CSS transition (D2 below), stack repositioning is on and hardened, and it is instant under reduced motion. S5 is next.
+- **Status: complete.** D0, D1, D2 and S1 to S5 are done, the final reconciliation and validation passed, and every checkpoint is recorded. Production uses candidate A, measured layout offsets with a flow-delta CSS transition. It adds no public surface: the token set stays at 28. What P-19 leaves open is listed in the S5 record and in the P-21, P-22, P-25, P-26 and P-29 entries.
 - Defects: none. Appendix A assigns no defect to P-19.
 - Acceptance: AC-MO-2 is P-19's. P-19 extends AC-MO-3 to reflow. AC-LC-1 to AC-LC-3, AC-POS-1, AC-KB-1, AC-KB-2, AC-Q-2, AC-CSS-1 and AC-CSS-3 must not regress. As with AC-MO-1 in P-18, AC-MO-2's real-browser proof ("reflow", §26) is P-22's.
 - Decisions locked before implementation (D0). They do **not** choose between the two techniques. That is D2's decision.
@@ -2420,6 +2420,102 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - a final manual checkpoint for any gaps;
       - close P-19.
     - **Commit:** `docs: close P-19 repositioning phase`.
+    - **Done.** The harness removal is its own commit, `08483de` (`chore: remove P-19 D1 prototype harness`). It deletes `demo/p19/`, which held the scenario controls, the DOM-only readout, its instrumentation and styles. It also removes the demo hooks (the host element, the Profiler and the panel), and restores `demo/` exactly to its state before P-19 (no diff against `209988e`). No P-19 UI, query parameter, import or comment is left in the demo.
+    - **Final architecture,** traced against the code and found unchanged since S2. Nothing was rewritten in S5.
+      - **Production files:**
+        - `src/react/reposition.ts` (S1): read-only geometry;
+        - `src/react/useStackReposition.ts` (S2): the list hook, and the only writer;
+        - `src/react/Toaster.tsx`: `StackList` calls the hook, and `PositionList` passes the ordered IDs;
+        - `src/react/useIsomorphicLayoutEffect.ts`: optional dependencies;
+        - `src/styles.css`: the root transition and the reduced-motion duration.
+
+        Nothing else in `src/` changed, nor did `package.json`, the lockfile, the build configuration, the scripts or the fixtures.
+
+      - **Geometry:**
+        - layout space only: `offsetTop` at top stacks, `clientHeight − offsetTop − offsetHeight` at bottom stacks, any height, no `getBoundingClientRect`;
+        - one pass per list;
+        - a node-keyed `WeakMap` cache;
+        - a feature-guarded, list-local ResizeObserver that only refreshes the cache.
+      - **Trigger:** a change in the list's ID sequence only. Phase changes, revival, replacement and size changes refresh the cache and move nothing.
+      - **Move:**
+        - read every distance and each mover's current P-19 offset;
+        - seed every mover with inline `transition-property: none` and `transform: translateY(…)`;
+        - one `list.offsetHeight` flush;
+        - release.
+
+        The flex layout stays authoritative, the root computes to `transform: none` at rest, and there is no wrapper and no DOM reorder.
+
+      - **Motion:**
+        - `:where(.ret-toast) { transition-property: transform; transition-duration: 200ms; transition-timing-function: cubic-bezier(0.2, 0, 0, 1); transition-delay: 0s; }`;
+        - under reduced motion, `transition-duration: 0s`;
+        - the same JavaScript path under either preference.
+      - **Ownership:**
+        - P-18 keeps the individual `translate`, `scale` and the spinner's `rotate`, and P-19 the root `transform`;
+        - P-19 does not compensate for P-18's `scale`;
+        - a consumer root `transform` is unsupported;
+        - swipe composition is P-21's.
+    - **Decision trace:**
+      - **D0:** decisions 1 to 14 hold.
+        - Both candidates were built and compared on one harness (1, 13), and the winner kept the flow-delta boundary (2).
+        - The triggers are exactly membership changes (3).
+        - The geometry is layout-space and anchored-edge (4).
+        - The interruption is continuous (5).
+        - The motion is root `transform` only, vertical, with no wrapper (6).
+        - Lifecycle, focus and state are untouched (7).
+        - Reduced motion is CSS only (8).
+        - There is no public surface (9).
+        - The primitives are within the floor and feature-guarded (10).
+        - The guards were narrowed only where named (11).
+        - P-21 is left a path (12).
+        - The sequence and boundaries were followed (14).
+      - **D2:** decisions 1 to 12 are implemented as recorded: layout, technique, geometry, interruption order, rest state, size changes, reduced motion, public contract, consumer root transform, the P-21 path, prototype disposition (S2 removed candidates A and B and the selector, and S5 removed the rest) and evidence.
+    - **Accepted implementation notes:** accepted for v2, not defects.
+      - **P-18 `scale` composition.**
+        - During a normal-motion overlap of a P-18 enter or exit with a P-19 move, P-18's `scale` applies to P-19's seed. The toast jumps by `|seed| × (1 − scale)`, at most about 1.79px (S3, machine-observed).
+        - P-19 deliberately does not compensate (maintainer decision at S4), so the ownership boundary stays as it is.
+        - It does not occur under reduced motion. P-22 evaluates it visually.
+      - **Rounding.** `offset*` geometry can leave about 1px of sub-pixel rounding at a retarget. Every move ends exactly at the layout position.
+      - **No ResizeObserver.** Self-resizing custom content can leave the cache stale until the next list commit. The API is feature-guarded, and every browser at the floor has it.
+    - **Acceptance:**
+      - **AC-MO-2 (existing toasts move smoothly when the stack changes): met in jsdom and in Chromium.**
+        - **Unit tests:** geometry, membership, parsing, cache and observer (`reposition.test.ts`, 86 tests).
+        - **Component tests:** `reposition-render.test.tsx` (75 tests) covers insertion, removal after the exit, removal plus promotion, all six positions at top and bottom, arbitrary and custom heights, DOM order with no wrapper, the exact seed, flush and release, interruption with exact continuity, required reversals only, revival, replacement, relocation, detach, unmount, remount, takeover, StrictMode and render counts.
+        - **Mutations:** 45, each detected (S1 9, S2 14, S3 12, S4 10).
+        - **Chromium (S2, S3, S5):** normal-motion checkpoints at all six positions, with mixed and custom heights, queue and promotion, and relocation. Continuity was proven at the commit instant, with a residual of at most 0.06px beyond the accepted scale composition, and a control showed the measure detects stale origins.
+        - **Left to P-22:** the automated real-browser reflow proof in Chromium, WebKit and Firefox (§26).
+      - **AC-MO-3, extended to repositioning: met structurally and in Chromium emulation.** It has the CSS contract (`styles.test.ts`), the component proof of the instant path and of an identical JavaScript path under either preference (`reposition-render.test.tsx`), the S4 mutations, and the S4 and S5 Chromium emulation checkpoints. P-22 owns the Playwright reduced-motion emulation, and P-29 checks the operating system's own setting.
+      - **Lifecycle (AC-LC-1 to AC-LC-3, AC-Q-2): no regression.** Repositioning never gates `entered()`, `exited()`, removal or promotion. Tests compare phase timing with and without motion and under reduced motion. A mutation that made completion wait for a reposition `transitionend` was detected (111 failures). P-18 completion reads no P-19 layout: it is behaviour-traced, and the modules are kept apart.
+      - **CSS and public contract (AC-API-1, AC-CSS-1, AC-CSS-3): no change.**
+        - The exports are exactly `Toaster` and `toast`, the declarations name no P-19 internal, and the packed package holds 7 entries (`LICENSE`, `README.md`, `package.json` and the four `dist` files).
+        - There are 28 tokens, none for repositioning, and the only `data-*` hooks are still `data-theme`, `data-position` and `data-phase`.
+        - There is no new public class, prop or API, and `dist/styles.css` matches `src/styles.css`.
+      - **Accessibility (AC-POS-1, AC-KB-1, AC-KB-2): no regression.**
+        - Focus restoration is unchanged while neighbours move.
+        - `inert` is still set after restoration in the same commit.
+        - Alt+T is unchanged.
+        - Repositioning never calls `focus()`.
+        - Reduced motion is supported structurally.
+
+        Assistive-technology and operating-system evidence is P-29's, and is not claimed here.
+    - **Defects:** Appendix A assigns none to P-19, and none was found or created. D-21 (reduced motion) stays closed by P-18; P-19 only extends AC-MO-3 to repositioning.
+    - **Tests:**
+      - **Reconciled:** none removed. No test depended on the D1 harness or on a D1 mechanism. The guards narrowed in S2 and S4 kept their underlying invariants, and only the render-test header was updated for S4.
+      - **Retained:** `reposition.test.ts`, `reposition-render.test.tsx` and the P-19 blocks of `styles.test.ts`.
+    - **Final Chromium checkpoint (machine-observed, not cross-browser or human visual certification):**
+      - **Setup:** headless Chrome 154 on Windows over CDP, with the ordinary demo and `?production-css`, driven only through the public `toast` API by an uncommitted script.
+      - **Normal motion:**
+        - insertion with mixed and custom heights, middle removal, and removal plus promotion at all six positions;
+        - toasts moved with a 0.2s duration, with a residual of 0 across 747 checks at the commit instant;
+        - `transform: none` and no inline style at rest, with `offsetParent` the toast's own list;
+        - promotion refilled every full stack, and dismissing all left nothing rendered.
+      - **Reduced-motion emulation:**
+        - the same scenarios ran with a `0s` duration;
+        - 0 moving frames, 0 reposition transitions and 0 P-18 animations;
+        - every toast was at rest immediately after every commit;
+        - the spinner was static, and the lifecycle and promotion completed.
+      - No P-19 UI is left in the demo, and there were no console errors besides the demo's missing favicon.
+    - **Validation (closure commit):** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (33 files, 1,238 tests), `validate:package` and `build:demo` all pass.
+    - **Carry-forwards:** P-21 (swipe composition), P-22 (real-browser reflow, reduced motion and the scale overlap), P-25 (the pre-release demo redesign), P-26 (root `transform` ownership and repositioning behaviour) and P-29 (the operating system's reduced-motion setting). Each is recorded in its own entry.
   - Then the PR into `v2`, CI, and a merge commit.
   - As in P-18, an intermediate slice may exist on the feature branch before reduced motion is in place (S2 to S3). P-19 merges only after S4.
 
@@ -2474,6 +2570,15 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Spinner.** Rotation about its own centre, and its events never completing the toast.
   - **Individual transform properties.** `translate`, `scale` and `rotate` in every engine the suite runs (P-18 D0, decision 6).
 
+- Carried over from P-19. P-19's checkpoints were machine-observed in headless Chromium only, so P-22 verifies these in real browsers. They are checks, not requirements added to P-19:
+  - **Reflow (AC-MO-2).** Automated stack repositioning in Chromium, WebKit and Firefox:
+    - insertion, removal after the exit, and removal plus promotion at all six positions with mixed and custom heights;
+    - interruption that continues from the toast's current position;
+    - `transform: none` at rest;
+    - the root's computed `offsetParent` being its list.
+  - **Reduced motion (AC-MO-3).** Under emulated `prefers-reduced-motion: reduce`, repositioning is instant, with no reposition transition, fade or scale, and the lifecycle still completes.
+  - **Scale overlap.** A visual evaluation of the accepted P-18 `scale` × P-19 `transform` composition during an overlapping enter or exit and move: up to about 1.79px, machine-observed in Chromium. P-19 deliberately does not compensate. Only browser evidence of a material, human-visible problem reopens the ownership boundary.
+
 **P-23 Compatibility and SSR verification**
 
 - Scope:
@@ -2521,9 +2626,11 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Not contract.** The keyframe names (`ret-enter-*`, `ret-exit-*`, `ret-spin`) and the spinner's `ret-toast__spinner` class are implementation details: describe the behaviour and the tokens, not them. Replacing the keyframes is not a supported customisation.
   - **Browser support.** Motion uses the individual `translate`, `scale` and `rotate` properties. The browser-support statement must not claim a floor below the one recorded in P-18 D0, decision 6.
 
-- Notes from P-19 D2 for the theming and customisation documentation (S5 may add more):
+- Notes from P-19 (D2 and S5) for the theming and customisation documentation:
   - **Toast root `transform`.** The library owns the toast root's `transform` for stack repositioning. A consumer `transform` on the root, for example through a toast's `className`, is not supported. Apply transforms inside custom content instead. Every other class and style on the root is unaffected. Describe the behaviour, not the mechanism.
   - **Repositioning.** When a stack's toasts change, the remaining toasts move smoothly to their new places. A toast that changes size, or a viewport change, does not animate. Under reduced motion the move is instant. The timing is not customisable in 2.0: there are no reposition tokens, and the public set stays at 28.
+  - **Transitions on the root.** A consumer rule that replaces `transition-property` on the toast root turns the reposition transition off for that toast. The toast still ends in the right place, only without the smooth move. To transition another property as well, list `transform` alongside it. A rule that sets `transition-duration` or `transition-timing-function` on the root changes the move's timing.
+  - **Browser support.** Repositioning uses `transform`, CSS transitions and ResizeObserver, all within the floor recorded in P-18 D0, decision 6. P-19 does not raise it.
 
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
@@ -2550,6 +2657,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - deprecate 0.x on npm
 - Carried over from P-16: check with the screen-reader matrix (§17.6) that an announcement node is kept long enough to be announced reliably. The retention is 7000 ms (`ANNOUNCEMENT_RETENTION_MS` in `src/react/announcer.ts`). If it is not long enough, change it based on real browser and assistive-technology evidence, not jsdom timing.
 - Carried over from P-18. In the manual cross-browser audit, check reduced motion with the operating system's own setting, not only emulation: toasts appear and disappear without motion and the spinner is static. P-18's evidence is Chromium DevTools emulation (S4).
+- Carried over from P-19. In the same audit, check that stack repositioning is instant under the operating system's reduced-motion setting: remaining toasts take their new places at once. P-19's evidence is Chromium emulation (S4, S5).
 - Carried over from P-18. Provide the assistive-technology evidence for the pointer-triggered close question recorded under P-22 (click without focus): how focus restored after a mouse close is experienced with screen readers, before the §10 and §18 contract is changed or confirmed.
 - Carried over from P-17. With the screen-reader matrix (§17.6), check that polite and assertive announcements still work now that the live regions are hidden by the `ret-toaster__live-region` class as well as inline styles (S5), including with the stylesheet loaded and an inline `style` blocked by CSP. Also check touch exploration with screen readers around the region's focus ring (decision 3).
 
