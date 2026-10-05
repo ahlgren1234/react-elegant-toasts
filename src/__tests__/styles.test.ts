@@ -570,6 +570,125 @@ describe('the toast card, content and controls (§17.2, OQ-24, P-17 S3)', () => 
   });
 });
 
+const TYPES = ['success', 'error', 'warning', 'info', 'loading'] as const;
+
+/** WCAG 2.x relative luminance of an opaque `#rrggbb` colour. */
+function luminance(hex: string): number {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) throw new Error(`${hex} is not an opaque #rrggbb colour, so its contrast is unknown`);
+  const [r, g, b] = match.slice(1).map(channel => {
+    const value = parseInt(channel, 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** The WCAG contrast ratio of two opaque colours. */
+function contrast(a: string, b: string): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (light + 0.05) / (dark + 0.05);
+}
+
+// The pairs AC-A11Y-6 requires (§17.4, §17.5), as [foreground, background, minimum]. Toast text is
+// 13 to 14px, which is never large text, so all of it needs 4.5:1. The icon glyphs, the close glyph
+// and the focus colour are meaningful non-text and need 3:1 against what they sit on. The border,
+// the tints against the surface, and the shadow are decorative: the card is told apart by surface,
+// border and shadow together, so no single pair of them is claimed.
+const PAIRS: readonly (readonly [string, string, number])[] = [
+  ['--ret-text', '--ret-surface', 4.5],
+  ['--ret-text-muted', '--ret-surface', 4.5],
+  ['--ret-action-text', '--ret-action-surface', 4.5],
+  ...TYPES.map(type => [`--ret-${type}`, `--ret-${type}-subtle`, 3] as const),
+  ['--ret-focus', '--ret-surface', 3],
+];
+
+describe('semantic accents (OQ-24, P-17 S4)', () => {
+  it.each(TYPES)('colours only the %s icon slot, from its own token family', type => {
+    const item = toastOf(type, ['icon', 'content']);
+    expect(declared(partOf(item, 'icon'))).toMatchObject({
+      background: `var(--ret-${type}-subtle)`,
+      color: `var(--ret-${type})`,
+    });
+    // The card itself stays neutral: no semantic surface, border or text.
+    expect(declared(item)).toMatchObject({
+      background: 'var(--ret-surface)',
+      border: '1px solid var(--ret-border)',
+      color: 'var(--ret-text)',
+    });
+  });
+
+  it("keeps a default toast's icon neutral, with no tint", () => {
+    const icon = partOf(toastOf('default', ['icon', 'content']), 'icon');
+    expect(declared(icon).color).toBe('var(--ret-text-muted)');
+    expect(declared(icon).background).toBeUndefined();
+  });
+
+  it('limits type rules to the icon slot, so no type restyles the card or its other parts', () => {
+    for (const rule of rules.filter(r => /ret-toast--(?!custom)/.test(r.selector))) {
+      expect(rule.selector).toMatch(/^:where\(\.ret-toast--[a-z]+ > \.ret-toast__icon\)$/);
+      expect([...rule.style].filter(p => !/^(color|background)/.test(p))).toEqual([]);
+    }
+  });
+
+  it('reads every semantic token, so none is left unused', () => {
+    const read = new Set(
+      rules.flatMap(rule =>
+        Object.values(declarations(rule.style)).flatMap(value =>
+          [...value.matchAll(/var\((--ret-[\w-]+)\)/g)].map(m => m[1])
+        )
+      )
+    );
+    for (const type of TYPES) {
+      expect(read).toContain(`--ret-${type}`);
+      expect(read).toContain(`--ret-${type}-subtle`);
+    }
+  });
+
+  it('never gives a custom toast or its contents a semantic colour', () => {
+    const item = toastOf('custom', ['custom', 'close']);
+    const inside = item.firstElementChild as Element;
+    inside.className = 'ret-toast__icon';
+    // Every rule that reads a semantic token, whatever its selector.
+    const semantic = rules.filter(r =>
+      Object.values(declarations(r.style)).some(v =>
+        /var\(--ret-(success|error|warning|info|loading)/.test(v)
+      )
+    );
+    expect(semantic.length).toBeGreaterThan(0);
+    for (const rule of semantic) {
+      expect([item, inside, ...item.children].some(e => e.matches(rule.selector))).toBe(false);
+    }
+  });
+
+  it('has no light-scheme media rule, so system in a light scheme is exactly the light default', () => {
+    expect(css).not.toMatch(/prefers-color-scheme:\s*light/);
+  });
+});
+
+describe('AC-A11Y-6: palette contrast in both themes (D-20)', () => {
+  const themes = {
+    light: declarations(LIGHT.style),
+    dark: { ...declarations(LIGHT.style), ...declarations(DARK.style) },
+    'system dark': { ...declarations(LIGHT.style), ...declarations(SYSTEM_DARK.style) },
+  };
+
+  it.each(Object.entries(themes))('meets every required ratio in %s', (theme, tokens) => {
+    for (const [foreground, background, minimum] of PAIRS) {
+      const ratio = contrast(tokens[foreground] ?? '', tokens[background] ?? '');
+      expect(
+        ratio,
+        `${theme}: ${foreground} on ${background} is ${ratio.toFixed(2)}:1, below ${minimum}:1`
+      ).toBeGreaterThanOrEqual(minimum);
+    }
+  });
+
+  it('computes WCAG ratios correctly', () => {
+    expect(contrast('#000000', '#ffffff')).toBeCloseTo(21, 5);
+    expect(contrast('#777777', '#ffffff')).toBeCloseTo(4.48, 2);
+    expect(() => contrast('rgb(0 0 0 / 0.5)', '#ffffff')).toThrow(/opaque/);
+  });
+});
+
 describe('motion boundary (P-17; P-18 owns motion)', () => {
   it('has no keyframes, animations, transitions, transforms or reduced-motion rules', () => {
     expect(css).not.toMatch(/@keyframes|prefers-reduced-motion/);

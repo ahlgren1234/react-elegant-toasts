@@ -187,7 +187,8 @@
   text-transform: none;
 }
 
-/* A fixed footprint for the decorative icon. S4 gives each type its accent and tint. */
+/* A fixed footprint for the decorative icon, neutral by default: a default toast's icon, which only
+   a consumer can give it, stays neutral. */
 :where(.ret-toast__icon) {
   display: grid;
   flex: none;
@@ -201,6 +202,38 @@
 :where(.ret-toast__icon > svg) {
   inline-size: 18px;
   block-size: 18px;
+}
+
+/*
+ * The semantic accent (OQ-24): each type colours only its icon slot, as an accent glyph on a subtle
+ * tint of the same family. The card stays neutral. The glyph inherits `color`, so library icons and
+ * consumer icons drawn in `currentColor` take the accent; other consumer icons keep their own
+ * colours on the tint. Loading has its own neutral family, so a pending toast reads as in progress
+ * rather than as a result.
+ */
+:where(.ret-toast--success > .ret-toast__icon) {
+  background: var(--ret-success-subtle);
+  color: var(--ret-success);
+}
+
+:where(.ret-toast--error > .ret-toast__icon) {
+  background: var(--ret-error-subtle);
+  color: var(--ret-error);
+}
+
+:where(.ret-toast--warning > .ret-toast__icon) {
+  background: var(--ret-warning-subtle);
+  color: var(--ret-warning);
+}
+
+:where(.ret-toast--info > .ret-toast__icon) {
+  background: var(--ret-info-subtle);
+  color: var(--ret-info);
+}
+
+:where(.ret-toast--loading > .ret-toast__icon) {
+  background: var(--ret-loading-subtle);
+  color: var(--ret-loading);
 }
 
 /* The text column takes the remaining width and may shrink below its content, so long words and

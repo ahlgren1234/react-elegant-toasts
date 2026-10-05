@@ -1677,6 +1677,27 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - Checked: content and control combinations (description, action, close), long content at narrow widths, custom toasts with and without the library close button (including its inherited colour), and the RTL internal layout.
       - This is P-17 visual review evidence, not P-22 browser verification or P-29 assistive-technology checking.
   - **S4, themes, variants and contrast:** the semantic accents, complete light, dark and system values, the automated palette contrast check (AC-A11Y-6), and theme render-count and hydration tests (AC-CSS-2).
+    - **Mapping:**
+      - Each of success, error, warning, info and loading colours only its icon slot: `:where(.ret-toast--<type> > .ret-toast__icon)` sets `color: var(--ret-<type>)` and `background: var(--ret-<type>-subtle)`.
+      - Loading uses its own neutral family, so a pending toast reads as in progress rather than as a result.
+      - The default type stays neutral: its icon, which only a consumer can give it, is `--ret-text-muted` with no tint.
+      - The card's surface, border and text never change with the type, and custom toasts receive no semantic colour.
+    - **Consumer icons:** the glyph inherits the slot's `color`, so library icons and consumer icons drawn in `currentColor` take the accent. Other consumer icons keep their own colours on the tint. The DOM does not distinguish library from consumer icons, and needs no change for this.
+    - **Contrast (AC-A11Y-6, D-20):**
+      - `styles.test.ts` computes WCAG 2.x ratios from the opaque `#rrggbb` token values for light, dark and system dark. A non-opaque value fails, because its contrast is unknown.
+      - Text needs 4.5:1, because toast text at 13 to 14px is never large: text and muted text on the surface, and action text on the action surface.
+      - Meaningful non-text needs 3:1: each type's glyph on its tint, and the focus colour on the surface.
+      - The border, the tints against the surface and the shadow are decorative. The card is told apart by those together, and no single pair of them is claimed.
+      - The D1 palette passed every pair, so no value changed. The lowest results are light warning 4.51:1, light success 4.57:1 and dark loading 4.07:1.
+    - **Meaning beyond colour:** each type has a distinct icon shape (§17.2), warnings and errors are announced with their prefixes (§17.1), and the content carries the message. Colour is never the only signal.
+    - **Themes:** system in a light scheme is the light default itself, because there is no light-scheme media rule. System dark equals dark, which a test checks. `theme.test.tsx` hydrates `light`, `dark`, `system`, the default and an invalid value without a mismatch (AC-CSS-2). The render-count test from S1 covers theme changes.
+    - **No new tokens:** the public set stays at 24.
+    - **Demo:** an All types button shows all six normal types at once, and the review Toaster shows six per stack.
+    - **Manual checkpoint (done):**
+      - The maintainer reviewed the All types matrix in Chromium with `?production-css`, in explicit light and explicit dark, and approved both.
+      - The neutral card stays dominant and the accents are clear but restrained. Warning was approved in both themes and the palette is kept as it is, with no token change requested. The description hierarchy and the loading and default treatments were checked.
+      - The system theme was not separately smoke-checked by hand. Its evidence is automated: the system-dark equality and light-default tests, and the hydration tests.
+      - This is P-17 visual review evidence, not P-22 browser verification or P-29 assistive-technology checking.
   - **S5, accessibility styling:** `:focus-visible` for the section, the toast root and the action and close buttons (§17.4); forced colours; the hybrid live-region class.
   - **S6, integration and reconciliation:** the plan and defect status, the P-22 and P-26 carry-forwards, full validation and the final manual checkpoints.
 

@@ -246,6 +246,20 @@ function Prototype() {
         <button
           type="button"
           className="demo-button"
+          onClick={() => {
+            toast('Default: event created', options());
+            toast.success('Success: profile saved', options());
+            toast.error('Error: payment failed', options());
+            toast.warning('Warning: storage almost full', options());
+            toast.info('Info: new version available', options());
+            toast.loading('Loading: uploading report', options());
+          }}
+        >
+          All types
+        </button>
+        <button
+          type="button"
+          className="demo-button"
           onClick={() => POSITIONS.forEach(at => toast.success(at, options(at)))}
         >
           All six positions
@@ -256,7 +270,8 @@ function Prototype() {
       </div>
       {/* Direction is inherited from the DOM (§20): the toasts mirror, the positions do not. */}
       <div dir={rtl ? 'rtl' : 'ltr'}>
-        <Toaster theme={theme} />
+        {/* Six visible per stack, so the All types matrix shows at once (the default is 4). */}
+        <Toaster theme={theme} maxVisible={6} />
       </div>
     </section>
   );
