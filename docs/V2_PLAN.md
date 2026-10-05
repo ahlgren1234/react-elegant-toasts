@@ -2054,7 +2054,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
      1. read every toast's layout metric;
      2. for each toast that moved, read its current P-19 offset from the computed `transform`;
      3. write the seed for every moving toast: inline CSSOM `transition-property: none`, and `transform: translateY(correction + current offset)`;
-     4. one style read for the whole list, to fix the seeds as the start values;
+     4. one forced read for the whole list, to fix the seeds as the start values. The implementation uses one `list.offsetHeight` read, a layout read that also flushes style (reconciled at the final review; the decision first said "style read");
      5. remove both inline declarations from every seeded toast, so the stylesheet transition carries each to its layout position.
 
      The seed uses inline CSSOM only: there is no seed class and no React `style` prop. There is no per-frame work. A commit that changes several lists runs this per list, which costs at most one extra layout per affected list, at most six. The observable rule stays D0 decision 5's: no visible snap-back.
@@ -2075,7 +2075,10 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
      - While reposition motion is active, the library owns the toast root's `transform`. A consumer `transform` on the root (through `className`) is not supported.
      - A consumer who needs a transform applies it inside custom content.
      - There is no wrapper and no composition API. P-26 documents this.
-     - Every other consumer class and style on the root is unaffected, including one that sets a `transition` on another property. A consumer rule that replaces `transition-property` on the root turns the reposition transition off for that toast, which leaves the toast correct, only unanimated.
+     - Every other consumer class and style on the root keeps applying, with two caveats on transitions (corrected at the final review, which found "unaffected" too strong):
+       - **Seed interruption.** While a moved toast is seeded, its root briefly carries inline `transition-property: none`. A consumer transition running on that same root at that moment, on any property, is cancelled and jumps to its end value.
+       - **Cascade.** The library's transition rules are zero-specificity `:where(.ret-toast)`. A consumer rule that replaces `transition-property` on the root turns the reposition transition off for that toast, which leaves the toast correct, only unanimated. A consumer `transition-duration` (or `transition-timing-function`) that wins the cascade overrides the library's, including the reduced-motion `0s` (S4).
+     - Consumers who need transforms or their own animated presentation should animate an inner element of custom content, not the library-owned root. This runtime behaviour is accepted for P-19. It is a documentation caveat for P-26, with no change of specificity, no `!important`, no JavaScript detection and no token.
   10. **P-21:**
       - A uses `transition: transform` for vertical repositioning.
       - P-21 composes horizontal swipe with it without wrappers, without DOM reordering, and without replacing P-18's individual properties.
@@ -2170,7 +2173,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Reposition pass:**
       1. Read: for each measured root with a cached distance and a new one that differs, its displacement plus `currentOffsetOf` (its in-flight offset). A new toast has no cached distance, so it is never seeded, and an unmoved survivor is skipped.
       2. Seed: inline CSSOM `transition-property: none` and `transform: translateY(…px)` on every mover.
-      3. Flush: one `list.offsetHeight` read.
+      3. Flush: one `list.offsetHeight` read. This is a layout read, the single extra layout per affected list that D2 decision 4 allows.
       4. Release: remove both declarations, and the then-empty `style` attribute.
 
       No `requestAnimationFrame`, timer, React `style` prop, class or WAAPI.
@@ -2262,7 +2265,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
         - the cache holds the layout as last measured, refreshed after every list commit and by the ResizeObserver, which runs after layout and before paint;
         - `T_cur` is read in the same task as the commit, on the same animation-timeline instant.
     - **Direction reversal:** a reversal is correct, category A, when the newest target lies on the other side of where the toast is now. An insertion followed by a removal is the usual case. A stale-origin reversal (category B) can only come from a break in continuity at the commit, so continuity at the commit instant is the test.
-    - **Tests:** `reposition-render.test.tsx` grows to 70 tests.
+    - **Tests:** `reposition-render.test.tsx` grows to 70 tests. The S3 plan named additions to `render-count.test.tsx`, `focus-restoration.test.tsx` and `environment-pause.test.tsx`. Those checks were deliberately put in `reposition-render.test.tsx` instead, because they need its layout and transition stand-ins. This only consolidates where the tests live: the render-count, focus and `inert`, and global-listener evidence is all implemented, as listed below.
       - **In-flight model:** a stand-in for the browser's transitions holds each released seed as the toast's live offset. It reports that offset through the computed `transform` as a `matrix()`, and tests advance or settle it.
       - **`retarget()`:** asserts, for every toast that stays in its list, that its on-screen position is identical before and after each commit, to 1e-9, and classifies every reversal.
       - **Interruption cases:**
@@ -2349,7 +2352,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Mutations:** the rule removed, a fade added, `matchMedia` added, a public token added, P-18's reduced-motion rules changed.
     - **Manual checkpoint:** Chromium reduced-motion emulation.
     - **Commit:** `feat: add reduced-motion stack repositioning`.
-    - **CSS:** a third rule in the existing `@media (prefers-reduced-motion: reduce)` block, `:where(.ret-toast) { transition-duration: 0s; }`, after P-18's two rules, which are unchanged. With no duration, no transition starts, so a released seed resolves at once to the real layout position: no translation, no fade, no scale. The normal rule (200 ms, `cubic-bezier(0.2, 0, 0, 1)`) is unchanged. No `transform`, no `transition: none` (a consumer's transitions on other properties keep their own durations unless they share the root's `transition-duration`), no token and no internal property.
+    - **CSS:** a third rule in the existing `@media (prefers-reduced-motion: reduce)` block, `:where(.ret-toast) { transition-duration: 0s; }`, after P-18's two rules, which are unchanged. With no duration, no transition starts, so a released seed resolves at once to the real layout position: no translation, no fade, no scale. The normal rule (200 ms, `cubic-bezier(0.2, 0, 0, 1)`) is unchanged. No `transform`, no `transition: none` (a consumer's transitions on other properties keep their own durations unless they share the root's `transition-duration`; conversely, a consumer `transition-duration` on the root that wins the cascade overrides this `0s`, see D2 decision 9 and P-26), no token and no internal property.
     - **JavaScript:** unchanged. The same measure, seed, flush and release path runs under either preference, and the geometry cache is maintained as before. Nothing in JavaScript reads the preference.
     - **Tests:**
       - **`styles.test.ts`:** a new P-19 S4 block covers:
@@ -2440,7 +2443,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - **Move:**
         - read every distance and each mover's current P-19 offset;
         - seed every mover with inline `transition-property: none` and `transform: translateY(…)`;
-        - one `list.offsetHeight` flush;
+        - one `list.offsetHeight` layout read as the flush, within D2's one extra layout per affected list;
         - release.
 
         The flex layout stays authoritative, the root computes to `transform: none` at rest, and there is no wrapper and no DOM reorder.
@@ -2627,9 +2630,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Browser support.** Motion uses the individual `translate`, `scale` and `rotate` properties. The browser-support statement must not claim a floor below the one recorded in P-18 D0, decision 6.
 
 - Notes from P-19 (D2 and S5) for the theming and customisation documentation:
-  - **Toast root `transform`.** The library owns the toast root's `transform` for stack repositioning. A consumer `transform` on the root, for example through a toast's `className`, is not supported. Apply transforms inside custom content instead. Every other class and style on the root is unaffected. Describe the behaviour, not the mechanism.
+  - **Toast root `transform`.** The library owns the toast root's `transform` for stack repositioning. A consumer `transform` on the root, for example through a toast's `className`, is not supported. Apply transforms inside custom content instead. Every other class and style on the root keeps applying, apart from the transition caveats below. Describe the behaviour, not the mechanism.
   - **Repositioning.** When a stack's toasts change, the remaining toasts move smoothly to their new places. A toast that changes size, or a viewport change, does not animate. Under reduced motion the move is instant. The timing is not customisable in 2.0: there are no reposition tokens, and the public set stays at 28.
-  - **Transitions on the root.** A consumer rule that replaces `transition-property` on the toast root turns the reposition transition off for that toast. The toast still ends in the right place, only without the smooth move. To transition another property as well, list `transform` alongside it. A rule that sets `transition-duration` or `transition-timing-function` on the root changes the move's timing.
+  - **Transitions on the root.** The toast root's transitions belong to the library. Overriding them can interfere with repositioning and with its reduced-motion behaviour. Recommend animating an inner element of custom content instead. Document three interactions:
+    - **Seed interruption.** When a stack's toasts change, each moved toast's root briefly has its transitions switched off. A consumer transition running on that same root at that moment, on any property, is cancelled and jumps to its end value.
+    - **Replacing `transition-property`.** A consumer rule that replaces `transition-property` on the root turns the reposition transition off for that toast. The toast still ends in the right place, only without the smooth move. To transition another property as well, list `transform` alongside it.
+    - **Duration and reduced motion.** A consumer `transition-duration` or `transition-timing-function` on the root that wins the cascade changes the move's timing. The library's rules have zero specificity, so such a rule also overrides the reduced-motion zero duration, and the move animates even under `prefers-reduced-motion: reduce`.
   - **Browser support.** Repositioning uses `transform`, CSS transitions and ResizeObserver, all within the floor recorded in P-18 D0, decision 6. P-19 does not raise it.
 
 **P-27 Migration guide** (§30), 0.x → 2.0.
