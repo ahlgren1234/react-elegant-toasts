@@ -11,7 +11,7 @@ import { Toaster, toast } from '../index';
 import { attach, entered, getSnapshot, inspectRecords, setGlobalPause } from '../store/store';
 import type { ToastOptions, ToastPosition } from '../types';
 
-type EnvironmentEvent = 'blur' | 'focus' | 'visibilitychange';
+type EnvironmentEvent = 'blur' | 'focus' | 'visibilitychange' | 'keydown';
 
 const recordOf = (id: string) => inspectRecords().find(record => record.id === id);
 const timerOf = (id: string) => recordOf(id)?.timer;
@@ -56,6 +56,7 @@ function trackListeners() {
     blur: new Set(),
     focus: new Set(),
     visibilitychange: new Set(),
+    keydown: new Set(),
   };
   let added = 0;
   const watch = (target: EventTarget, types: readonly EnvironmentEvent[]) => {
@@ -76,16 +77,17 @@ function trackListeners() {
     });
   };
   watch(window, ['blur', 'focus']);
-  watch(document, ['visibilitychange']);
+  watch(document, ['visibilitychange', 'keydown']);
   return {
     /** How many listeners of each type are attached now. */
     counts: () => ({
       blur: live.blur.size,
       focus: live.focus.size,
       visibilitychange: live.visibilitychange.size,
+      keydown: live.keydown.size,
     }),
     /** Every listener attached now. */
-    all: () => [...live.blur, ...live.focus, ...live.visibilitychange],
+    all: () => [...live.blur, ...live.focus, ...live.visibilitychange, ...live.keydown],
     /** How many environmental listeners were ever added. */
     added: () => added,
   };
@@ -122,8 +124,9 @@ function trackElementListeners() {
   };
 }
 
-const NONE = { blur: 0, focus: 0, visibilitychange: 0 };
-const ONE_EACH = { blur: 1, focus: 1, visibilitychange: 1 };
+// The active Toaster's fixed global listeners: these three (P-15) and the hotkey's keydown (P-16).
+const NONE = { blur: 0, focus: 0, visibilitychange: 0, keydown: 0 };
+const ONE_EACH = { blur: 1, focus: 1, visibilitychange: 1, keydown: 1 };
 
 let warn: MockInstance<typeof console.warn>;
 let error: MockInstance<typeof console.error>;
@@ -141,10 +144,30 @@ afterEach(() => {
 });
 
 describe('listener ownership (§10, §32)', () => {
-  it('the active Toaster attaches exactly one blur, focus and visibilitychange listener', () => {
+  it('the active Toaster attaches exactly one blur, focus, visibilitychange and keydown listener', () => {
     const listeners = trackListeners();
     render(<Toaster />);
     expect(listeners.counts()).toEqual(ONE_EACH);
+  });
+
+  it('focus restoration adds no listener (P-16)', () => {
+    const listeners = trackListeners();
+    render(<Toaster />);
+    showVisible('a');
+    showVisible('b');
+    act(() => (document.querySelector('.ret-toast__close') as HTMLButtonElement).focus());
+    act(() => {
+      toast.dismiss('b');
+    });
+    flush();
+    expect(document.activeElement).toBe(document.querySelector('.ret-toast__close'));
+    act(() => {
+      toast.dismiss('a');
+    });
+    expect(document.activeElement).toBe(document.querySelector('section'));
+    flush();
+    expect(listeners.counts()).toEqual(ONE_EACH);
+    expect(listeners.added()).toBe(4);
   });
 
   it('StrictMode replay leaves no duplicate listeners', async () => {
@@ -156,7 +179,7 @@ describe('listener ownership (§10, §32)', () => {
     );
     await settle();
     expect(listeners.counts()).toEqual(ONE_EACH);
-    expect(listeners.added()).toBe(3);
+    expect(listeners.added()).toBe(4);
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -171,11 +194,33 @@ describe('listener ownership (§10, §32)', () => {
     const attached = listeners.all();
     rerender(
       <StrictMode>
-        <Toaster position="bottom-left" duration={1000} maxVisible={2} theme="dark" />
+        <Toaster
+          position="bottom-left"
+          duration={1000}
+          maxVisible={2}
+          theme="dark"
+          hotkey={['ctrlKey', 'KeyY']}
+        />
       </StrictMode>
     );
     await settle();
-    expect(listeners.added()).toBe(3);
+    // The region advertises each new hotkey (P-16) with the same four listeners.
+    const region = document.querySelector('section') as HTMLElement;
+    expect(region).toHaveAttribute('aria-keyshortcuts', 'Control+Y');
+    for (const [hotkey, shortcut] of [
+      [false, null],
+      [['Minus'], null],
+      [undefined, 'Alt+T'],
+    ] as const) {
+      rerender(
+        <StrictMode>
+          <Toaster hotkey={hotkey} />
+        </StrictMode>
+      );
+      await settle();
+      expect(region.getAttribute('aria-keyshortcuts')).toBe(shortcut);
+    }
+    expect(listeners.added()).toBe(4);
     expect(listeners.all()).toEqual(attached);
   });
 
@@ -200,7 +245,7 @@ describe('listener ownership (§10, §32)', () => {
     );
     await settle();
     expect(listeners.counts()).toEqual(ONE_EACH);
-    expect(listeners.added()).toBe(3);
+    expect(listeners.added()).toBe(4);
     expect(isRunning('t')).toBe(false);
   });
 

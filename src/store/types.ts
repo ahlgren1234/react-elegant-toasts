@@ -92,6 +92,12 @@ export interface ToastRecord {
    * replacement clears it; dismissal and settlement clear it too.
    */
   readonly promiseToken: symbol | undefined;
+  /**
+   * The last `revision` announced to assistive technology, or undefined before the first (§17.1).
+   * Every replacement increments `revision`, so the new revision is unannounced; moving between
+   * queue, positions and Toasters keeps the record, so nothing is announced twice. Never in a view.
+   */
+  readonly announcedRevision: number | undefined;
 }
 
 /** What rendering needs from a rendered (entering, visible or exiting) toast. */

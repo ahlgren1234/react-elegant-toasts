@@ -19,32 +19,41 @@ import {
 } from '../store/store';
 import type { ToasterToken, ToastView } from '../store/types';
 import type { ToasterProps, ToastPosition, ToastTheme } from '../types';
-import { resolveCloseButton } from './defaults';
+import { AnnouncerContext, createAnnouncer, VISUALLY_HIDDEN } from './announcer';
+import { resolveCloseButton, resolveLabels } from './defaults';
 import { ToastItem } from './ToastItem';
 import { useEnvironmentPause } from './useEnvironmentPause';
+import { keyShortcutsOf, useHotkey } from './useHotkey';
 
 const createToken = (): ToasterToken => ({});
 
 const THEMES: readonly unknown[] = ['light', 'dark', 'system'] satisfies readonly ToastTheme[];
-// The region's name until `labels` arrives (§6.5, §17.2).
-const REGION_LABEL = 'Notifications';
 
 interface PositionListProps {
   readonly position: ToastPosition;
   readonly views: readonly ToastView[];
   /** The Toaster's `closeButton` prop, as given. */
   readonly closeButton: boolean | undefined;
+  /** The close button's resolved name. */
+  readonly closeLabel: string;
+  /** The resolved prefixes of warning and error announcements. */
+  readonly warningPrefix: string;
+  readonly errorPrefix: string;
 }
 
 // One position's toasts (§12). The store lists them oldest first. The newest toast is nearest the
 // anchored edge, and DOM order is visual order: top positions reverse the list, bottom positions
 // keep it. Memoised on the store's list, which keeps its identity while it is unchanged. Each
-// item gets its close button already resolved, so a changed Toaster default re-renders only the
-// items it changes.
+// item gets its close button already resolved, and its name only when it shows, and only its own
+// type's announcement prefix, so a changed Toaster default or label re-renders only the items it
+// changes.
 const PositionList = memo(function PositionList({
   position,
   views,
   closeButton,
+  closeLabel,
+  warningPrefix,
+  errorPrefix,
 }: PositionListProps) {
   const ordered = useMemo(
     () => (position.startsWith('top-') ? [...views].reverse() : views),
@@ -53,9 +62,24 @@ const PositionList = memo(function PositionList({
   if (ordered.length === 0) return null;
   return (
     <StackList position={position}>
-      {ordered.map(view => (
-        <ToastItem key={view.id} view={view} closeButton={resolveCloseButton(view, closeButton)} />
-      ))}
+      {ordered.map(view => {
+        const shown = resolveCloseButton(view, closeButton);
+        return (
+          <ToastItem
+            key={view.id}
+            view={view}
+            closeButton={shown}
+            closeLabel={shown ? closeLabel : undefined}
+            announcePrefix={
+              view.type === 'warning'
+                ? warningPrefix
+                : view.type === 'error'
+                  ? errorPrefix
+                  : undefined
+            }
+          />
+        );
+      })}
     </StackList>
   );
 });
@@ -106,6 +130,8 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   duration,
   closeButton,
   theme,
+  hotkey,
+  labels,
   className,
 }: ToasterProps) => {
   const [token] = useState(createToken);
@@ -120,23 +146,45 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   useEffect(() => attach(token), [token]);
   const owner = snapshot.active === token;
   useEnvironmentPause(owner);
+  const section = useRef<HTMLElement>(null);
+  const hotkeySpec = useHotkey(owner, section, hotkey);
+  // Writes into this Toaster's live regions. Its pending announcements go with it.
+  const [announcer] = useState(createAnnouncer);
+  useEffect(() => () => announcer.dispose(), [announcer]);
 
   if (!owner && snapshot.active !== null) return null;
+  // Resolved to strings on every render, so a new `labels` object with the same text changes no
+  // prop below the region.
+  const { region, close, warningPrefix, errorPrefix } = resolveLabels(labels);
+  // The region takes focus from script only, as the last place focus restoration can go (§18). It
+  // advertises the hotkey in effect when ARIA can name it (§17.2); its role is the named section's.
   return (
     <section
+      ref={section}
       className={className ? `ret-toaster ${className}` : 'ret-toaster'}
-      aria-label={REGION_LABEL}
+      aria-label={region}
+      aria-keyshortcuts={hotkeySpec ? keyShortcutsOf(hotkeySpec) : undefined}
       data-theme={THEMES.includes(theme) ? theme : 'system'}
+      tabIndex={-1}
     >
-      {owner &&
-        POSITIONS.map(position => (
-          <PositionList
-            key={position}
-            position={position}
-            views={snapshot.byPosition[position]}
-            closeButton={closeButton}
-          />
-        ))}
+      {/* Persistent and empty until something is announced (§17.1), on the server too (§23). */}
+      <div role="status" aria-live="polite" aria-atomic="false" style={VISUALLY_HIDDEN} />
+      <div aria-live="assertive" aria-atomic="false" style={VISUALLY_HIDDEN} />
+      {owner && (
+        <AnnouncerContext.Provider value={announcer}>
+          {POSITIONS.map(position => (
+            <PositionList
+              key={position}
+              position={position}
+              views={snapshot.byPosition[position]}
+              closeButton={closeButton}
+              closeLabel={close}
+              warningPrefix={warningPrefix}
+              errorPrefix={errorPrefix}
+            />
+          ))}
+        </AnnouncerContext.Provider>
+      )}
     </section>
   );
 };

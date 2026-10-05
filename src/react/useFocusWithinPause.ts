@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { setToastPause } from '../store/store';
 import type { ToastId } from '../types';
+import { activeElementOf } from './focus';
 
 // Focus inside a toast pauses that toast (§10, §17.4). The toast is its `<li>`, by DOM containment:
 // native listeners, so focus in a React portal outside the `<li>` does not count. A move between
@@ -34,13 +35,8 @@ export function useFocusWithinPause(
         observing = false;
       }
     };
-    // The active element of the tree the toast is in: its document, or the shadow root it renders
-    // into, where the document's active element is only the shadow host.
-    const reconcile = () => {
-      const root = item.getRootNode();
-      const active = 'activeElement' in root ? (root as Document | ShadowRoot).activeElement : null;
-      update(item.contains(active));
-    };
+    // The active element of the tree the toast is in, which may be a shadow root.
+    const reconcile = () => update(item.contains(activeElementOf(item)));
     const observer = new (doc.defaultView?.MutationObserver ?? MutationObserver)(reconcile);
     const onFocusIn = () => update(true);
     const onFocusOut = (event: FocusEvent) => {

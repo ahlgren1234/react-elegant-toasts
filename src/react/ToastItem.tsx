@@ -2,11 +2,12 @@ import { Fragment, memo, useEffect, useRef, type MouseEvent } from 'react';
 import { dismiss, entered, exited } from '../store/store';
 import type { ToastView } from '../store/types';
 import { warnInaccessiblePersistent } from '../store/warnings';
+import { useAnnouncement } from './announcer';
+import { registerAction, registerClose, restoreFocusFrom } from './focus';
 import { CLOSE_ICON, typeIcon } from './icons';
 import { useFocusWithinPause } from './useFocusWithinPause';
+import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect';
 
-// The close button's name until `labels` arrives (§6.5, §17.2).
-const CLOSE_LABEL = 'Close notification';
 // The lifecycle fallback (§9 rule 3) until motion arrives (P-18): with no animation to wait for,
 // an enter or exit completes on the next task.
 const LIFECYCLE_FALLBACK_MS = 0;
@@ -15,19 +16,50 @@ interface ToastItemProps {
   readonly view: ToastView;
   /** Whether the close button shows, already resolved against the Toaster default. */
   readonly closeButton: boolean;
+  /** The close button's name, from the Toaster's labels, while the close button shows. */
+  readonly closeLabel: string | undefined;
+  /** The announcement prefix of a warning or error toast, from the Toaster's labels (§17.1). */
+  readonly announcePrefix: string | undefined;
 }
 
 // One rendered toast (§12, §17.2, §21). Memoised on its view, which the store keeps while nothing
-// render-visible changes, and on its resolved close button, so a change to one toast, or to a
-// Toaster default it does not use, re-renders no other toast (§32, D-16). The content is keyed by
-// `revision`: a replacement re-keys the content without remounting the toast or its controls (§7,
-// §14). Clicking the toast body never dismisses it (D-17). An exiting toast's controls do nothing
-// (§9 rule 4).
-export const ToastItem = memo(function ToastItem({ view, closeButton }: ToastItemProps) {
+// render-visible changes, and on its resolved close button and its name, so a change to one toast,
+// or to a Toaster default or label it does not use, re-renders no other toast (§32, D-16). The
+// content is keyed by `revision`: a replacement re-keys the content without remounting the toast
+// or its controls (§7, §14). Clicking the toast body never dismisses it (D-17). An exiting toast is
+// inert, and its controls also do nothing where `inert` is not enforced (§9 rule 4).
+export const ToastItem = memo(function ToastItem({
+  view,
+  closeButton,
+  closeLabel,
+  announcePrefix,
+}: ToastItemProps) {
   const { id, phase, custom, persistent, options } = view;
   const { action } = options;
   const ref = useRef<HTMLLIElement>(null);
   useFocusWithinPause(ref, id);
+  useAnnouncement(ref, view, announcePrefix);
+
+  // An exiting toast is inert (§9 rule 4), and only an exiting one: revival removes it. Set here,
+  // not as a prop: React 18 drops `inert={true}` and React 19 treats `""` as false, and a prop would
+  // be applied before any layout effect. React never touches the attribute, because it is not
+  // rendered.
+  //
+  // Focus restoration (§18) runs first, in the same effect, while the focused control can still be
+  // found inside the toast: only on the change from entering or visible to exiting, never on a
+  // mount, which also keeps a StrictMode replay from restoring again, and never in a cleanup, so
+  // an unmount restores nothing. Keep that order, and `inert` set whatever restoration achieved.
+  const committedPhase = useRef<ToastView['phase'] | null>(null);
+  useIsomorphicLayoutEffect(() => {
+    const previous = committedPhase.current;
+    committedPhase.current = phase;
+    const item = ref.current;
+    if (!item) return;
+    if (phase === 'exiting' && (previous === 'entering' || previous === 'visible')) {
+      restoreFocusFrom(item);
+    }
+    item.toggleAttribute('inert', phase === 'exiting');
+  }, [phase]);
 
   // Reports the end of an enter or exit. The store ignores a report that no longer matches the
   // toast's phase, so a replacement, revival or detach in between completes nothing stale.
@@ -62,7 +94,13 @@ export const ToastItem = memo(function ToastItem({ view, closeButton }: ToastIte
   // An explicit icon replaces the type's, and `null` removes it. Either way it is decorative.
   const icon = custom ? undefined : options.icon !== undefined ? options.icon : typeIcon(view.type);
   const close = closeButton && (
-    <button type="button" className="ret-toast__close" aria-label={CLOSE_LABEL} onClick={onClose}>
+    <button
+      ref={registerClose}
+      type="button"
+      className="ret-toast__close"
+      aria-label={closeLabel}
+      onClick={onClose}
+    >
       {CLOSE_ICON}
     </button>
   );
@@ -70,14 +108,26 @@ export const ToastItem = memo(function ToastItem({ view, closeButton }: ToastIte
   // Custom toasts are chrome-less (§6.4): their content, and the close button only when asked for.
   if (custom) {
     return (
-      <li ref={ref} className={className} data-phase={phase} data-position={view.position}>
+      <li
+        ref={ref}
+        className={className}
+        data-phase={phase}
+        data-position={view.position}
+        tabIndex={-1}
+      >
         <Fragment key={view.revision}>{view.content}</Fragment>
         {close}
       </li>
     );
   }
   return (
-    <li ref={ref} className={className} data-phase={phase} data-position={view.position}>
+    <li
+      ref={ref}
+      className={className}
+      data-phase={phase}
+      data-position={view.position}
+      tabIndex={-1}
+    >
       {icon != null && (
         <span className="ret-toast__icon" aria-hidden="true">
           {icon}
@@ -90,7 +140,7 @@ export const ToastItem = memo(function ToastItem({ view, closeButton }: ToastIte
         )}
       </div>
       {action && (
-        <button type="button" className="ret-toast__action" onClick={onAction}>
+        <button ref={registerAction} type="button" className="ret-toast__action" onClick={onAction}>
           {action.label}
         </button>
       )}

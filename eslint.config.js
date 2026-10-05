@@ -32,6 +32,10 @@ export default defineConfig(
     ],
     languageOptions: { globals: globals.browser },
     settings: { react: { version: 'detect' } },
+    rules: {
+      // The isomorphic layout effect takes dependencies like the hooks it wraps.
+      'react-hooks/exhaustive-deps': ['warn', { additionalHooks: '^useIsomorphicLayoutEffect$' }],
+    },
   },
   {
     files: ['*.config.{js,ts}', 'scripts/**/*.js'],

@@ -3,10 +3,10 @@
 // lifecycle fallbacks run only when a test advances it, and tests drive `entered` and `exited`
 // themselves when needed. Toast chrome and the fallbacks are covered in toast-item.test.tsx.
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, type ReactElement } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi, type MockInstance } from 'vitest';
 import { Toaster, toast } from '../index';
 import { dismiss, entered, exited, getSnapshot, inspectRecords } from '../store/store';
 import type { ToastPosition } from '../types';
@@ -19,6 +19,8 @@ async function settle(): Promise<void> {
 }
 
 const regions = () => document.querySelectorAll('section');
+// Text queries for a toast skip the hidden announcement copy in the live regions (§17.1).
+const inToasts = { ignore: 'script, style, [aria-live] *' };
 const lists = () =>
   [...document.querySelectorAll('ol')].map(list => list.getAttribute('data-position'));
 const itemsAt = (position: ToastPosition) =>
@@ -48,7 +50,13 @@ describe('the region (§12, §17.2)', () => {
     const region = screen.getByRole('region', { name: 'Notifications' });
     expect(region.tagName).toBe('SECTION');
     expect(region).toHaveClass('ret-toaster', { exact: true });
-    expect(region).toBeEmptyDOMElement();
+    // Only the two empty live regions (§17.1): no list and no toast.
+    expect([...region.children].map(child => child.getAttribute('aria-live'))).toEqual([
+      'polite',
+      'assertive',
+    ]);
+    expect(region).toHaveTextContent('', { normalizeWhitespace: true });
+    expect(region.querySelector('ol, li')).toBeNull();
   });
 
   it("adds the Toaster's className and exposes its theme, defaulting to system", () => {
@@ -100,15 +108,19 @@ describe('the region (§12, §17.2)', () => {
     expect(allItems()).toHaveLength(6);
   });
 
-  it('uses native list semantics, with no alert role and no live region', () => {
+  it('uses native list semantics, with no alert role, and no live region but the two persistent ones', () => {
     render(<Toaster />);
     show('a', 'top-left');
     show('b', 'bottom-right');
     expect(screen.getAllByRole('list')).toHaveLength(2);
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    expect(document.querySelectorAll('[role="alert"], [role="status"], [aria-live]')).toHaveLength(
-      0
-    );
+    expect(document.querySelectorAll('[role="alert"]')).toHaveLength(0);
+    const live = [...document.querySelectorAll('[role="status"], [aria-live]')];
+    expect(live).toHaveLength(2);
+    for (const region of live) {
+      expect(region.parentElement?.tagName).toBe('SECTION');
+      expect(region.closest('ol, li')).toBeNull();
+    }
   });
 });
 
@@ -136,13 +148,16 @@ describe('the toast item seam (§7, §14, §21)', () => {
       toast.success('Saved', { id: 's', position: 'bottom-left', className: 'mine' });
       toast.custom(<strong>Custom</strong>, { id: 'c' });
     });
-    const saved = screen.getByText('Saved').closest('li');
+    const saved = screen.getByText('Saved', inToasts).closest('li');
     expect(saved).toHaveClass('ret-toast ret-toast--success mine', { exact: true });
     expect(saved).toHaveAttribute('data-phase', 'entering');
     expect(saved).toHaveAttribute('data-position', 'bottom-left');
-    expect(screen.getByText('Custom').closest('li')).toHaveClass('ret-toast ret-toast--custom', {
-      exact: true,
-    });
+    expect(screen.getByText('Custom', inToasts).closest('li')).toHaveClass(
+      'ret-toast ret-toast--custom',
+      {
+        exact: true,
+      }
+    );
   });
 
   it('keeps the toast element on replacement, and re-keys its content by revision', () => {
@@ -162,7 +177,7 @@ describe('the toast item seam (§7, §14, §21)', () => {
     render(<Toaster />);
     show('t');
     await settle();
-    const item = screen.getByText('t').closest('li');
+    const item = screen.getByText('t', inToasts).closest('li');
     expect(item).toHaveAttribute('data-phase', 'entering');
     expect(phaseOf('t')).toBe('entering');
 
@@ -182,8 +197,8 @@ describe('the toast item seam (§7, §14, §21)', () => {
       toast('Body', { id: 'b', onDismiss });
     });
     act(() => entered('b'));
-    fireEvent.click(screen.getByText('Body'));
-    fireEvent.click(screen.getByText('Body').closest('li') as HTMLElement);
+    fireEvent.click(screen.getByText('Body', inToasts));
+    fireEvent.click(screen.getByText('Body', inToasts).closest('li') as HTMLElement);
     expect(phaseOf('b')).toBe('visible');
     expect(onDismiss).not.toHaveBeenCalled();
   });
@@ -371,15 +386,31 @@ describe('ownership (§8.5, AC-NT-5)', () => {
   });
 });
 
+/**
+ * Renders on the server path (§23). jsdom defines `window`, so a plain `renderToString` here would
+ * take the browser path, where React warns about every layout effect; a real server has no
+ * `window`, so it is hidden for the render only.
+ */
+function renderOnServer(element: ReactElement): string {
+  vi.stubGlobal('window', undefined);
+  try {
+    return renderToString(element);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
+
 describe('hydration (§23)', () => {
   it('hydrates the server shell without a mismatch, then renders client toasts', async () => {
-    const html = renderToString(<Toaster />);
+    // Watches the server render and the hydration alike.
+    const error = vi.spyOn(console, 'error');
+    onTestFinished(() => error.mockRestore());
+    const html = renderOnServer(<Toaster />);
     const container = document.createElement('div');
     container.innerHTML = html;
     document.body.append(container);
     // A client-side toast created before hydration: queued, so the snapshot is still empty.
     toast('client');
-    const error = vi.spyOn(console, 'error');
 
     const root = await act(async () => {
       const hydrated = hydrateRoot(container, <Toaster />);
@@ -387,7 +418,7 @@ describe('hydration (§23)', () => {
       return hydrated;
     });
     await settle();
-    expect(error).not.toHaveBeenCalled();
+    expect(error.mock.calls).toEqual([]);
     expect(container.querySelectorAll('section')).toHaveLength(1);
     expect(itemsAt('top-right')).toEqual(['client']);
     expect(container.querySelector('li .ret-toast__close')).not.toBeNull();
