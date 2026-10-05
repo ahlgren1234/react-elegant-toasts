@@ -1214,13 +1214,17 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       for (const element of animated) expect(animationOf(element)).toEqual({});
     });
 
-    // Narrowed by P-19 S2 from "adds no transition": the one transition is stack repositioning's.
+    // Narrowed by P-19 S2 from "adds no transition": the one transition is stack repositioning's,
+    // and P-19 S4 adds its reduced-motion duration.
     it("adds no transition of its own: the only one is the toast root's reposition transition", () => {
       expect(
         rules
           .filter(r => Object.keys(declarations(r.style)).some(p => /^transition/.test(p)))
           .map(r => [r.selector, r.media])
-      ).toEqual([[':where(.ret-toast)', null]]);
+      ).toEqual([
+        [':where(.ret-toast)', null],
+        [':where(.ret-toast)', REDUCED],
+      ]);
     });
 
     it('leaves motion to CSS: no JavaScript reads the reduced-motion preference', () => {
@@ -1316,6 +1320,8 @@ describe('the loading spinner (§22, P-18 S3)', () => {
 
 const REDUCED = '(prefers-reduced-motion: reduce)';
 const reducedRules = rules.filter(r => r.media === REDUCED);
+/** P-18's reduced-motion rules: every rule of the block but P-19's repositioning one. */
+const p18ReducedRules = reducedRules.filter(r => r.selector !== ':where(.ret-toast)');
 
 /**
  * The declarations `element` gets under reduced motion: the top-level rules, then the
@@ -1393,13 +1399,16 @@ describe('stack repositioning (§22, P-19 S2)', () => {
 });
 
 describe('reduced motion (§17.5, §22, P-18 S4)', () => {
-  it('is one media block, after every motion rule, that only removes animation names', () => {
+  // Narrowed by P-19 S4: the block's third rule is stack repositioning's (tested below); P-18's
+  // two rules are unchanged and still only remove animation names.
+  it('is one media block, after every motion rule: P-18 only removes animation names', () => {
     expect((css.match(/@media \(prefers-reduced-motion/g) ?? []).length).toBe(1);
     expect(reducedRules.map(r => r.selector)).toEqual([
       ":where(.ret-toast[data-phase='entering'], .ret-toast[data-phase='exiting'])",
       ':where(.ret-toast__spinner)',
+      ':where(.ret-toast)',
     ]);
-    for (const rule of reducedRules) {
+    for (const rule of p18ReducedRules) {
       expect(declarations(rule.style)).toEqual({ 'animation-name': 'none' });
     }
     const animated = rules
@@ -1444,8 +1453,9 @@ describe('reduced motion (§17.5, §22, P-18 S4)', () => {
 
   it('adds no keyframes, fade, token or settled style of its own', () => {
     expect([...keyframes().keys()]).toHaveLength(5);
-    for (const rule of reducedRules) {
-      expect(tokensOf(rule.style)).toEqual([]);
+    for (const rule of reducedRules) expect(tokensOf(rule.style)).toEqual([]);
+    // Narrowed by P-19 S4: only P-18's rules; P-19's one declaration is tested below.
+    for (const rule of p18ReducedRules) {
       expect(
         Object.keys(declarations(rule.style)).filter(p =>
           /^(opacity|translate|scale|rotate|transform|transition|animation-(duration|delay|fill))/.test(
@@ -1470,6 +1480,81 @@ describe('reduced motion (§17.5, §22, P-18 S4)', () => {
       expect(Object.keys(declarations(rule.style)).filter(p => ANIMATION.test(p))).toEqual([]);
     }
     expect(css).not.toMatch(/forced-color-adjust/);
+  });
+});
+
+describe('reduced-motion stack repositioning (§17.5, §22, P-19 S4)', () => {
+  const transitionsOf = (values: Record<string, string>) =>
+    Object.fromEntries(Object.entries(values).filter(([property]) => /^transition/.test(property)));
+  const rule = () => reducedRules.find(r => r.selector === ':where(.ret-toast)');
+
+  it('takes the reposition transition no time: one declaration, the duration, on the toast root', () => {
+    expect(rule()).toBeDefined();
+    expect(declarations(rule()!.style)).toEqual({ 'transition-duration': '0s' });
+  });
+
+  it.each(POSITIONS)('makes every toast at %s move instantly, in every phase', position => {
+    for (const phase of PHASES) {
+      for (const type of ['success', 'default', 'loading', 'custom']) {
+        expect(transitionsOf(declaredReduced(toastIn(phase, position, type)))).toEqual({
+          ...REPOSITION,
+          'transition-duration': '0s',
+        });
+      }
+    }
+  });
+
+  it('leaves the normal 200 ms and its easing as they are outside the media block', () => {
+    for (const phase of PHASES) {
+      expect(transitionsOf(declared(toastIn(phase, 'bottom-center', 'custom')))).toEqual(
+        REPOSITION
+      );
+    }
+    expect(REPOSITION['transition-duration']).toBe('200ms');
+    expect(REPOSITION['transition-timing-function']).toBe('cubic-bezier(0.2, 0, 0, 1)');
+  });
+
+  it('adds no transform, fade, scale, translation, animation or token under reduced motion', () => {
+    const own = Object.keys(declarations(rule()!.style));
+    expect(
+      own.filter(p => /^(transform|opacity|scale|translate|rotate|animation)/.test(p))
+    ).toEqual([]);
+    expect(tokensOf(rule()!.style)).toEqual([]);
+    for (const phase of PHASES) {
+      const reduced = declaredReduced(toastIn(phase, 'top-left'));
+      expect(reduced.transform).toBeUndefined();
+      expect(reduced.opacity).toBeUndefined();
+      expect(reduced.scale).toBeUndefined();
+      expect(reduced.translate).toBeUndefined();
+    }
+  });
+
+  it('reaches no other element: the region, lists, parts and spinner have no transition', () => {
+    const item = toastIn('visible', 'top-right');
+    for (const element of [
+      regionOf(),
+      ...POSITIONS.map(listAt),
+      ...item.children,
+      spinnerIn('visible'),
+    ]) {
+      expect(transitionsOf(declaredReduced(element))).toEqual({});
+    }
+  });
+
+  it('comes after the normal transition, so it wins at the same zero specificity', () => {
+    const normal = rules.findIndex(
+      r => r.media === null && r.style.getPropertyValue('transition-property')
+    );
+    expect(normal).toBeGreaterThanOrEqual(0);
+    expect(rules.indexOf(rule()!)).toBeGreaterThan(normal);
+  });
+
+  it('keeps the public contract: 28 tokens, no reposition token, no new hook', () => {
+    const tokens = [...new Set(rules.flatMap(r => tokensOf(r.style)))];
+    expect(tokens).toHaveLength(28);
+    expect(tokens.filter(t => /reposition|move|transition|stack/.test(t))).toEqual([]);
+    const attributes = new Set(css.match(/\[[a-z-]+/g)?.map(a => a.slice(1)));
+    expect([...attributes].sort()).toEqual(['data-phase', 'data-position', 'data-theme']);
   });
 });
 

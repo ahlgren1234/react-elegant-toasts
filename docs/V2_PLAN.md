@@ -1845,7 +1845,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - **Prototype gate:** build both the measured-offset approach and the FLIP/WAAPI approach, choose one within the §22 constraints, and record the decision in the PR.
 - Scope: the chosen technique, including its reduced-motion behaviour.
 - Carried over from P-18. Enter and exit animate `opacity` and the individual `translate` and `scale` on the toast root, and the spinner the individual `rotate` on its icon, so `transform` is free for repositioning. Neighbouring toasts still jump when a toast enters, and when an exiting toast is removed at the end of its exit; smoothing that is P-19's.
-- **Status: S3 done.** D0, D1, D2 and S1 to S3 are done. Production uses candidate A, measured layout offsets with a flow-delta CSS transition (D2 below), and stack repositioning is on and hardened. S4 is next.
+- **Status: S4 done.** D0, D1, D2 and S1 to S4 are done. Production uses candidate A, measured layout offsets with a flow-delta CSS transition (D2 below), stack repositioning is on and hardened, and it is instant under reduced motion. S5 is next.
 - Defects: none. Appendix A assigns no defect to P-19.
 - Acceptance: AC-MO-2 is P-19's. P-19 extends AC-MO-3 to reflow. AC-LC-1 to AC-LC-3, AC-POS-1, AC-KB-1, AC-KB-2, AC-Q-2, AC-CSS-1 and AC-CSS-3 must not regress. As with AC-MO-1 in P-18, AC-MO-2's real-browser proof ("reflow", §26) is P-22's.
 - Decisions locked before implementation (D0). They do **not** choose between the two techniques. That is D2's decision.
@@ -2336,7 +2336,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
         - Correcting it would mean reading P-18's `scale` in P-19, which S1 kept out of scope. It stays an observation for the maintainer and for P-22's real-browser reflow proof.
       - **No ResizeObserver:** where ResizeObserver is missing, a consumer's custom content that resizes itself without a list commit leaves the cache stale until the next commit. No browser at the support floor lacks it.
       - **Rounding:** `offset*` metrics are whole pixels, so fractional layouts can leave up to about 1px at a retarget. Every move still ends exactly at `transform: none`.
-  - **S4, reduced motion and contract proof:**
+  - **S4, reduced motion and contract proof (done):**
     - **Responsibility:** the reduced-motion rule in the existing `@media (prefers-reduced-motion: reduce)` block. The rule sets only the reposition transition's duration to zero.
     - **Tests:**
       - `styles.test.ts`: the reduced-motion block now holds three rules, the P-18 two unchanged; 28 tokens; no new class or attribute; `transform` only.
@@ -2349,6 +2349,68 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Mutations:** the rule removed, a fade added, `matchMedia` added, a public token added, P-18's reduced-motion rules changed.
     - **Manual checkpoint:** Chromium reduced-motion emulation.
     - **Commit:** `feat: add reduced-motion stack repositioning`.
+    - **CSS:** a third rule in the existing `@media (prefers-reduced-motion: reduce)` block, `:where(.ret-toast) { transition-duration: 0s; }`, after P-18's two rules, which are unchanged. With no duration, no transition starts, so a released seed resolves at once to the real layout position: no translation, no fade, no scale. The normal rule (200 ms, `cubic-bezier(0.2, 0, 0, 1)`) is unchanged. No `transform`, no `transition: none` (a consumer's transitions on other properties keep their own durations unless they share the root's `transition-duration`), no token and no internal property.
+    - **JavaScript:** unchanged. The same measure, seed, flush and release path runs under either preference, and the geometry cache is maintained as before. Nothing in JavaScript reads the preference.
+    - **Tests:**
+      - **`styles.test.ts`:** a new P-19 S4 block covers:
+        - one declaration, `transition-duration: 0s`, on the toast root;
+        - every type and phase at all six positions resolving to the full reposition transition with a zero duration;
+        - the normal 200 ms and easing intact outside the block;
+        - no transform, fade, scale, translation, animation or token in the rule, and none resolved under reduced motion;
+        - the region, lists, parts and spinner untouched;
+        - source order after the normal rule;
+        - 28 tokens, none for repositioning, and still only the `data-phase`, `data-position` and `data-theme` hooks.
+      - **`reposition-render.test.tsx` (75 tests):**
+        - a byte-identical seed, flush and release log whether or not the page reports reduced motion, with `matchMedia` stubbed and never called;
+        - the instant path: a zero-duration transition ends at release, and computed styles report `transition-duration: 0s`. Survivors are at their layout position right after each commit, the flush still happens, and nothing stays in flight or inline;
+        - enter, exit, removal and promotion keep their timing;
+        - P-18 completion reads no layout. Enters and exits were completed by `animationend` and by the fallback. Every layout read seen came from `useStackReposition`'s layout effect, none from `onAnimationEnd`, `lifecycleFallback` or `fallbackDelay`;
+        - `motion.ts` and `ToastItem.tsx` import nothing from P-19.
+    - **Guard narrowing:**
+      - P-18's "one media block that only removes animation names" now lists three selectors and checks P-18's two rules still declare only `animation-name: none`.
+      - P-18's "no fade, transition or settled style of its own" applies to P-18's two rules; the P-19 rule is tested on its own.
+      - S2's "only transition-bearing rule" also admits the reduced-motion `:where(.ret-toast)`.
+      - The spinner, enter and exit guarantees and `matchMedia` fences are unchanged.
+    - **Mutations,** each detected by the full suite and restored byte-for-byte:
+
+      | Mutation                                               | Failures |
+      | ------------------------------------------------------ | -------- |
+      | The reduced-motion duration left at 200 ms             | 7        |
+      | The zero duration escaping the media block             | 13       |
+      | A `transform` declared in the rule                     | 4        |
+      | A fade transition added                                | 8        |
+      | A JavaScript `matchMedia` branch                       | 5        |
+      | A JavaScript skip when the computed duration is zero   | 60       |
+      | A public reposition-duration token                     | 12       |
+      | The spinner turning again                              | 2        |
+      | P-18 reduced motion weakened, so the exit animates     | 8        |
+      | The lifecycle waiting for a reposition `transitionend` | 111      |
+
+    - **Validation:** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (33 files, 1,238 tests), `validate:package` and `build:demo` all pass. Public exports and the 28 tokens are unchanged.
+    - **Chromium checkpoint (emulation, machine-observed):**
+      - **Setup:** headless Chrome 154 on Windows over CDP with `Emulation.setEmulatedMedia` (`prefers-reduced-motion: reduce`), `?production-css` at 1440×1100, all six positions through the retained harness.
+      - **Scenarios:** insertion, middle removal, mixed heights, add while exiting, rapid interruption, queue and promotion, and loading toasts.
+      - **Results:**
+        - every toast computed `transition-duration: 0s`;
+        - across more than 4,500 per-commit checks, every toast was already at `transform: none` with no inline style in the microtask after its commit;
+        - 0 frames with a non-`none` transform and 0 reposition transitions;
+        - 0 P-18 enter or exit animations, with `scale` and `translate` always `none`, so the S3 scale composition cannot occur;
+        - the spinner was static (`animation-name: none`, no running animation);
+        - promotion completed, with every toast `visible`;
+        - `offsetParent` was the toast's own list;
+        - no console errors besides the demo's missing favicon.
+      - **Normal motion restored:** with `no-preference`, the duration read `0.2s` again and the moves animated as accepted.
+      - This is browser emulation, not operating-system reduced-motion certification, which belongs to P-29. P-22 repeats it with Playwright emulation.
+    - **Accepted observations and carry-forwards:**
+      - **P-18 `scale` composition (maintainer decision at S4):**
+        - It is accepted as a known v2 composition artifact: up to about 1.79px, machine-observed, during an overlap of P-18 enter or exit and a P-19 move.
+        - P-19 does not compensate for it in v2. P-18 keeps the individual `translate` and `scale` and P-19 the root `transform`; `reposition.ts` parses no P-18 property, and the interruption formula is unchanged.
+        - It does not occur under reduced motion, where P-18 runs no scale.
+        - P-22 evaluates the overlap visually in real browsers. Only browser evidence of a material, human-visible problem there would reopen the architecture.
+      - **No ResizeObserver:** self-resizing custom content can leave the cache stale until the next commit. This is accepted: every browser at the floor has ResizeObserver, and its absence degrades gracefully.
+      - **Rounding:** `offset*` geometry can leave about 1px of sub-pixel rounding at a retarget, and every move still ends exactly at the layout position. This is accepted; the locked layout-space technique stays.
+      - **P-22:** real-browser reflow proof (AC-MO-2), Playwright reduced-motion emulation, and visual evaluation of the scale overlap.
+      - **P-29:** the operating system's reduced-motion setting.
   - **S5, reconciliation and closure:**
     - **Responsibility:**
       - remove the rest of `demo/p19/` and its hooks in `demo/index.tsx`, in a separate commit, `chore: remove P-19 D1 prototype harness`;

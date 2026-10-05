@@ -4,12 +4,16 @@
 // seed, the one flush and the release then show up in order, and the rest state is checked
 // directly. For interruption (S3), a stand-in for the browser's transitions can hold each released
 // seed in flight, so the computed `transform` reports it, and tests advance or settle it at will.
+import fs from 'node:fs';
+import path from 'node:path';
 import { act, render, screen } from '@testing-library/react';
 import { Profiler, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster, toast } from '../index';
 import { dismiss, inspectRecords, resetStore } from '../store/store';
 import type { ToastPosition } from '../types';
+
+const root = path.resolve(__dirname, '../..');
 
 const POSITIONS: readonly ToastPosition[] = [
   'top-left',
@@ -35,6 +39,8 @@ let traces: string[] | null = null;
  */
 const motion = new Map<Element, number>();
 let holding = false;
+/** Computed styles report a zero reposition duration, as the reduced-motion stylesheet gives. */
+let reducedMotion = false;
 
 const titleOf = (item: Element) =>
   item.querySelector('.ret-toast__title')?.textContent ?? item.textContent ?? '';
@@ -157,10 +163,17 @@ function reportMotion() {
     value(element: Element, pseudo?: string | null) {
       const computed = real(element, pseudo);
       const offset = isToast(element) ? motion.get(element) : undefined;
-      if (offset === undefined) return computed;
+      const reduced = reducedMotion && isToast(element);
+      if (offset === undefined && !reduced) return computed;
       return new Proxy(computed, {
         get(target, key) {
-          if (key === 'transform') return `matrix(1, 0, 0, 1, 0, ${offset})`;
+          if (key === 'transform' && offset !== undefined)
+            return `matrix(1, 0, 0, 1, 0, ${offset})`;
+          if (reduced && key === 'transitionDuration') return '0s';
+          if (reduced && key === 'getPropertyValue') {
+            return (property: string) =>
+              property === 'transition-duration' ? '0s' : target.getPropertyValue(property);
+          }
           const value: unknown = Reflect.get(target, key, target);
           return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
         },
@@ -265,6 +278,7 @@ beforeEach(() => {
   traces = null;
   motion.clear();
   holding = false;
+  reducedMotion = false;
   installLayout();
   recordStyleWrites();
   reportMotion();
@@ -1393,5 +1407,155 @@ describe('renders, focus and global resources (S3)', () => {
     ).toEqual([]);
     expect(observers.every(stack => stack.includes('useFocusWithinPause'))).toBe(true);
     expect(observers).toHaveLength(5);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// P-19 S4: reduced motion. The policy is CSS only (styles.test.ts): under
+// `prefers-reduced-motion: reduce` the reposition transition takes no time. jsdom evaluates no
+// media query, so these tests show what JavaScript does, which is the same either way, and what a
+// zero-duration transition means for it: a released seed ends at once.
+// ---------------------------------------------------------------------------------------------
+
+/** The same membership changes at a top and a bottom list, returning the full log. */
+function membershipScenario(): string[] {
+  const view = render(<Toaster maxVisible={3} />);
+  log = [];
+  show('a');
+  show('b', 'top-right', 70);
+  show('c', 'top-right', 30);
+  show('d');
+  show('x', 'bottom-left');
+  show('y', 'bottom-left', 90);
+  close('b');
+  advance();
+  show('z', 'bottom-left');
+  const logged = [...log];
+  view.unmount();
+  act(() => resetStore());
+  settle();
+  return logged;
+}
+
+describe('reduced motion (S4)', () => {
+  it('runs the same seed, flush and release whatever the motion preference', () => {
+    const normal = membershipScenario();
+    // Even a page that reports reduced motion to any script changes nothing: no script asks.
+    const media = vi.fn((query: string) => ({ matches: true, media: query }) as MediaQueryList);
+    vi.stubGlobal('matchMedia', media);
+    const reduced = membershipScenario();
+    expect(normal.filter(entry => entry.startsWith('seed')).length).toBeGreaterThan(0);
+    expect(reduced).toEqual(normal);
+    expect(media).not.toHaveBeenCalled();
+  });
+
+  it('puts every survivor at its new layout position at once when the transition takes no time', () => {
+    // `holding` off: a released seed ends at once, as a zero-duration transition does. Computed
+    // styles say so too, so a script that looked would see it; the path must not change.
+    holding = false;
+    reducedMotion = true;
+    render(<Toaster maxVisible={6} />);
+    for (const id of ['a', 'b', 'c']) show(id, 'bottom-right', id === 'b' ? 80 : undefined);
+    for (const step of [
+      () => show('d', 'bottom-right', 60),
+      () => {
+        close('b');
+        advance();
+      },
+      () => show('e', 'bottom-right'),
+    ]) {
+      log = [];
+      step();
+      // Still seeded and released by the same path; nothing is left in flight or inline.
+      expect(log).toContain('flush');
+      expect(motion.size).toBe(0);
+      for (const item of toastsOf(listAt('bottom-right'))) {
+        expect(visualOf(item)).toBe(layoutOf(item));
+      }
+      expectAtRest();
+    }
+  });
+
+  it('gates no lifecycle step: enter, exit, removal and promotion keep their timing', () => {
+    const run = () => {
+      const phases: string[] = [];
+      const view = render(<Toaster maxVisible={2} />);
+      show('a');
+      show('b');
+      act(() => {
+        toast('c', { id: 'c', duration: Infinity });
+      });
+      phases.push(`${phaseOf('c')}`);
+      close('a');
+      phases.push(`${phaseOf('a')} ${phaseOf('c')}`);
+      advance();
+      phases.push(`${phaseOf('a')} ${phaseOf('c')}`);
+      advance();
+      phases.push(`${phaseOf('c')}`);
+      view.unmount();
+      act(() => resetStore());
+      return phases;
+    };
+    const moving = run();
+    expect(seeds()).not.toEqual([]);
+    expect(moving).toEqual(['queued', 'exiting queued', 'undefined entering', 'visible']);
+    for (const [target, key, descriptor] of saved.reverse()) {
+      Object.defineProperty(target, key, descriptor);
+    }
+    saved.length = 0;
+    expect(run()).toEqual(moving);
+  });
+});
+
+describe('P-18 completion reads no P-19 layout (S4)', () => {
+  /** A native `animationend` for the toast root, as a browser would dispatch it. */
+  function animationEnd(target: Element, animationName: string) {
+    const event = new Event('animationend', { bubbles: true });
+    Object.defineProperty(event, 'animationName', { value: animationName });
+    act(() => {
+      target.dispatchEvent(event);
+    });
+  }
+
+  it('completes enters and exits, by event and by fallback, with no layout read of its own', () => {
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = 100;
+    try {
+      render(<Toaster />);
+      show('a');
+      traces = [];
+      // Enter completed by its event, then by the fallback; exits likewise.
+      act(() => {
+        toast('b', { id: 'b', duration: Infinity });
+      });
+      animationEnd(itemOf('b'), 'ret-enter-top');
+      expect(phaseOf('b')).toBe('visible');
+      add('c');
+      advance();
+      expect(phaseOf('c')).toBe('visible');
+      close('b');
+      animationEnd(itemOf('b'), 'ret-exit-top');
+      expect(phaseOf('b')).toBeUndefined();
+      close('c');
+      advance();
+      expect(phaseOf('c')).toBeUndefined();
+      // P-19 did measure (its commits), so the instrumentation saw layout reads...
+      expect(traces.length).toBeGreaterThan(0);
+      // ...and every one came from the list's layout effect, none from the completion path.
+      for (const stack of traces) {
+        expect(stack).not.toMatch(/onAnimationEnd|lifecycleFallback|fallbackDelay/);
+        expect(stack).toMatch(/useStackReposition/);
+      }
+    } finally {
+      Error.stackTraceLimit = limit;
+      traces = null;
+    }
+  });
+
+  it('keeps the completion modules apart from P-19: neither imports its geometry', () => {
+    for (const file of ['src/react/motion.ts', 'src/react/ToastItem.tsx']) {
+      const source = fs.readFileSync(path.join(root, file), 'utf8');
+      expect(source).not.toMatch(/reposition|useStackReposition/);
+    }
   });
 });

@@ -461,8 +461,10 @@
  * fade, and a static spinner. Removing the animation name is the whole rule: with no animation
  * there is nothing to fill, so an exiting toast keeps its ordinary look until it is removed, and
  * the lifecycle finds no library animation and completes at once (§9 rule 3). The tokens stay as
- * they are. It comes after every motion rule, so it wins at the same zero specificity. CSS only:
- * nothing in JavaScript reads the preference.
+ * they are. Stack repositioning (P-19) is instant: its transition takes no time, so a moved
+ * toast is at its new place at once, with no fade or translation instead; the renderer still
+ * seeds and releases it as usual. It comes after every motion rule, so it wins at the same zero
+ * specificity. CSS only: nothing in JavaScript reads the preference.
  */
 @media (prefers-reduced-motion: reduce) {
   :where(.ret-toast[data-phase='entering'], .ret-toast[data-phase='exiting']) {
@@ -471,6 +473,10 @@
 
   :where(.ret-toast__spinner) {
     animation-name: none;
+  }
+
+  :where(.ret-toast) {
+    transition-duration: 0s;
   }
 }
 
