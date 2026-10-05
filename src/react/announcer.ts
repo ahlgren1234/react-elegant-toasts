@@ -10,8 +10,12 @@ import type { ToastType } from '../types';
 
 export type Politeness = 'polite' | 'assertive';
 
-// Hidden visually but not from assistive technology, whether or not the stylesheet is loaded.
-// Inline for now (P-16); P-17 may move it into the stylesheet.
+// The live regions are hidden visually but not from assistive technology two ways (P-17 decision
+// 4). Inline, so they stay hidden whether or not the stylesheet is loaded, and by a class with the
+// same declarations in the stylesheet, for server-rendered HTML whose `style` attribute a
+// restrictive CSP blocks (§34). Keep the two in step; the style contract test compares them.
+export const LIVE_REGION = 'ret-toaster__live-region';
+
 export const VISUALLY_HIDDEN: CSSProperties = {
   position: 'absolute',
   width: '1px',

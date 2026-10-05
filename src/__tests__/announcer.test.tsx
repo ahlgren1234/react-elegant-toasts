@@ -116,6 +116,11 @@ describe('the live regions (§17.1, D-18)', () => {
       expect(region).toBeEmptyDOMElement();
       expect(region).toHaveStyle({ position: 'absolute', width: '1px', height: '1px' });
       expect(region.getAttribute('style')).toContain('clip-path: inset(50%)');
+      // Hidden by the stylesheet's class too (P-17 S5), and never from assistive technology.
+      expect(region).toHaveClass('ret-toaster__live-region', { exact: true });
+      for (const attribute of ['hidden', 'aria-hidden', 'inert']) {
+        expect(region).not.toHaveAttribute(attribute);
+      }
     }
     expect(document.querySelectorAll('[role="alert"]')).toHaveLength(0);
 

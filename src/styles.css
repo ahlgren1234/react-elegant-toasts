@@ -324,3 +324,109 @@
   inset-inline-end: 8px;
   color: inherit;
 }
+
+/*
+ * Focus (§17.4, §18). The region, each toast root and the library's own action and close buttons
+ * show a ring in `--ret-focus` whenever the browser shows focus (`:focus-visible`). Rings are
+ * outlines, so they never change layout, and nothing animates them (P-18 owns motion). The colour
+ * meets 3:1 against `--ret-surface` in every theme (AC-A11Y-6). No rule reaches into custom content
+ * other than the library's own close button; the consumer styles focus there (§17.3).
+ *
+ * The region takes focus from script only, as the last step of focus restoration (§18). It has no
+ * box of its own and must never become an overlay, so its own outline gives way to a ring drawn by
+ * a fixed pseudo-element just inside the viewport. The pseudo-element exists only while the region
+ * shows focus and never takes pointer input. It is two-tone, a `--ret-focus` band inside a
+ * `--ret-surface` halo, so the 3:1 pair holds over whatever page lies beneath it.
+ */
+:where(.ret-toaster:focus-visible) {
+  outline: none;
+}
+
+:where(.ret-toaster:focus-visible)::after {
+  content: '';
+  position: fixed;
+  inset: 4px;
+  z-index: var(--ret-z-index);
+  border: 3px solid var(--ret-focus);
+  border-radius: 12px;
+  outline: 2px solid var(--ret-surface);
+  pointer-events: none;
+}
+
+/* A toast root takes focus from the hotkey and from focus restoration (§18). On a card the ring
+   takes the border's place, next to the known surface. A custom toast has no surface of its own,
+   so its ring sits just outside it and never covers the consumer's content. */
+:where(.ret-toast:focus-visible) {
+  outline: 2px solid var(--ret-focus);
+  outline-offset: -1px;
+}
+
+:where(.ret-toast--custom:focus-visible) {
+  outline-offset: 2px;
+}
+
+/* The action and close rings sit on the card's surface, outside the button. */
+:where(.ret-toast__action:focus-visible, .ret-toast__close:focus-visible) {
+  outline: 2px solid var(--ret-focus);
+  outline-offset: 2px;
+}
+
+/* A custom toast's close sits on the consumer's background, which the library cannot know. Its
+   ring takes the glyph's colour, which the consumer sets through the toast's `className` to suit
+   that background (S3), so ring and glyph contrast alike. */
+:where(.ret-toast--custom > .ret-toast__close:focus-visible) {
+  outline-color: currentColor;
+}
+
+/*
+ * The persistent live regions (§17.1): hidden visually, never from assistive technology. The same
+ * declarations are also inline on each region (`VISUALLY_HIDDEN`), which works without this
+ * stylesheet. This class is for server-rendered HTML under a restrictive `style-src`, which may
+ * block the inline `style` attribute; hydration does not apply it again (§34). An implementation
+ * detail, not public contract (OQ-25). A plain class rather than `:where()`, so element rules in
+ * the page do not undo it.
+ */
+.ret-toaster__live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * Forced colours (§17.5): the user's palette replaces authored colours and drops shadows and
+ * tints. Meaning never depended on them: each type has its own icon shape and the content carries
+ * the message (S4), so no authored hue is preserved and nothing opts out of forced colours. What
+ * needs help is structure the palette would otherwise erase: the card keeps a visible edge, the
+ * action, a filled button with no border, gets one (its padding gives back the 1px, so the size
+ * holds), and every library ring uses the system `Highlight`, with the region's halo in `Canvas`.
+ */
+@media (forced-colors: active) {
+  :where(.ret-toast:not(.ret-toast--custom)) {
+    border-color: CanvasText;
+  }
+
+  :where(.ret-toast__action) {
+    padding-block: 3px;
+    padding-inline: 9px;
+    border: 1px solid ButtonText;
+  }
+
+  :where(
+    .ret-toast:focus-visible,
+    .ret-toast__action:focus-visible,
+    .ret-toast__close:focus-visible
+  ) {
+    outline-color: Highlight;
+  }
+
+  :where(.ret-toaster:focus-visible)::after {
+    border-color: Highlight;
+    outline-color: Canvas;
+  }
+}

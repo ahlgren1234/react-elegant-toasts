@@ -86,6 +86,16 @@ function Prototype() {
           </>
         )}
       </p>
+      {PRODUCTION_CSS_ONLY && (
+        <p className="demo-note">
+          S5 focus review: Alt+T focuses the first toast, Tab reaches its action and close, Escape
+          returns. The region takes focus only when the last focused toast leaves, for example by
+          pressing Enter on the close of a single toast; Focus region below jumps there directly.
+          Activate it from the keyboard, since browsers show focus after a script moves it only when
+          the last input was a key. For forced colours, use DevTools, Rendering, Emulate CSS media
+          feature forced-colors.
+        </p>
+      )}
 
       <div className="demo-controls">
         <label>
@@ -264,6 +274,17 @@ function Prototype() {
         >
           All six positions
         </button>
+        {PRODUCTION_CSS_ONLY && (
+          // S5 review only: the library focuses the region only as the last step of focus
+          // restoration (§18), which is slow to reach by hand.
+          <button
+            type="button"
+            className="demo-button"
+            onClick={() => document.querySelector<HTMLElement>('.ret-toaster')?.focus()}
+          >
+            Focus region
+          </button>
+        )}
         <button type="button" className="demo-button danger" onClick={() => toast.dismiss()}>
           Dismiss all
         </button>
