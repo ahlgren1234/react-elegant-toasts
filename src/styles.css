@@ -9,7 +9,7 @@
  * Tokens are scoped to `.ret-toaster`, never `:root`. Override them for a Toaster with
  * `.ret-toaster { --ret-surface: … }`, or for one theme with `.ret-toaster[data-theme="dark"]`
  * (and the same rule inside `@media (prefers-color-scheme: dark)` for
- * `.ret-toaster[data-theme="system"]`). Motion tokens belong to P-18 and progress tokens to P-20.
+ * `.ret-toaster[data-theme="system"]`). Progress tokens belong to P-20.
  */
 
 /* Light theme: the default, so it also covers `system` in a light colour scheme. */
@@ -44,6 +44,13 @@
   --ret-offset: 16px;
   --ret-width: 360px;
   --ret-z-index: 9999;
+
+  /* Enter and exit motion (P-18): the same in every theme, so the theme blocks do not repeat them.
+     The lifecycle reads the resolved values, so an override here also times the toast's exit. */
+  --ret-enter-duration: 180ms;
+  --ret-exit-duration: 120ms;
+  --ret-enter-easing: cubic-bezier(0.2, 0, 0, 1);
+  --ret-exit-easing: cubic-bezier(0.4, 0, 1, 1);
 }
 
 /* Dark theme. The `system` block below repeats these values; the style contract test keeps the
@@ -326,11 +333,139 @@
 }
 
 /*
+ * Enter and exit motion (§22, P-18). A toast enters from its anchored edge, from above at top
+ * positions and from below at bottom positions, and exits in reverse; the horizontal placement
+ * never changes the direction (§20). Normal and custom toasts move alike, since the library owns
+ * a custom toast's motion but none of its chrome (§6.4). Only `opacity` and the individual
+ * `translate` and `scale` properties move, never `transform`, which stays free for later stack
+ * and swipe motion.
+ *
+ * Each keyframe authors only its moving end. The other end is the toast's ordinary style, so a
+ * settled toast looks exactly as it does with no motion, and a `visible` toast has no animation.
+ * The exit keeps its last frame until the toast is removed, so it never flashes back.
+ *
+ * The lifecycle completes on the toast's own `animationend` for these names, or on a fallback
+ * read from the toast's computed animation (§9 rule 3), so the names, the edge mapping and the
+ * longhands below agree with `src/react/motion.ts`. The names are an implementation detail, not
+ * public API. Each rule sets longhands, never the `animation` shorthand: an invalid token then
+ * resets only its own property. The name rules stand apart from the timing rules, so a later rule
+ * can turn motion off by `animation-name` alone.
+ */
+@keyframes ret-enter-top {
+  from {
+    opacity: 0;
+    translate: 0 -8px;
+    scale: 0.98;
+  }
+}
+
+@keyframes ret-enter-bottom {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.98;
+  }
+}
+
+@keyframes ret-exit-top {
+  to {
+    opacity: 0;
+    translate: 0 -8px;
+    scale: 0.98;
+  }
+}
+
+@keyframes ret-exit-bottom {
+  to {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.98;
+  }
+}
+
+:where(.ret-toast[data-phase='entering']) {
+  animation-duration: var(--ret-enter-duration);
+  animation-timing-function: var(--ret-enter-easing);
+  animation-delay: 0s;
+  animation-iteration-count: 1;
+  animation-fill-mode: none;
+}
+
+:where(.ret-toast[data-phase='exiting']) {
+  animation-duration: var(--ret-exit-duration);
+  animation-timing-function: var(--ret-exit-easing);
+  animation-delay: 0s;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+:where(.ret-toast[data-phase='entering'][data-position^='top-']) {
+  animation-name: ret-enter-top;
+}
+
+:where(.ret-toast[data-phase='entering'][data-position^='bottom-']) {
+  animation-name: ret-enter-bottom;
+}
+
+:where(.ret-toast[data-phase='exiting'][data-position^='top-']) {
+  animation-name: ret-exit-top;
+}
+
+:where(.ret-toast[data-phase='exiting'][data-position^='bottom-']) {
+  animation-name: ret-exit-bottom;
+}
+
+/*
+ * The loading spinner (§22, P-18): only the library's built-in loading icon turns, marked by its
+ * internal `ret-toast__spinner` class, so a consumer's icon on a loading toast stays as it is.
+ * One steady turn a second, for as long as the icon is rendered, whatever the toast's phase. It
+ * moves the icon, not the toast, so it composes with the toast's enter and exit, and the lifecycle
+ * never completes on it. It uses the individual `rotate` property, never `transform`. The class
+ * and the keyframes are implementation details, not public API.
+ */
+@keyframes ret-spin {
+  from {
+    rotate: 0deg;
+  }
+
+  to {
+    rotate: 360deg;
+  }
+}
+
+:where(.ret-toast__spinner) {
+  animation-name: ret-spin;
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-delay: 0s;
+  animation-iteration-count: infinite;
+}
+
+/*
+ * Reduced motion (§17.5, §22, P-18 D0 decision 4): no enter or exit motion at all, not even a
+ * fade, and a static spinner. Removing the animation name is the whole rule: with no animation
+ * there is nothing to fill, so an exiting toast keeps its ordinary look until it is removed, and
+ * the lifecycle finds no library animation and completes at once (§9 rule 3). The tokens stay as
+ * they are. It comes after every motion rule, so it wins at the same zero specificity. CSS only:
+ * nothing in JavaScript reads the preference.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :where(.ret-toast[data-phase='entering'], .ret-toast[data-phase='exiting']) {
+    animation-name: none;
+  }
+
+  :where(.ret-toast__spinner) {
+    animation-name: none;
+  }
+}
+
+/*
  * Focus (§17.4, §18). The region, each toast root and the library's own action and close buttons
  * show a ring in `--ret-focus` whenever the browser shows focus (`:focus-visible`). Rings are
- * outlines, so they never change layout, and nothing animates them (P-18 owns motion). The colour
- * meets 3:1 against `--ret-surface` in every theme (AC-A11Y-6). No rule reaches into custom content
- * other than the library's own close button; the consumer styles focus there (§17.3).
+ * outlines, so they never change layout, and nothing animates them; a moving toast carries its
+ * ring with it. The colour meets 3:1 against `--ret-surface` in every theme (AC-A11Y-6). No rule
+ * reaches into custom content other than the library's own close button; the consumer styles
+ * focus there (§17.3).
  *
  * The region takes focus from script only, as the last step of focus restoration (§18). It has no
  * box of its own and must never become an overlay, so its own outline gives way to a ring drawn by

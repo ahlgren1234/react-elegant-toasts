@@ -133,6 +133,31 @@ describe('normal toasts (§17.2, §21)', () => {
     expect(slot?.querySelector('svg')).toBeNull();
     expect(itemOf('none').querySelector('.ret-toast__icon')).toBeNull();
   });
+
+  it('marks only the built-in loading icon as the spinner (P-18 S3)', () => {
+    render(<Toaster maxVisible={10} />);
+    act(() => {
+      for (const type of ['success', 'error', 'warning', 'info', 'loading'] as const) {
+        toast[type](type, { id: type });
+      }
+      toast('neutral', { id: 'neutral', icon: <svg data-testid="neutral-icon" /> });
+      toast.loading('own', { id: 'own', icon: <svg data-testid="own-spinner" /> });
+      toast.custom(<svg data-testid="custom-svg" />, { id: 'custom' });
+    });
+    const spinners = document.querySelectorAll('.ret-toast__spinner');
+    expect(spinners).toHaveLength(1);
+    const builtIn = itemOf('loading').querySelector('.ret-toast__icon > svg');
+    expect(spinners[0]).toBe(builtIn);
+    expect(builtIn?.getAttribute('class')).toBe('ret-toast__spinner');
+    for (const type of ['success', 'error', 'warning', 'info']) {
+      expect(itemOf(type).querySelector('.ret-toast__icon > svg')?.hasAttribute('class')).toBe(
+        false
+      );
+    }
+    for (const id of ['neutral-icon', 'own-spinner', 'custom-svg']) {
+      expect(screen.getByTestId(id).hasAttribute('class')).toBe(false);
+    }
+  });
 });
 
 describe('icon and control accessibility (§17.2, D-19)', () => {

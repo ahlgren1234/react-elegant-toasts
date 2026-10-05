@@ -5,12 +5,9 @@ import { warnInaccessiblePersistent } from '../store/warnings';
 import { useAnnouncement } from './announcer';
 import { registerAction, registerClose, restoreFocusFrom } from './focus';
 import { CLOSE_ICON, typeIcon } from './icons';
+import { fallbackDelayOf, libraryAnimationName } from './motion';
 import { useFocusWithinPause } from './useFocusWithinPause';
 import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect';
-
-// The lifecycle fallback (§9 rule 3) until motion arrives (P-18): with no animation to wait for,
-// an enter or exit completes on the next task.
-const LIFECYCLE_FALLBACK_MS = 0;
 
 interface ToastItemProps {
   readonly view: ToastView;
@@ -34,7 +31,7 @@ export const ToastItem = memo(function ToastItem({
   closeLabel,
   announcePrefix,
 }: ToastItemProps) {
-  const { id, phase, custom, persistent, options } = view;
+  const { id, phase, position, custom, persistent, options } = view;
   const { action } = options;
   const ref = useRef<HTMLLIElement>(null);
   useFocusWithinPause(ref, id);
@@ -61,16 +58,38 @@ export const ToastItem = memo(function ToastItem({
     item.toggleAttribute('inert', phase === 'exiting');
   }, [phase]);
 
-  // Reports the end of an enter or exit. The store ignores a report that no longer matches the
-  // toast's phase, so a replacement, revival or detach in between completes nothing stale.
+  // Reports the end of an enter or exit (§9 rule 3): the toast root's own `animationend` for the
+  // library animation of this phase and edge, or the fallback, whichever comes first. The listener
+  // is native, since jsdom has no `AnimationEvent` for React to map. It ignores events bubbling
+  // from descendants, other animations, a consumer's included, and any event once the committed
+  // phase has moved on. The fallback follows the computed animation, or is immediate when no
+  // library animation runs. The store ignores a report that no longer matches the toast's phase,
+  // so a replacement, revival or detach in between completes nothing stale.
   useEffect(() => {
     if (phase === 'visible') return;
+    const item = ref.current;
     const complete = phase === 'entering' ? entered : exited;
-    const timeout = setTimeout(function lifecycleFallback() {
+    const expected = libraryAnimationName(phase, position);
+    const timeout = setTimeout(
+      function lifecycleFallback() {
+        complete(id);
+      },
+      item ? fallbackDelayOf(item, expected) : 0
+    );
+    if (!item) return () => clearTimeout(timeout);
+    const onAnimationEnd = (event: Event) => {
+      if (event.target !== item || item.getAttribute('data-phase') !== phase) return;
+      if ((event as AnimationEvent).animationName !== expected) return;
+      clearTimeout(timeout);
+      item.removeEventListener('animationend', onAnimationEnd);
       complete(id);
-    }, LIFECYCLE_FALLBACK_MS);
-    return () => clearTimeout(timeout);
-  }, [id, phase]);
+    };
+    item.addEventListener('animationend', onAnimationEnd);
+    return () => {
+      clearTimeout(timeout);
+      item.removeEventListener('animationend', onAnimationEnd);
+    };
+  }, [id, phase, position]);
 
   // A persistent normal toast that, as rendered, cannot be dismissed with a keyboard (§17.2).
   // Custom content may bring its own controls (§17.3).
