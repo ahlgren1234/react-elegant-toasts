@@ -18,12 +18,13 @@ import {
   subscribe,
 } from '../store/store';
 import type { ToasterToken, ToastView } from '../store/types';
-import type { ToasterProps, ToastPosition, ToastTheme } from '../types';
+import type { ToastId, ToasterProps, ToastPosition, ToastTheme } from '../types';
 import { AnnouncerContext, createAnnouncer, LIVE_REGION, VISUALLY_HIDDEN } from './announcer';
 import { resolveCloseButton, resolveLabels } from './defaults';
 import { ToastItem } from './ToastItem';
 import { useEnvironmentPause } from './useEnvironmentPause';
 import { keyShortcutsOf, useHotkey } from './useHotkey';
+import { useStackReposition } from './useStackReposition';
 
 const createToken = (): ToasterToken => ({});
 
@@ -59,9 +60,10 @@ const PositionList = memo(function PositionList({
     () => (position.startsWith('top-') ? [...views].reverse() : views),
     [position, views]
   );
+  const ids = useMemo(() => ordered.map(view => view.id), [ordered]);
   if (ordered.length === 0) return null;
   return (
-    <StackList position={position}>
+    <StackList position={position} ids={ids}>
       {ordered.map(view => {
         const shown = resolveCloseButton(view, closeButton);
         return (
@@ -86,15 +88,19 @@ const PositionList = memo(function PositionList({
 
 interface StackListProps {
   readonly position: ToastPosition;
+  /** The IDs of its toasts, in DOM order. */
+  readonly ids: readonly ToastId[];
   readonly children: ReactNode;
 }
 
 // A position's `<ol>`, which exists only while the position has toasts. A pointer over it pauses
 // the whole stack (§10). The listeners are native, so hover follows the DOM, not React portals.
 // The list owns the reason: when it unmounts, for example as its last toast leaves under the
-// pointer, the hover goes with it, since no `pointerleave` will ever arrive.
-function StackList({ position, children }: StackListProps) {
+// pointer, the hover goes with it, since no `pointerleave` will ever arrive. The list also moves
+// its surviving toasts smoothly when its toasts change (§22).
+function StackList({ position, ids, children }: StackListProps) {
   const ref = useRef<HTMLOListElement>(null);
+  useStackReposition(ref, position, ids);
   useEffect(() => {
     const list = ref.current;
     if (!list) return;
