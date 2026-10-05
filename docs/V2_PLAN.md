@@ -1736,10 +1736,14 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 **P-18 Enter and exit motion**
 
+- **Status: complete.** D0 and S1 to S5 are done, the final reconciliation and validation passed, and every manual checkpoint is recorded. The public addition is the four motion tokens (28 in all). What P-18 leaves open is listed under Defects below, in the S5 record and in the P-19, P-21, P-22, P-26 and P-29 entries.
 - Scope: `ret-enter` and `ret-exit`, `animationend` plus the fallbacks, reduced motion, the spinner.
 - Defects: D-13, D-14, D-21.
+  - **D-13 is closed by P-18:** a dismissed toast stays rendered while `exiting` (P-09) and now runs a real exit animation (S2), and it is removed only on its own `animationend` or the computed fallback (S1). `toast-item.test.tsx`, `motion-lifecycle.test.tsx` and `styles.test.ts` show it; real playback in three browsers is AC-MO-1, verified by P-22.
+  - **D-14 is closed by P-18:** v2 motion is vertical with no horizontal component, enter keyframes author only `from`, and a `visible` toast has no animation and no authored `translate`, so no position can keep an offset (S2). `styles.test.ts` checks the exact frames, the settled state and that left, centre and right never change the motion, and the S2 manual checkpoint covered all six positions in Chromium. AC-MO-1's three-browser check of left positions is P-22's.
+  - **D-21 is closed by P-18:** `prefers-reduced-motion: reduce` removes enter and exit motion entirely and stops the spinner, in CSS only, and the lifecycle completes without animation events (S4). `styles.test.ts` and `motion-lifecycle.test.tsx` show it, with the S4 Chromium emulation checkpoint; AC-MO-3's Playwright emulation is P-22's.
 - Acceptance: AC-LC-1, AC-LC-2 and AC-MO-3 are automated here. AC-MO-1 is checked structurally here (keyframes, settled end state, left positions without offset) and in real browsers by P-22.
-- Decisions locked before implementation (D0). They are not yet implemented.
+- Decisions locked before implementation (D0). They are implemented in S1 to S4.
   1. **Lifecycle completion:**
      - A native `animationend` listener on the toast root (`<li>`), not React's `onAnimationEnd`. jsdom has no `AnimationEvent`, so React's choice of native event name is unreliable there, and a native listener follows the DOM tree like the P-15 listeners.
      - A completion is accepted only when `event.target` is the toast root itself, the toast is in the matching phase (`entering` for `entered`, `exiting` for `exited`), and the animation name is the library animation for that phase and the toast's edge (decision 7). Events bubbling from custom content, the spinner or, later, progress are ignored.
@@ -1816,12 +1820,31 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Manual checkpoint (done):**
       - The maintainer reviewed S4 in Chromium with `?production-css`, emulating `prefers-reduced-motion: reduce` through DevTools, and approved it as implemented. Under the emulation, toasts entered and exited with no visible slide, scale or fade; the loading spinner stayed visible and static; a finite toast still timed out; close and dismiss still removed toasts; and focus stayed usable. With the emulation off, the normal motion and the spinner returned. No value changed.
       - This is Chromium DevTools media-feature emulation only. It is not an operating-system reduced-motion setting, P-22 real-browser or cross-browser verification, screen-reader checking (P-29) or Windows High Contrast verification (P-22).
-  - **S5, reconciliation:** the plan and defect status, the carry-forwards above, full validation and the final manual checkpoint.
+  - **S5, reconciliation (done):** the plan and defect status, the carry-forwards above, full validation and the final manual checkpoint.
+    - **Decisions:** each of D0's nine decisions was traced to the final code and tests, and all hold. Native, target-, phase- and name-filtered completion and the computed fallback with its 100 ms margin and 0 ms path (`ToastItem.tsx`, `motion.ts`); the four tokens and 28 in all; `opacity`, `translate`, `scale` and `rotate`, never `transform`; the four edge keyframes; the built-in spinner only; consumer animations excluded; reduced motion in CSS only.
+    - **Lifecycle:** traced end to end. An enter and an exit each complete on the toast root's own library `animationend` or on the fallback, whichever comes first; with no matching animation (no stylesheet, `0s`, reduced motion, jsdom) on the 0 ms path. Revival changes the animation name, so the enter restarts, and stale reports stay phase-guarded. Detach still finishes exits at once and depends on no animation. Timers, pauses, callbacks, slots, focus restoration and `inert` are unchanged.
+    - **Acceptance:**
+      - AC-LC-1 and AC-CSS-1 are met: automated, and nothing is left to a later phase.
+      - AC-LC-2 is met for the component layer: completion without events in jsdom, with reduced motion and with `display: none` (the stubbed fallback). The real-browser lifecycle is checked by P-22 (§26).
+      - AC-MO-1 has its structural evidence and the S2 and S3 Chromium checkpoints; real enter and exit in Chromium, WebKit and Firefox, and left positions settling, are P-22's.
+      - AC-MO-3 has its structural and lifecycle evidence and the S4 Chromium emulation checkpoint; Playwright reduced-motion emulation is P-22's (§17.6).
+      - P-18 changes no other criterion: AC-MO-2 is P-19's, the AC-TM, AC-KB and AC-A11Y tests pass unchanged, and the positive-exit focus tests extend AC-KB-1's evidence.
+    - **Public surface:** compared with the P-17 merge (`95bf2bd`), the only public addition is the four motion tokens (28 in all). The JavaScript exports, the toast and Toaster APIs, the documented classes and `data-*` attributes, the entry points, `package.json`, the lockfile, the fixtures, the scripts and the demo are unchanged. The DOM's only change is the internal `ret-toast__spinner` class; it and the five keyframes are implementation details and documented nowhere as contract.
+    - **Tests:** the S3 narrowing of two S2 guards kept their coverage: the enter and exit keyframes still must animate exactly `opacity`, `translate` and `scale`, and `ret-spin` has its own exact test; the name-rule separation still covers every toast-root rule, the reduced-motion one included. The "no reduced-motion rule yet" guard was replaced by the S4 contract. No `.only`, `.skip`, TODO, debug output or commented-out code was added. One comment is stale: the header of `styles.test.ts` still says "no motion before P-18"; it asserts nothing.
+    - **Mutations:** S1 to S4 recorded 35 mutations, each detected. Together they cover the target and name filters, consumer animations, the margin, `requestAnimationFrame`, the edge mapping, `transform`, the fills, `visible` animation, custom toasts, the spinner's reach and lifecycle isolation, reduced motion missing, partial, faded or done in JavaScript, and token drift. The one case left to real browsers is a preference that changes during a running exit: the toast shows its ordinary style and is removed when the fallback computed at the exit's start fires.
+    - **Validation (S4 commit `357da80`):** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (31 files, 1,054 tests), `validate:package` (exports, packed declarations and the consumer fixture render) and `build:demo` all pass.
+    - **Final manual checkpoint (done):** limited to what the S2 to S4 checkpoints did not record. The maintainer reviewed it in Chromium with `?production-css` and approved:
+      - **Custom toasts:** the root enters and exits like a normal toast, the content stays chrome-less, and the lifecycle completes.
+      - **Rapid activity:** approved after an investigation. Closing a toast with the mouse could leave one finite toast on screen indefinitely. It was `visible` with its finite duration and its timer paused by `focus-within`: Chromium focuses a clicked close button, removal restoration (§18) then moves focus to the next toast's close button, or the previous toast, and focus inside a toast pauses it (§10). When focus leaves, the pause clears and the timer resumes with the time it had left. The behaviour is deterministic and identical at the P-17 merge (`95bf2bd`); P-18 changed no timer, pause or focus-restoration code, and restoration runs as the exit starts, before `inert` and before any animation completes. It is expected pause behaviour under the current §10 and §18 contract, not a stuck timer, a lifecycle failure or a P-18 regression. Whether a pointer close should restore focus the same way is a design question, recorded under P-22 (click without focus).
+      - **RTL:** the vertical motion is unchanged, top toasts from above and bottom toasts from below, with no horizontal or logical-direction coupling.
+      - **Keyboard during an enter:** Alt+T and keyboard focus stayed usable while toasts moved, and motion did not visibly break the P-16 focus behaviour. This is not an accessibility audit.
+      - **Forced colours (Chromium DevTools emulation):** toast and spinner motion kept working, with no visible breakage. This is not Windows High Contrast, P-22 cross-browser or P-29 accessibility verification.
 
 **P-19 Stack repositioning**
 
 - **Prototype gate:** build both the measured-offset approach and the FLIP/WAAPI approach, choose one within the §22 constraints, and record the decision in the PR.
 - Scope: the chosen technique, including its reduced-motion behaviour.
+- Carried over from P-18. Enter and exit animate `opacity` and the individual `translate` and `scale` on the toast root, and the spinner the individual `rotate` on its icon, so `transform` is free for repositioning. Neighbouring toasts still jump when a toast enters, and when an exiting toast is removed at the end of its exit; smoothing that is P-19's.
 
 **P-20 Progress indicator**
 
@@ -1831,6 +1854,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-21 Swipe to dismiss**
 
 - Scope: §19 in full, with thresholds set by prototype. Touch and pen only, centre positions in either direction, custom toasts included.
+- Carried over from P-18. The swipe exit continues from the dragged offset (§19), which the P-18 exit keyframes (`ret-exit-top` and `ret-exit-bottom`, from the settled state) do not: P-21 decides how a swipe exit composes with them, through `transform` or otherwise, and keeps lifecycle completion on the toast root's library `animationend` or the computed fallback (§9 rule 3).
 
 ### Track E: Verification
 
@@ -1850,6 +1874,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - that the browser's own focus fix-up does not then contradict the library's restoration
     - pointer, click and focus behaviour on an inert exiting toast
   - **Click without focus (WebKit and Safari).** Safari may not focus a button when it is clicked. Check what happens when a close button is activated without first having focus. Removal restoration starts only from focus inside the toast, so this path is not assumed to restore focus. Report it separately from the keyboard path, where the focused close button is the starting point.
+    - **Open design question from P-18 S5: pointer-triggered close.** Where a click focuses the close button, as in Chromium, a mouse close restores focus into a neighbouring toast (§18), which is then paused by `focus-within` (§10) until focus leaves. The restored focus may not show `:focus-visible` after a pointer interaction, so the toast can look stuck. This is correct under the current contract and unchanged by P-18. Should a pointer-triggered close restore focus the same way as a keyboard-triggered one? Options to evaluate, none chosen: the current behaviour, always restoring within the region; restoring into another toast only when the dismissal came from keyboard focus or navigation; treating script-restored focus after a pointer interaction differently from keyboard-visible focus; or another accessible strategy that browser and assistive-technology testing supports. Any change must keep these: keyboard users never lose focus to `<body>`; keyboard dismissal keeps deterministic restoration; genuine keyboard focus still pauses the toast; pointer behaviour is tested in every browser, since click-to-focus differs; and assistive-technology evidence (P-29) supports it. The contract (§10, §18) changes only by a decision recorded in this plan before implementation.
   - **Revival.** A toast revived in the same commit in which it was exiting: whether the browser's `inert` state can briefly refuse focus although the toast is already eligible again.
   - **Ordering.** The order, in each browser, of removal restoration, focus events, applying and removing `inert`, and the focus-within pause moving from one toast to another.
   - **`aria-keyshortcuts`:**
@@ -1861,6 +1886,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **The region ring.** The fixed, viewport-inset `::after` shown while the region itself has focus (decision 3): its appearance, that it never takes pointer input, and its stacking above the lists.
   - **Forced colours.** Chromium's `forced-colors: active` in the browser suite (§26), and Windows High Contrast for real: the card edge, the action's border, the `Highlight` focus rings, the region ring, and that each type stays recognisable by its icon shape.
   - **Layout.** The six positions, safe-area gutters and narrow-viewport width without horizontal overflow, and the RTL mirroring that AC-RTL-1 requires.
+- Carried over from P-18. jsdom runs no CSS animation and evaluates no media query, and P-18's manual checkpoints were in Chromium only, so P-22 verifies these in real browsers. They are checks, not requirements added to P-18:
+  - **Enter and exit (AC-MO-1).** Real `ret-enter-*` and `ret-exit-*` playback at every position in Chromium, WebKit and Firefox; completion on the toast root's own `animationend`; the exit holding its last frame until removal; and left positions settling with no offset (D-14).
+  - **Fallbacks (AC-LC-2).** Completion when no `animationend` arrives, for example under `display: none`, and the computed fallback following an overridden motion token.
+  - **Reduced motion (AC-MO-3).** Under emulated `prefers-reduced-motion: reduce`, no translation, scale or fade, a static spinner, and a lifecycle that still completes.
+  - **Spinner.** Rotation about its own centre, and its events never completing the toast.
+  - **Individual transform properties.** `translate`, `scale` and `rotate` in every engine the suite runs (P-18 D0, decision 6).
 
 **P-23 Compatibility and SSR verification**
 
@@ -1901,6 +1932,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **CSP.** The live regions are hidden by inline styles and by the stylesheet. Under a restrictive `style-src` the server-rendered `style` attribute is blocked, so the stylesheet must be loaded for them to stay hidden (§34). Their class, `ret-toaster__live-region`, stays an undocumented implementation detail: describe the behaviour, not the class.
   - **Forced colours.** The toaster follows the user's colours; type stays recognisable by icon shape and, for warnings and errors, by the announced prefix. Do not claim Windows High Contrast support beyond what P-22 verifies.
 
+- Notes from P-18 for the theming and accessibility documentation:
+  - **Motion tokens.** P-18 adds four public tokens, so the set is 28: `--ret-enter-duration` (180ms), `--ret-exit-duration` (120ms), `--ret-enter-easing` (`cubic-bezier(0.2, 0, 0, 1)`) and `--ret-exit-easing` (`cubic-bezier(0.4, 0, 1, 1)`), with the same override model as the P-17 tokens, on a Toaster or a toast's `className`. The lifecycle follows the resolved values, so a longer exit holds the toast, and its slot, that much longer, and `0ms` removes the motion.
+  - **Reduced motion.** Under `prefers-reduced-motion: reduce` toasts appear and disappear without any motion, not even a fade, and the loading spinner is static. It is CSS only.
+  - **Not contract.** The keyframe names (`ret-enter-*`, `ret-exit-*`, `ret-spin`) and the spinner's `ret-toast__spinner` class are implementation details: describe the behaviour and the tokens, not them. Replacing the keyframes is not a supported customisation.
+  - **Browser support.** Motion uses the individual `translate`, `scale` and `rotate` properties. The browser-support statement must not claim a floor below the one recorded in P-18 D0, decision 6.
+
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
 - Note from P-16: in 0.x a toast's text was in the DOM once. In 2.0 its announcement copy is there too, for about 7000 ms, so a test that finds a toast by its text can match twice after upgrading. The guide mentions this and points to the testing note in the P-26 docs rather than repeating it.
@@ -1925,6 +1962,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - deploy the demo
   - deprecate 0.x on npm
 - Carried over from P-16: check with the screen-reader matrix (§17.6) that an announcement node is kept long enough to be announced reliably. The retention is 7000 ms (`ANNOUNCEMENT_RETENTION_MS` in `src/react/announcer.ts`). If it is not long enough, change it based on real browser and assistive-technology evidence, not jsdom timing.
+- Carried over from P-18. In the manual cross-browser audit, check reduced motion with the operating system's own setting, not only emulation: toasts appear and disappear without motion and the spinner is static. P-18's evidence is Chromium DevTools emulation (S4).
+- Carried over from P-18. Provide the assistive-technology evidence for the pointer-triggered close question recorded under P-22 (click without focus): how focus restored after a mouse close is experienced with screen readers, before the §10 and §18 contract is changed or confirmed.
 - Carried over from P-17. With the screen-reader matrix (§17.6), check that polite and assertive announcements still work now that the live regions are hidden by the `ret-toaster__live-region` class as well as inline styles (S5), including with the stylesheet loaded and an inline `style` blocked by CSP. Also check touch exploration with screen readers around the region's focus ring (decision 3).
 
 ## 36. Acceptance criteria for v2.0
