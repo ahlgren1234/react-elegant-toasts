@@ -1563,6 +1563,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 **P-17 Styling foundation**
 
+- **Status: complete.** D0 to D2 and S1 to S6 are done, and every manual checkpoint is recorded. What P-17 leaves open is listed under Defects below and in the P-20, P-22, P-26 and P-29 entries.
 - **Entry gate:** OQ-24 (visual direction signed off from a mockup or prototype) and OQ-25 (public CSS contract) must both be resolved before implementation starts.
   - **OQ-25 is resolved** (§21).
   - **OQ-24 is resolved** (§21). The maintainer approved the visual direction after reviewing the D1 prototype in Chromium (D2 below).
@@ -1574,6 +1575,10 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - the chrome-less custom wrapper
   - `className` hooks
 - Defects: D-11 (layout), D-20, D-23, D-24.
+  - **D-20 is closed by P-17:** the palette meets AC-A11Y-6 in every theme (S4), with the focus pair added in S5, checked from the token values in `styles.test.ts`.
+  - **D-23 is closed by P-17:** every selector, class, custom property and keyframe is `ret-` prefixed, enforced by `scripts/check-styles.js` in `npm run lint` (AC-CSS-1, S1).
+  - **D-24 is closed by P-17:** the CSS-only `theme` with matching server and client markup (AC-CSS-2, S1 and S4), and no inline `z-index` or padding on the region or its lists, which take `--ret-z-index` and the `--ret-offset` gutters from the stylesheet (AC-CSS-3, S2, with its render guard added in S6).
+  - **D-11 stays open.** P-17 mirrors the toast layout in RTL with logical properties (S3), checked by `styles.test.ts` and the S3 manual RTL review. The progress direction is P-20's, and AC-RTL-1 is verified in real browsers by P-22.
 - Carried over from P-16. P-16 made two non-control elements focusable from script, and left the live regions styled inline. These are styling requirements, not changes to P-16 behaviour:
   - The region (`<section tabindex="-1">`) takes focus as the last step of focus restoration (§18). It needs an intentional, accessible `:focus-visible` treatment (§17.4, §17.5).
   - Each toast root (`<li tabindex="-1">`) takes focus from the hotkey and from focus restoration (§18). It needs one too.
@@ -1608,7 +1613,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - The maintainer approved the direction recorded in §21, and OQ-24 is resolved here, in §21, §38 and Appendix B. The entry gate is open.
     - This is visual design sign-off only. P-22 still owns systematic browser verification.
     - D2 does not authorise motion: the motion boundary above still applies.
-  - **S1, CSS foundation:** remove the 0.x CSS; establish the final `ret-*` stylesheet, its tokens and the light, dark and system token architecture; add the prefix lint and contract check (AC-CSS-1); update `CSS_MARKER` (P-07).
+  - **S1, CSS foundation (done):** remove the 0.x CSS; establish the final `ret-*` stylesheet, its tokens and the light, dark and system token architecture; add the prefix lint and contract check (AC-CSS-1); update `CSS_MARKER` (P-07).
     - **Stylesheet:** `src/styles.css` holds only the token and theme layer: `:where(.ret-toaster)` with the light values and `color-scheme`, `:where(.ret-toaster[data-theme='dark'])`, and the same dark values for `:where(.ret-toaster[data-theme='system'])` inside `@media (prefers-color-scheme: dark)`. No component rule exists until S2 to S5, so a page that loads it alone still shows unstyled toasts.
     - **Tokens:**
       - colour: `--ret-surface`, `--ret-text`, `--ret-text-muted`, `--ret-border`, `--ret-shadow`, `--ret-focus`, `--ret-action-surface`, `--ret-action-text`, and `--ret-{success,error,warning,info,loading}` with a `-subtle` tint each
@@ -1621,7 +1626,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Marker and renders:**
       - `CSS_MARKER` is now `.ret-toaster`. The 0.x stylesheet had no `ret-` selector, so stale CSS cannot satisfy it.
       - A render-count test shows that a theme change re-renders no toast.
-  - **S2, position, stack and responsive structure:** the six positions, offsets, safe areas, gaps, the z-index token, the pointer-event architecture (empty space clicks through, while the lists keep the P-15 hover pause) and responsive width, with no visual reordering (§12, §18).
+  - **S2, position, stack and responsive structure (done):** the six positions, offsets, safe areas, gaps, the z-index token, the pointer-event architecture (empty space clicks through, while the lists keep the P-15 hover pause) and responsive width, with no visual reordering (§12, §18).
     - **Lists:**
       - Each rendered `.ret-toaster__list` is `position: fixed`, with `--ret-z-index`, a reset and a plain flex column spaced by `--ret-gap`.
       - Placement uses the physical sides: `top`, `bottom`, `left` and `right`, matched on `data-position` prefixes and suffixes, so RTL never moves a position (§20).
@@ -1640,7 +1645,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - The maintainer reviewed S2 in Chromium with `?production-css`.
       - Observed: top stacks put the newest toast at the top edge, and bottom stacks at the bottom edge, with no CSS reordering. On narrow and mobile widths the stacks shrink between sensible gutters, with no horizontal overflow, and centre and edge positions stay stable.
       - This is visual review evidence, not P-22 browser verification.
-  - **S3, toast shell and custom styling:**
+  - **S3, toast shell and custom styling (done):**
     - the card and its parts: icon, content, title, description, action and close, with a close target of at least 24×24 CSS px
     - long-text wrapping and logical properties
     - the chrome-less custom wrapper, with its close button in the inline-end top corner (AC-API-10)
@@ -1676,7 +1681,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - The maintainer reviewed the production stylesheet in Chromium with `?production-css` and approved the normal card in the light and dark themes.
       - Checked: content and control combinations (description, action, close), long content at narrow widths, custom toasts with and without the library close button (including its inherited colour), and the RTL internal layout.
       - This is P-17 visual review evidence, not P-22 browser verification or P-29 assistive-technology checking.
-  - **S4, themes, variants and contrast:** the semantic accents, complete light, dark and system values, the automated palette contrast check (AC-A11Y-6), and theme render-count and hydration tests (AC-CSS-2).
+  - **S4, themes, variants and contrast (done):** the semantic accents, complete light, dark and system values, the automated palette contrast check (AC-A11Y-6), and theme render-count and hydration tests (AC-CSS-2).
     - **Mapping:**
       - Each of success, error, warning, info and loading colours only its icon slot: `:where(.ret-toast--<type> > .ret-toast__icon)` sets `color: var(--ret-<type>)` and `background: var(--ret-<type>-subtle)`.
       - Loading uses its own neutral family, so a pending toast reads as in progress rather than as a result.
@@ -1698,7 +1703,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - The neutral card stays dominant and the accents are clear but restrained. Warning was approved in both themes and the palette is kept as it is, with no token change requested. The description hierarchy and the loading and default treatments were checked.
       - The system theme was not separately smoke-checked by hand. Its evidence is automated: the system-dark equality and light-default tests, and the hydration tests.
       - This is P-17 visual review evidence, not P-22 browser verification or P-29 assistive-technology checking.
-  - **S5, accessibility styling:** `:focus-visible` for the section, the toast root and the action and close buttons (§17.4); forced colours; the hybrid live-region class.
+  - **S5, accessibility styling (done):** `:focus-visible` for the section, the toast root and the action and close buttons (§17.4); forced colours; the hybrid live-region class.
     - **Focus model (unchanged from P-16):** the hotkey focuses the first eligible toast root, never the region. The region (`<section tabindex="-1">`) takes focus only as the last step of removal restoration (§18). Toast roots take focus from script only; the action and close are native buttons in the tab order. S5 changes no focus behaviour, listener or focus order.
     - **Rings:** every focus rule is a zero-specificity `:where(… :focus-visible)` outline, so it never changes layout, and nothing animates it.
       - Toast root: `2px solid var(--ret-focus)` at `outline-offset: -1px`. On a card the ring takes the border's place next to the known surface (the D2 preferred direction). A custom root gets `outline-offset: 2px`, so the ring sits just outside it and never covers consumer content.
@@ -1718,7 +1723,16 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - No separate result was recorded for forced colours, so its evidence is the automated forced-colour tests only.
       - This is P-17 Chromium visual and interaction evidence, not P-22 browser verification (including Windows High Contrast) or P-29 assistive-technology checking.
     - **Carried forward:** P-22 verifies real focus-visible and forced-colours rendering, including Windows High Contrast, and the region ring's appearance (decision 3). P-26 documents the custom close and custom root focus guarantee, `--ret-focus` per toast, and the CSP caveat. P-29 checks that the live regions still announce with real screen readers.
-  - **S6, integration and reconciliation:** the plan and defect status, the P-22 and P-26 carry-forwards, full validation and the final manual checkpoints.
+  - **S6, integration and reconciliation (done):** the plan and defect status, the P-22 and P-26 carry-forwards, full validation and the final manual checkpoints.
+    - **Reconciliation:** every P-17 criterion was traced to its evidence. AC-CSS-1, AC-CSS-2 and AC-A11Y-6 are automated. AC-POS-1 and AC-API-10 are automated, with the S2 and S3 manual reviews. The §17.4 focus styles are automated, with the S5 review. The P-17 part of D-11 is automated, and the rest is deferred (see Defects). §17.5 forced colours has automated structural checks; real rendering is P-22's.
+    - **AC-CSS-3 guard:** before S6 only the region was covered, by the exact server markup; an inline `z-index` on a position list passed every test. `render.test.tsx` now renders toasts in all six positions and checks that neither the region nor any list has an inline `z-index` or `padding*`, while toasts are entering and once they are visible. It checks only those properties on those containers, as AC-CSS-3 states. Mutations: an inline `zIndex: 9999` on the lists and an inline padding on the region each fail it; an inline `opacity` on the lists, which AC-CSS-3 does not cover, passes.
+    - **Audit:** the only production React change in P-17 is S5's live-region class. The window and document listeners are unchanged, and so are the focus order, the lifecycle and the announcements. There is no motion (P-18). The public set stays at 24 tokens. The D1 prototype and the demo review aids never reach `dist/`, and `dist/styles.css` is the source stylesheet byte for byte.
+    - **Carry-forwards:** recorded in the P-22, P-26 and P-29 entries.
+    - **Validation (after the S6 changes):** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (29 files, 900 tests), `validate:package` and `build:demo` all pass.
+    - **Final manual checkpoint (done):** limited to the two gaps the earlier checkpoints left; S2 to S5 were not reviewed again.
+      - **System theme:** the maintainer checked `theme="system"` in Chromium under emulated `prefers-color-scheme`. In light it followed the light design and in dark the dark design, it switched when the emulated preference changed, and the focus styling stayed coherent.
+      - **Forced colours:** the maintainer checked Chromium's `forced-colors: active` emulation. The toaster stayed usable: card edges were visible, the action read as a control, the types stayed distinguishable without their authored hues, and the toast, action, close and region focus indicators were visible. Pointer input and dismissal still worked.
+      - This is P-17 Chromium implementation and visual evidence. It is not P-22 browser or Windows High Contrast certification, and not P-29 assistive-technology checking; those carry-forwards stay open.
 
 **P-18 Enter and exit motion**
 
@@ -1763,6 +1777,11 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - how Chromium, WebKit and Firefox expose the attribute in the DOM and the accessibility tree, where that can be checked
     - exposure through assistive technology is checked separately, under P-29
     - axe does not show that the value is exposed or understood
+- Carried over from P-17. jsdom has no layout, focus-visible heuristics or forced colours, and P-17's manual reviews were in Chromium only, so P-22 verifies these in real browsers. They are checks, not requirements added to P-17:
+  - **Focus-visible.** The rings on the toast root (inside the card edge, outside a custom toast), the action and close, and the custom close in `currentColor`. When each browser shows them after the hotkey and after removal restoration, which focus from script.
+  - **The region ring.** The fixed, viewport-inset `::after` shown while the region itself has focus (decision 3): its appearance, that it never takes pointer input, and its stacking above the lists.
+  - **Forced colours.** Chromium's `forced-colors: active` in the browser suite (§26), and Windows High Contrast for real: the card edge, the action's border, the `Highlight` focus rings, the region ring, and that each type stays recognisable by its icon shape.
+  - **Layout.** The six positions, safe-area gutters and narrow-viewport width without horizontal overflow, and the RTL mirroring that AC-RTL-1 requires.
 
 **P-23 Compatibility and SSR verification**
 
@@ -1797,6 +1816,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Announcement boundary.** A custom toast's announcement is the DOM `textContent` of its committed revision, which is not the accessibility tree: it includes `aria-hidden`, visually hidden and nested-control text, and later DOM changes without a new revision are not announced. It leaves out the library close button by its `.ret-toast__close` class, which custom markup can imitate. P-26 documents this boundary and decides whether that last case needs its own fix.
   - **Testing toasts.** Each announcement is a copy of the toast's text in a hidden live-region node, kept for about 7000 ms (§17.1). For that time a generic DOM query such as Testing Library's `getByText("Saved")` finds both the visible toast and the hidden copy. This is the live region working as designed, not a toast rendered twice. Document how to query the visible toast without matching the copy; this repository's own tests, for example, pass `ignore: "script, style, [aria-live] *"`. Do not make the copy `aria-hidden`, shorten its retention or change the live region to make such queries unique.
 
+- Notes from P-17 for the theming and accessibility documentation:
+  - **CSS contract (OQ-25).** The 24 `--ret-*` tokens, scoped to `.ret-toaster`, with their override model: `.ret-toaster { … }` for a Toaster, `.ret-toaster[data-theme="dark"]` for a theme, and the same rule inside `@media (prefers-color-scheme: dark)` for `system`. The documented `ret-*` classes and the `data-theme`, `data-position` and `data-phase` attributes. Defaults have zero specificity and no `!important`. `--ret-font-family` sets the family only; sizes, padding and radii other than `--ret-radius` are not tokens. Motion and progress tokens arrive with P-18 and P-20.
+  - **Custom toasts.** Chrome-less: the library gives the root no surface, border, shadow, padding, typography or semantic colour. The library close takes the toast root's colour (`color: inherit`), so the toast's `className` is the one hook for the close's colour; its focus ring is drawn in that same colour (`currentColor`), so it contrasts as well as the glyph does. The root's own focus ring sits outside it in `--ret-focus`, which the library cannot match to an arbitrary page; a consumer can set `--ret-focus` on the toast through `className`. Focus styles inside custom content are the consumer's (§17.3).
+  - **CSP.** The live regions are hidden by inline styles and by the stylesheet. Under a restrictive `style-src` the server-rendered `style` attribute is blocked, so the stylesheet must be loaded for them to stay hidden (§34). Their class, `ret-toaster__live-region`, stays an undocumented implementation detail: describe the behaviour, not the class.
+  - **Forced colours.** The toaster follows the user's colours; type stays recognisable by icon shape and, for warnings and errors, by the announced prefix. Do not claim Windows High Contrast support beyond what P-22 verifies.
+
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
 - Note from P-16: in 0.x a toast's text was in the DOM once. In 2.0 its announcement copy is there too, for about 7000 ms, so a test that finds a toast by its text can match twice after upgrading. The guide mentions this and points to the testing note in the P-26 docs rather than repeating it.
@@ -1821,6 +1846,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - deploy the demo
   - deprecate 0.x on npm
 - Carried over from P-16: check with the screen-reader matrix (§17.6) that an announcement node is kept long enough to be announced reliably. The retention is 7000 ms (`ANNOUNCEMENT_RETENTION_MS` in `src/react/announcer.ts`). If it is not long enough, change it based on real browser and assistive-technology evidence, not jsdom timing.
+- Carried over from P-17. With the screen-reader matrix (§17.6), check that polite and assertive announcements still work now that the live regions are hidden by the `ret-toaster__live-region` class as well as inline styles (S5), including with the stylesheet loaded and an inline `style` blocked by CSP. Also check touch exploration with screen readers around the region's focus ring (decision 3).
 
 ## 36. Acceptance criteria for v2.0
 
