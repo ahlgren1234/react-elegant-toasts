@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { Profiler, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster, toast, type ToastOptions, type ToastPosition, type ToastTheme } from '../src';
 import '../src/styles.css';
 import './styles.css';
+import { P19Panel } from './p19/P19Panel';
+import { stats as p19Stats } from './p19/instrument';
 
 // P-17 D1: the interim visual prototype for the OQ-24 sign-off. Demo only, not the production
 // stylesheet, and not the P-25 demo rebuild. It loads after the production stylesheet and masks
@@ -20,6 +22,8 @@ const POSITIONS: readonly ToastPosition[] = [
   'bottom-right',
 ];
 const THEMES: readonly ToastTheme[] = ['system', 'light', 'dark'];
+/** The element the P-19 D1 prototypes observe (demo/p19/harness.ts). */
+const P19_HOST = 'demo-toaster-host';
 const LONG_TEXT =
   'Your export of 1,284 records finished, but 3 rows were skipped because their dates could not be parsed. https://example.com/a-very-long-unbroken-link-to-the-export-report-that-must-wrap';
 
@@ -290,9 +294,13 @@ function Prototype() {
         </button>
       </div>
       {/* Direction is inherited from the DOM (§20): the toasts mirror, the positions do not. */}
-      <div dir={rtl ? 'rtl' : 'ltr'}>
-        {/* Six visible per stack, so the All types matrix shows at once (the default is 4). */}
-        <Toaster theme={theme} maxVisible={6} />
+      {/* The P-19 D1 harness observes the Toaster inside this host (demo/p19), and the Profiler
+          counts its commits for the comparison. Both are demo-only. */}
+      <div id={P19_HOST} dir={rtl ? 'rtl' : 'ltr'}>
+        <Profiler id="p19-toaster" onRender={() => (p19Stats.toasterCommits += 1)}>
+          {/* Six visible per stack, so the All types matrix shows at once (the default is 4). */}
+          <Toaster theme={theme} maxVisible={6} />
+        </Profiler>
       </div>
     </section>
   );
@@ -365,6 +373,7 @@ const Demo = () => (
 
     <main className="demo-content">
       <Prototype />
+      <P19Panel hostId={P19_HOST} />
     </main>
   </div>
 );
