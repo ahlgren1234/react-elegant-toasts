@@ -271,11 +271,12 @@ body {
 }
 
 /* A consumer's custom toast: it owns its surface, padding and typography (§6.4, §17.3). The
-   end padding leaves room for the optional library close button in the corner. */
+   inline-end padding leaves room for the optional library close button in the corner. */
 .demo-custom-toast {
   display: flex;
   gap: 12px;
-  padding: 14px 44px 14px 14px;
+  padding-block: 14px;
+  padding-inline: 14px 44px;
   border-radius: 14px;
   background: #1e1b4b;
   color: #eef2ff;
@@ -317,8 +318,14 @@ body {
   font-weight: 700;
 }
 
-/* The library close button over this consumer's dark surface. */
-.demo-custom-toast + .ret-toast__close {
+/* The consumer's foreground, set on the toast root through `className`. The production close
+   button inherits it. */
+.demo-custom-root {
+  color: #eef2ff;
+}
+
+/* The D1 prototype's close button has a fixed colour, so the prototype view overrides it. */
+html:not(.demo-production-css) .demo-custom-toast + .ret-toast__close {
   color: #c7d2fe;
 }
 
@@ -333,14 +340,8 @@ body {
   }
 }
 
-/* P-17 review aid for `?production-css`: outlines show each list's hit area and each toast's box
-   while the production stylesheet is still incomplete. Demo only. */
+/* P-17 review aid for `?production-css`: a dotted outline shows each list's hit area. The toasts
+   themselves show the production card from S3 on. Demo only. */
 .demo-production-css .ret-toaster__list {
   outline: 1px dotted #d946ef;
-}
-
-.demo-production-css .ret-toast {
-  outline: 1px dashed #64748b;
-  background: Canvas;
-  color: CanvasText;
 }

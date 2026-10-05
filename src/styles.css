@@ -157,3 +157,137 @@
 :where(.ret-toast) {
   box-sizing: border-box;
 }
+
+/*
+ * The normal toast: a neutral elevated card (OQ-24). Custom toasts are excluded rather than reset,
+ * so no card property can reach them (§6.4). The DOM is flat, in reading and focus order: icon,
+ * content, action, close. A plain row shows it as it is, with the close at the inline end and
+ * every part aligned to the top. Inner spacing is logical, so RTL mirrors the card (§20); the
+ * stack's position stays physical. Type sizes are set here, so the application's own text styles
+ * do not reshape the hierarchy; only the family follows `--ret-font-family`.
+ */
+:where(.ret-toast:not(.ret-toast--custom)) {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-block: 12px;
+  padding-inline: 12px 10px;
+  border: 1px solid var(--ret-border);
+  border-radius: var(--ret-radius);
+  background: var(--ret-surface);
+  box-shadow: var(--ret-shadow);
+  color: var(--ret-text);
+  font-family: var(--ret-font-family);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: normal;
+  text-align: start;
+  text-transform: none;
+}
+
+/* A fixed footprint for the decorative icon. S4 gives each type its accent and tint. */
+:where(.ret-toast__icon) {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 8px;
+  color: var(--ret-text-muted);
+}
+
+:where(.ret-toast__icon > svg) {
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+/* The text column takes the remaining width and may shrink below its content, so long words and
+   URLs wrap inside the card instead of widening it. Nothing is truncated. The 4px block padding
+   centres the first 20px line on the 28px icon. */
+:where(.ret-toast__content) {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding-block: 4px;
+  overflow-wrap: anywhere;
+}
+
+:where(.ret-toast__title) {
+  font-weight: 600;
+}
+
+:where(.ret-toast__description) {
+  margin-block-start: 2px;
+  color: var(--ret-text-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* Library controls: native buttons with the application's button styles reset. */
+:where(.ret-toast__action, .ret-toast__close) {
+  flex: none;
+  margin: 0;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* A compact filled action. A long label wraps within its share of the card. */
+:where(.ret-toast__action) {
+  max-inline-size: 45%;
+  min-block-size: 28px;
+  padding-block: 4px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  background: var(--ret-action-surface);
+  color: var(--ret-action-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* An unobtrusive 24×24 close target (§17.2, WCAG 2.5.8). */
+:where(.ret-toast__close) {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ret-text-muted);
+}
+
+:where(.ret-toast__close > svg) {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+/* Centred on the 28px icon row of a normal toast. */
+:where(.ret-toast:not(.ret-toast--custom) > .ret-toast__close) {
+  margin-block-start: 2px;
+}
+
+:where(.ret-toast:not(.ret-toast--custom) > .ret-toast__close):hover {
+  color: var(--ret-text);
+}
+
+/*
+ * Custom toasts are chrome-less (§6.4): the consumer owns the surface, padding and typography. The
+ * root only anchors the optional library close button in the inline-end top corner, over the
+ * content, with no wrapper (AC-API-10). The close button inherits the toast root's colour, which
+ * a consumer sets through the toast's `className`; it cannot see the custom content's own colour,
+ * because it is that content's sibling.
+ */
+:where(.ret-toast--custom) {
+  position: relative;
+}
+
+:where(.ret-toast--custom > .ret-toast__close) {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+  color: inherit;
+}

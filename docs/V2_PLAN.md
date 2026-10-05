@@ -1644,6 +1644,38 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - the card and its parts: icon, content, title, description, action and close, with a close target of at least 24×24 CSS px
     - long-text wrapping and logical properties
     - the chrome-less custom wrapper, with its close button in the inline-end top corner (AC-API-10)
+    - **Card:**
+      - Normal toasts match `:where(.ret-toast:not(.ret-toast--custom))`. Custom toasts are excluded rather than reset, so no card property can reach them.
+      - The card is a flex row aligned to the top: `--ret-surface`, a 1px `--ret-border`, `--ret-radius`, `--ret-shadow`, `--ret-text` and `--ret-font-family`, with 12px gaps and padding written logically (12px, and 10px at the inline end).
+      - Type is 14/20 at weight 400, with letter spacing, alignment and case reset, so application text styles cannot reshape it.
+      - The DOM is unchanged: icon, content, action, close, shown in order with no reordering.
+    - **Content:**
+      - The title is weight 600. The description is 13/18 in `--ret-text-muted`.
+      - The content column is `flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere`, so long words and URLs wrap inside the card.
+      - There is no truncation, line clamp, `white-space` or `overflow` rule.
+    - **Icon:** a 28px box with an 18px glyph and an 8px radius, in a neutral muted colour. S4 gives each type its accent and tint. The loading icon stays static.
+    - **Controls:**
+      - Both buttons have their margin, border and font reset.
+      - The action is a compact filled button in `--ret-action-surface` and `--ret-action-text`, 13px semibold. It is at most 45% of the card, and a long label wraps.
+      - The close is exactly 24×24 with a 16px glyph in `--ret-text-muted`. On normal toasts it turns `--ret-text` on hover.
+      - Native focus rings are untouched until S5.
+    - **Custom close colour (decided):**
+      - On a custom toast the close is absolute at `inset-block-start` and `inset-inline-end` 8px, with `color: inherit` and no hover recolouring.
+      - It is a sibling of the custom content, so it inherits the toast root's colour, not the content's own. A consumer sets that colour through the toast's `className`.
+      - A theme token would be wrong on an arbitrary custom background. With `inherit`, the toast's own `className` is the single hook for the close's colour and the content's.
+      - P-26 documents this.
+    - **No new tokens:** padding, sizes, radii and type sizes are implementation details. The public set stays at 24 tokens.
+    - **Tests:** `styles.test.ts` checks:
+      - the card on every normal type, and no card chrome on custom toasts
+      - the description hierarchy, and the shrink and wrap rules without truncation
+      - the icon, action and close sizes
+      - the custom close's corner, colour and hover isolation
+      - that toast parts use logical spacing and no physical side insets
+    - **Demo:** the review harness adds Long title, Unbroken URL and an RTL toggle that wraps the Toaster in `dir="rtl"`. The custom example sets its foreground through `className`. The S2 aid now only outlines the lists.
+    - **Manual checkpoint (done):**
+      - The maintainer reviewed the production stylesheet in Chromium with `?production-css` and approved the normal card in the light and dark themes.
+      - Checked: content and control combinations (description, action, close), long content at narrow widths, custom toasts with and without the library close button (including its inherited colour), and the RTL internal layout.
+      - This is P-17 visual review evidence, not P-22 browser verification or P-29 assistive-technology checking.
   - **S4, themes, variants and contrast:** the semantic accents, complete light, dark and system values, the automated palette contrast check (AC-A11Y-6), and theme render-count and hydration tests (AC-CSS-2).
   - **S5, accessibility styling:** `:focus-visible` for the section, the toast root and the action and close buttons (§17.4); forced colours; the hybrid live-region class.
   - **S6, integration and reconciliation:** the plan and defect status, the P-22 and P-26 carry-forwards, full validation and the final manual checkpoints.

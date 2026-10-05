@@ -423,6 +423,153 @@ describe('positions and stacks (§12, P-17 S2)', () => {
   });
 });
 
+/** A toast `<li>` of `type`, with the normal or custom children the renderer gives it. */
+function toastOf(type: string, parts: readonly string[] = []): HTMLLIElement {
+  const item = document.createElement('li');
+  item.className = `ret-toast ret-toast--${type}`;
+  for (const part of parts) {
+    const child = document.createElement(
+      part === 'icon' ? 'span' : part.endsWith('n') ? 'button' : 'div'
+    );
+    if (part !== 'custom') child.className = `ret-toast__${part}`;
+    item.append(child);
+  }
+  return item;
+}
+
+const partOf = (item: Element, part: string): Element => {
+  const element = item.querySelector(`.ret-toast__${part}`);
+  if (!element) throw new Error(`no ${part}`);
+  return element;
+};
+
+// The card's properties, none of which a custom toast may receive (§6.4).
+const CARD =
+  /^(display|gap|padding|border|background|box-shadow|color|font|line-height|letter-spacing|text-)/;
+
+describe('the toast card, content and controls (§17.2, OQ-24, P-17 S3)', () => {
+  it('makes every normal type a neutral elevated card from the public tokens', () => {
+    for (const type of ['default', 'success', 'error', 'warning', 'info', 'loading']) {
+      expect(declared(toastOf(type))).toMatchObject({
+        display: 'flex',
+        'align-items': 'flex-start',
+        border: '1px solid var(--ret-border)',
+        'border-radius': 'var(--ret-radius)',
+        background: 'var(--ret-surface)',
+        'box-shadow': 'var(--ret-shadow)',
+        color: 'var(--ret-text)',
+        'font-family': 'var(--ret-font-family)',
+        'font-size': '14px',
+        'line-height': '20px',
+        'font-weight': '400',
+      });
+    }
+  });
+
+  it('gives a custom toast no card chrome, only its box sizing and the close anchor', () => {
+    const custom = declared(toastOf('custom', ['custom', 'close']));
+    expect(Object.keys(custom).filter(p => CARD.test(p))).toEqual([]);
+    expect(custom).toEqual({ 'box-sizing': 'border-box', position: 'relative' });
+  });
+
+  it('sets the description below the primary text: smaller, muted, still the same column', () => {
+    const item = toastOf('info', ['icon', 'content', 'close']);
+    const content = partOf(item, 'content');
+    const title = document.createElement('div');
+    title.className = 'ret-toast__title';
+    const description = document.createElement('div');
+    description.className = 'ret-toast__description';
+    content.append(title, description);
+    expect(declared(title)['font-weight']).toBe('600');
+    expect(declared(description)).toMatchObject({
+      color: 'var(--ret-text-muted)',
+      'font-size': '13px',
+      'line-height': '18px',
+    });
+  });
+
+  it('lets the text column shrink and wrap long words and URLs, without truncating', () => {
+    const content = partOf(toastOf('default', ['content']), 'content');
+    expect(declared(content)).toMatchObject({
+      'flex-grow': '1',
+      'flex-shrink': '1',
+      'min-inline-size': '0px',
+      'overflow-wrap': 'anywhere',
+    });
+    for (const rule of rules.filter(r => r.selector.includes('ret-toast'))) {
+      const css = declarations(rule.style);
+      expect(css['white-space']).toBeUndefined();
+      expect(css['text-overflow']).toBeUndefined();
+      expect(Object.keys(css).filter(p => /line-clamp|^overflow(-x|-y)?$/.test(p))).toEqual([]);
+    }
+  });
+
+  it('gives the icon a fixed 28px footprint with an 18px glyph, in the content order', () => {
+    const icon = partOf(toastOf('success', ['icon', 'content']), 'icon');
+    expect(declared(icon)).toMatchObject({
+      'flex-grow': '0',
+      'flex-shrink': '0',
+      'inline-size': '28px',
+      'block-size': '28px',
+    });
+    const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.append(glyph);
+    expect(declared(glyph)).toMatchObject({ 'inline-size': '18px', 'block-size': '18px' });
+  });
+
+  it('styles the action as a compact filled control that wraps a long label', () => {
+    const action = partOf(toastOf('success', ['content', 'action', 'close']), 'action');
+    expect(declared(action)).toMatchObject({
+      background: 'var(--ret-action-surface)',
+      color: 'var(--ret-action-text)',
+      'font-size': '13px',
+      'max-inline-size': '45%',
+      'overflow-wrap': 'anywhere',
+      'flex-shrink': '0',
+    });
+  });
+
+  it('gives the close button exactly a 24×24 target with a muted 16px glyph', () => {
+    const close = partOf(toastOf('default', ['content', 'close']), 'close');
+    expect(declared(close)).toMatchObject({
+      'inline-size': '24px',
+      'block-size': '24px',
+      padding: '0px',
+      color: 'var(--ret-text-muted)',
+      'flex-shrink': '0',
+    });
+    const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    close.append(glyph);
+    expect(declared(glyph)).toMatchObject({ 'inline-size': '16px', 'block-size': '16px' });
+  });
+
+  it("puts a custom toast's close in the inline-end top corner, in the root's colour", () => {
+    const close = partOf(toastOf('custom', ['custom', 'close']), 'close');
+    expect(declared(close)).toMatchObject({
+      position: 'absolute',
+      'inset-block-start': '8px',
+      'inset-inline-end': '8px',
+      color: 'inherit',
+      'inline-size': '24px',
+      'block-size': '24px',
+    });
+    // No hover or other state rule recolours it with a theme token.
+    for (const rule of rules.filter(r => /:hover|:active/.test(r.selector))) {
+      expect(close.matches(rule.selector.replace(/:(hover|active)/g, ''))).toBe(false);
+    }
+  });
+
+  it('mirrors in RTL: toast parts use logical spacing and no physical side insets', () => {
+    for (const rule of rules.filter(r => /ret-toast(?!er)/.test(r.selector))) {
+      const css = declarations(rule.style);
+      expect(css.left ?? css.right).toBeUndefined();
+      for (const box of ['margin', 'padding']) {
+        expect(css[`${box}-left`]).toBe(css[`${box}-right`]);
+      }
+    }
+  });
+});
+
 describe('motion boundary (P-17; P-18 owns motion)', () => {
   it('has no keyframes, animations, transitions, transforms or reduced-motion rules', () => {
     expect(css).not.toMatch(/@keyframes|prefers-reduced-motion/);

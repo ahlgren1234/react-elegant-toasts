@@ -31,6 +31,7 @@ function Prototype() {
   const [action, setAction] = useState(false);
   const [closeButton, setCloseButton] = useState(true);
   const [persistent, setPersistent] = useState(true);
+  const [rtl, setRtl] = useState(false);
 
   const options = (at: ToastPosition = position): ToastOptions => ({
     position: at,
@@ -55,7 +56,14 @@ function Prototype() {
           </button>
         </div>
       </div>,
-      { id, position, closeButton: withClose, ...(persistent ? { duration: Infinity } : {}) }
+      {
+        id,
+        position,
+        closeButton: withClose,
+        // The consumer's foreground on the toast root, which the library close button inherits.
+        className: 'demo-custom-root',
+        ...(persistent ? { duration: Infinity } : {}),
+      }
     );
   };
 
@@ -69,8 +77,8 @@ function Prototype() {
       <p className="demo-note">
         {PRODUCTION_CSS_ONLY ? (
           <>
-            Showing the production stylesheet only, with dashed review outlines.{' '}
-            <a href="?">Show the D1 prototype</a>
+            Showing the production stylesheet only, with dotted outlines around each stack's hit
+            area. <a href="?">Show the D1 prototype</a>
           </>
         ) : (
           <>
@@ -123,6 +131,10 @@ function Prototype() {
             onChange={e => setPersistent(e.target.checked)}
           />
           Persistent
+        </label>
+        <label>
+          <input type="checkbox" checked={rtl} onChange={e => setRtl(e.target.checked)} />
+          RTL
         </label>
       </div>
 
@@ -189,6 +201,31 @@ function Prototype() {
         >
           Long text
         </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() =>
+            toast(
+              'Your weekly analytics summary for the Marketing, Sales and Customer Success workspaces is ready to download',
+              { ...options(), description: undefined }
+            )
+          }
+        >
+          Long title
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() =>
+            toast.info('Link copied', {
+              ...options(),
+              description:
+                'https://example.com/shared/reports/2026/q3/a-very-long-unbroken-path-segment-without-any-spaces-at-all',
+            })
+          }
+        >
+          Unbroken URL
+        </button>
         <button type="button" className="demo-button" onClick={() => custom(false)}>
           Custom
         </button>
@@ -217,7 +254,10 @@ function Prototype() {
           Dismiss all
         </button>
       </div>
-      <Toaster theme={theme} />
+      {/* Direction is inherited from the DOM (§20): the toasts mirror, the positions do not. */}
+      <div dir={rtl ? 'rtl' : 'ltr'}>
+        <Toaster theme={theme} />
+      </div>
     </section>
   );
 }
