@@ -141,6 +141,40 @@ describe('visual order (§12, D-15)', () => {
   });
 });
 
+describe('AC-CSS-3: containers (D-24)', () => {
+  // The region and its position lists carry no inline z-index or padding: the stylesheet gives
+  // them `--ret-z-index` and the `--ret-offset` gutters (styles.test.ts). Only those properties
+  // are checked here, and only on the containers, as AC-CSS-3 states.
+  it('D-24: renders no inline z-index or padding on the region or any position list', () => {
+    const positions: readonly ToastPosition[] = [
+      'top-left',
+      'top-center',
+      'top-right',
+      'bottom-left',
+      'bottom-center',
+      'bottom-right',
+    ];
+    render(<Toaster />);
+    for (const position of positions) show(position, position);
+    const inlineLayout = () =>
+      [document.querySelector('section.ret-toaster'), ...document.querySelectorAll('ol')].flatMap(
+        container =>
+          [...((container as HTMLElement | null)?.style ?? [])]
+            .filter(property => /^(z-index|padding)/.test(property))
+            .map(property => `${container?.tagName} ${property}`)
+      );
+    expect(lists()).toHaveLength(positions.length);
+    expect(inlineLayout()).toEqual([]);
+    // Still none once every toast has entered (the 0 ms fallback), and is visible.
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(getSnapshot().byPosition['top-left'].map(view => view.phase)).toEqual(['visible']);
+    expect(lists()).toHaveLength(positions.length);
+    expect(inlineLayout()).toEqual([]);
+  });
+});
+
 describe('the toast item seam (§7, §14, §21)', () => {
   it('renders the content in an <li> with phase, position, type and className hooks', () => {
     render(<Toaster />);

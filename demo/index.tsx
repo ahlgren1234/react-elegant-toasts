@@ -1,9 +1,303 @@
+import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster, toast } from '../src';
+import { Toaster, toast, type ToastOptions, type ToastPosition, type ToastTheme } from '../src';
 import '../src/styles.css';
 import './styles.css';
 
-// P-08 placeholder: the 0.x demo is gone and P-25 rebuilds the demo for 2.0.
+// P-17 D1: the interim visual prototype for the OQ-24 sign-off. Demo only, not the production
+// stylesheet, and not the P-25 demo rebuild. It loads after the production stylesheet and masks
+// it, so `?production-css` skips it and shows the production stylesheet alone (P-17 review).
+const PRODUCTION_CSS_ONLY = new URLSearchParams(window.location.search).has('production-css');
+if (PRODUCTION_CSS_ONLY) document.documentElement.classList.add('demo-production-css');
+else void import('./p17-prototype.css');
+
+const POSITIONS: readonly ToastPosition[] = [
+  'top-left',
+  'top-center',
+  'top-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
+];
+const THEMES: readonly ToastTheme[] = ['system', 'light', 'dark'];
+const LONG_TEXT =
+  'Your export of 1,284 records finished, but 3 rows were skipped because their dates could not be parsed. https://example.com/a-very-long-unbroken-link-to-the-export-report-that-must-wrap';
+
+// P-17 D1 review harness: drives the real toast API and Toaster props. P-25 replaces it.
+function Prototype() {
+  const [theme, setTheme] = useState<ToastTheme>('system');
+  const [position, setPosition] = useState<ToastPosition>('top-right');
+  const [description, setDescription] = useState(true);
+  const [action, setAction] = useState(false);
+  const [closeButton, setCloseButton] = useState(true);
+  const [persistent, setPersistent] = useState(true);
+  const [rtl, setRtl] = useState(false);
+
+  const options = (at: ToastPosition = position): ToastOptions => ({
+    position: at,
+    closeButton,
+    ...(persistent ? { duration: Infinity } : {}),
+    ...(description ? { description: 'Changes are synced to all of your devices.' } : {}),
+    ...(action ? { action: { label: 'Undo', onClick: () => undefined } } : {}),
+  });
+
+  const custom = (withClose: boolean) => {
+    const id = `custom-${Date.now()}`;
+    toast.custom(
+      <div className="demo-custom-toast">
+        <span className="demo-custom-avatar" aria-hidden="true">
+          AL
+        </span>
+        <div>
+          <strong>Ada Lovelace invited you</strong>
+          <p>Join the Analytics workspace to view shared reports.</p>
+          <button type="button" onClick={() => toast.dismiss(id)}>
+            View invitation
+          </button>
+        </div>
+      </div>,
+      {
+        id,
+        position,
+        closeButton: withClose,
+        // The consumer's foreground on the toast root, which the library close button inherits.
+        className: 'demo-custom-root',
+        ...(persistent ? { duration: Infinity } : {}),
+      }
+    );
+  };
+
+  return (
+    <section className="demo-prototype" aria-labelledby="prototype-heading">
+      <h2 id="prototype-heading">P-17 visual prototype</h2>
+      <p className="demo-note">
+        Interim harness for the OQ-24 review: a neutral elevated card with a semantic accent. Not
+        final styling. Alt+T focuses the first toast, Escape returns focus.
+      </p>
+      <p className="demo-note">
+        {PRODUCTION_CSS_ONLY ? (
+          <>
+            Showing the production stylesheet only, with dotted outlines around each stack's hit
+            area. <a href="?">Show the D1 prototype</a>
+          </>
+        ) : (
+          <>
+            Showing the D1 prototype. <a href="?production-css">Show production CSS only</a>
+          </>
+        )}
+      </p>
+      {PRODUCTION_CSS_ONLY && (
+        <p className="demo-note">
+          S5 focus review: Alt+T focuses the first toast, Tab reaches its action and close, Escape
+          returns. The region takes focus only when the last focused toast leaves, for example by
+          pressing Enter on the close of a single toast; Focus region below jumps there directly.
+          Activate it from the keyboard, since browsers show focus after a script moves it only when
+          the last input was a key. For forced colours, use DevTools, Rendering, Emulate CSS media
+          feature forced-colors.
+        </p>
+      )}
+
+      <div className="demo-controls">
+        <label>
+          Theme
+          <select value={theme} onChange={e => setTheme(e.target.value as ToastTheme)}>
+            {THEMES.map(value => (
+              <option key={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Position
+          <select value={position} onChange={e => setPosition(e.target.value as ToastPosition)}>
+            {POSITIONS.map(value => (
+              <option key={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={description}
+            onChange={e => setDescription(e.target.checked)}
+          />
+          Description
+        </label>
+        <label>
+          <input type="checkbox" checked={action} onChange={e => setAction(e.target.checked)} />
+          Action
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={closeButton}
+            onChange={e => setCloseButton(e.target.checked)}
+          />
+          Close button
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={persistent}
+            onChange={e => setPersistent(e.target.checked)}
+          />
+          Persistent
+        </label>
+        <label>
+          <input type="checkbox" checked={rtl} onChange={e => setRtl(e.target.checked)} />
+          RTL
+        </label>
+      </div>
+
+      <div className="demo-actions">
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => toast('Event has been created', options())}
+        >
+          Default
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => toast.success('Profile saved', options())}
+        >
+          Success
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => toast.error('Payment failed', options())}
+        >
+          Error
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => toast.warning('Storage almost full', options())}
+        >
+          Warning
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => toast.info('New version available', options())}
+        >
+          Info
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => toast.loading('Uploading report…', options())}
+        >
+          Loading
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() =>
+            toast.promise(
+              () => new Promise<void>(resolve => setTimeout(resolve, 2000)),
+              { loading: 'Publishing…', success: 'Published', error: 'Could not publish' },
+              options()
+            )
+          }
+        >
+          Promise
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => toast.warning(LONG_TEXT, { ...options(), description: LONG_TEXT })}
+        >
+          Long text
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() =>
+            toast(
+              'Your weekly analytics summary for the Marketing, Sales and Customer Success workspaces is ready to download',
+              { ...options(), description: undefined }
+            )
+          }
+        >
+          Long title
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() =>
+            toast.info('Link copied', {
+              ...options(),
+              description:
+                'https://example.com/shared/reports/2026/q3/a-very-long-unbroken-path-segment-without-any-spaces-at-all',
+            })
+          }
+        >
+          Unbroken URL
+        </button>
+        <button type="button" className="demo-button" onClick={() => custom(false)}>
+          Custom
+        </button>
+        <button type="button" className="demo-button" onClick={() => custom(true)}>
+          Custom + close
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => {
+            toast.info('First (oldest)', options());
+            toast.success('Second', options());
+            toast.error('Third (newest)', options());
+          }}
+        >
+          Stack of three
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => {
+            toast('Default: event created', options());
+            toast.success('Success: profile saved', options());
+            toast.error('Error: payment failed', options());
+            toast.warning('Warning: storage almost full', options());
+            toast.info('Info: new version available', options());
+            toast.loading('Loading: uploading report', options());
+          }}
+        >
+          All types
+        </button>
+        <button
+          type="button"
+          className="demo-button"
+          onClick={() => POSITIONS.forEach(at => toast.success(at, options(at)))}
+        >
+          All six positions
+        </button>
+        {PRODUCTION_CSS_ONLY && (
+          // S5 review only: the library focuses the region only as the last step of focus
+          // restoration (§18), which is slow to reach by hand.
+          <button
+            type="button"
+            className="demo-button"
+            onClick={() => document.querySelector<HTMLElement>('.ret-toaster')?.focus()}
+          >
+            Focus region
+          </button>
+        )}
+        <button type="button" className="demo-button danger" onClick={() => toast.dismiss()}>
+          Dismiss all
+        </button>
+      </div>
+      {/* Direction is inherited from the DOM (§20): the toasts mirror, the positions do not. */}
+      <div dir={rtl ? 'rtl' : 'ltr'}>
+        {/* Six visible per stack, so the All types matrix shows at once (the default is 4). */}
+        <Toaster theme={theme} maxVisible={6} />
+      </div>
+    </section>
+  );
+}
+
 const Demo = () => (
   <div className="demo-container">
     <header className="demo-header">
@@ -70,14 +364,8 @@ const Demo = () => (
     </header>
 
     <main className="demo-content">
-      <div className="demo-actions">
-        <button type="button" onClick={() => toast('Hello')} className="demo-button primary">
-          Show toast
-        </button>
-      </div>
+      <Prototype />
     </main>
-
-    <Toaster />
   </div>
 );
 

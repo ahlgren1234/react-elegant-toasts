@@ -25,6 +25,10 @@ describe('AC-API-1: package entry', () => {
     expect('default' in entry).toBe(false);
   });
 
+  // This test builds a real TypeScript program for the entry, which can take most of Vitest's
+  // 5000 ms default timeout when the whole suite runs in parallel. The 20 s timeout only gives that
+  // compilation headroom: the assertions are unchanged, nothing is retried, and a real failure
+  // still fails.
   it('exports exactly the two values and the eleven §6.7 types', () => {
     const indexFile = path.resolve(__dirname, '../index.ts');
     const program = ts.createProgram([indexFile], { noEmit: true, skipLibCheck: true });
@@ -37,5 +41,5 @@ describe('AC-API-1: package entry', () => {
       .map(symbol => symbol.getName())
       .sort();
     expect(names).toEqual([...VALUE_EXPORTS, ...TYPE_EXPORTS].sort());
-  });
+  }, 20_000);
 });

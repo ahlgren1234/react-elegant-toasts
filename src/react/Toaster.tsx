@@ -19,7 +19,7 @@ import {
 } from '../store/store';
 import type { ToasterToken, ToastView } from '../store/types';
 import type { ToasterProps, ToastPosition, ToastTheme } from '../types';
-import { AnnouncerContext, createAnnouncer, VISUALLY_HIDDEN } from './announcer';
+import { AnnouncerContext, createAnnouncer, LIVE_REGION, VISUALLY_HIDDEN } from './announcer';
 import { resolveCloseButton, resolveLabels } from './defaults';
 import { ToastItem } from './ToastItem';
 import { useEnvironmentPause } from './useEnvironmentPause';
@@ -168,8 +168,19 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
       tabIndex={-1}
     >
       {/* Persistent and empty until something is announced (§17.1), on the server too (§23). */}
-      <div role="status" aria-live="polite" aria-atomic="false" style={VISUALLY_HIDDEN} />
-      <div aria-live="assertive" aria-atomic="false" style={VISUALLY_HIDDEN} />
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="false"
+        className={LIVE_REGION}
+        style={VISUALLY_HIDDEN}
+      />
+      <div
+        aria-live="assertive"
+        aria-atomic="false"
+        className={LIVE_REGION}
+        style={VISUALLY_HIDDEN}
+      />
       {owner && (
         <AnnouncerContext.Provider value={announcer}>
           {POSITIONS.map(position => (

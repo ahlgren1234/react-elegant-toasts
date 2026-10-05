@@ -1,0 +1,1042 @@
+// The shipped stylesheet's contract (§21, OQ-25, P-17 S1): the `ret-` namespace and its lint gate
+// (AC-CSS-1, D-23), the token set scoped to `.ret-toaster`, the CSS-only light, dark and system
+// themes (§23), no motion before P-18, and the package-validation marker (P-07). These are
+// structural checks of the CSS text and its token palette (S4, S5). Rendered layout, focus and
+// forced-colour appearance are verified in real browsers (P-22).
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { LIVE_REGION, VISUALLY_HIDDEN } from '../react/announcer';
+
+const root = path.resolve(__dirname, '../..');
+const STYLES = path.join(root, 'src/styles.css');
+const CHECK = path.join(root, 'scripts/check-styles.js');
+const css = fs.readFileSync(STYLES, 'utf8');
+
+/** Every style rule in the stylesheet, with the media condition it sits in, if any. */
+function styleRules(): { selector: string; media: string | null; style: CSSStyleDeclaration }[] {
+  const element = document.createElement('style');
+  element.textContent = css;
+  document.head.append(element);
+  const sheet = element.sheet;
+  element.remove();
+  const found: { selector: string; media: string | null; style: CSSStyleDeclaration }[] = [];
+  const walk = (rules: CSSRuleList, media: string | null) => {
+    for (const rule of rules) {
+      if (rule instanceof CSSStyleRule) {
+        found.push({ selector: rule.selectorText, media, style: rule.style });
+      } else if (rule instanceof CSSMediaRule) {
+        walk(rule.cssRules, rule.conditionText);
+      }
+    }
+  };
+  if (sheet) walk(sheet.cssRules, null);
+  return found;
+}
+
+const declarations = (style: CSSStyleDeclaration): Record<string, string> =>
+  Object.fromEntries([...style].map(property => [property, style.getPropertyValue(property)]));
+
+const tokensOf = (style: CSSStyleDeclaration): string[] =>
+  [...style].filter(property => property.startsWith('--'));
+
+const rules = styleRules();
+const ruleFor = (selector: string, media: string | null = null) => {
+  const rule = rules.find(r => r.selector === selector && r.media === media);
+  if (!rule) throw new Error(`no rule ${selector} in ${media ?? 'the top level'}`);
+  return rule;
+};
+const LIGHT = ruleFor(':where(.ret-toaster)');
+const DARK = ruleFor(":where(.ret-toaster[data-theme='dark'])");
+const SYSTEM_DARK = ruleFor(
+  ":where(.ret-toaster[data-theme='system'])",
+  '(prefers-color-scheme: dark)'
+);
+
+// The initial documented token set (§21, OQ-24, OQ-25).
+const COLOUR_TOKENS = [
+  '--ret-surface',
+  '--ret-text',
+  '--ret-text-muted',
+  '--ret-border',
+  '--ret-shadow',
+  '--ret-focus',
+  '--ret-action-surface',
+  '--ret-action-text',
+  ...['success', 'error', 'warning', 'info', 'loading'].flatMap(type => [
+    `--ret-${type}`,
+    `--ret-${type}-subtle`,
+  ]),
+];
+const LAYOUT_TOKENS = [
+  '--ret-font-family',
+  '--ret-radius',
+  '--ret-gap',
+  '--ret-offset',
+  '--ret-width',
+  '--ret-z-index',
+];
+
+// Class names of the 0.x stylesheet, none of which is part of the 2.x contract.
+const LEGACY_CLASSES = [
+  'toast',
+  'toast-container',
+  'toast-content',
+  'toast-icon',
+  'toast-message',
+  'toast-title',
+  'toast-progress',
+  'success',
+  'error',
+  'warning',
+  'info',
+  'rtl',
+  'top-right',
+  'top-left',
+  'top-center',
+  'bottom-right',
+  'bottom-left',
+  'bottom-center',
+  'slideIn',
+  'fadeIn',
+  'zoomIn',
+  'bounceIn',
+];
+
+// Samples the check must reject, each with a fragment of the expected message.
+const FAILING: readonly (readonly [name: string, css: string, message: string])[] = [
+  ['a legacy .toast selector', '.toast { color: red; }', 'unprefixed class .toast'],
+  ['a legacy .toast-container selector', '.toast-container {}', '.toast-container'],
+  ['an arbitrary unprefixed class', '.foo { color: red; }', 'unprefixed class .foo'],
+  ['an unprefixed class beside a ret- one', '.ret-toast.success {}', '.success'],
+  ['an unprefixed class in :where()', ':where(.ret-toast, .foo) {}', '.foo'],
+  ['an unprefixed class in :not()', '.ret-toast:not(.foo) {}', '.foo'],
+  ['a :root rule', ':root { --ret-surface: red; }', 'no ret- class'],
+  ['an element-only selector', 'button { color: red; }', 'no ret- class'],
+  ['an ID selector', '.ret-toast#main {}', 'ID selector'],
+  ['an undocumented attribute', '.ret-toast[data-foo] {}', '[data-foo]'],
+  ['an attribute outside a ret- compound', '[data-theme] .ret-toast {}', 'outside a ret-'],
+  ['an unprefixed custom property', '.ret-toaster { --toast-bg: red; }', '--toast-bg'],
+  ['an unprefixed var() read', '.ret-toast { color: var(--brand); }', '--brand'],
+  ['unprefixed keyframes', '@keyframes slideIn { to { opacity: 1; } }', 'slideIn'],
+  ['!important', '.ret-toast { color: red !important; }', '!important'],
+  ['an unprefixed selector inside @media', '@media (min-width: 1px) { .foo {} }', '.foo'],
+  ['an @import', "@import 'x.css';", 'not allowed'],
+];
+
+// Constructs the check must accept.
+const PASSING = [
+  "@media (prefers-color-scheme: dark) { :where(.ret-toaster[data-theme='system']) {} }",
+  '@supports (inset: 0) { .ret-toaster__list[data-position^="top-"] {} }',
+  ':where(.ret-toast):focus-visible::after { color: var(--ret-focus); }',
+  '.ret-toast[data-phase="exiting"] > .ret-toast__close svg {}',
+  '@keyframes ret-example { to { opacity: 1; } }',
+].join('\n');
+
+/**
+ * One run of the check over the shipped stylesheet and every sample, in a single process. Reports
+ * are in that order: the stylesheet, the failing samples, then the passing one.
+ */
+function runCheck(): { status: number | null; reports: string[] } {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ret-styles-'));
+  try {
+    const samples = [...FAILING.map(([, text]) => text), PASSING].map((text, index) => {
+      const file = path.join(tmp, `case-${index}.css`);
+      fs.writeFileSync(file, text);
+      return file;
+    });
+    const files = [STYLES, ...samples];
+    const result = spawnSync(process.execPath, [CHECK, ...files], { cwd: root, encoding: 'utf8' });
+    // Each file's report: its OK line, or its header and the violation lines under it.
+    const lines = `${result.stdout}${result.stderr}`.split('\n');
+    const reports = files.map(file => {
+      const name = file === STYLES ? 'src/styles.css' : file;
+      const start = lines.findIndex(
+        line => line.startsWith(`${name}:`) || line.startsWith(`${name} `)
+      );
+      const block = [lines[start] ?? ''];
+      for (let i = start + 1; start >= 0 && lines[i]?.startsWith('  - '); i++)
+        block.push(lines[i] ?? '');
+      return block.join('\n');
+    });
+    return { status: result.status, reports };
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+describe('AC-CSS-1: the ret- namespace check (D-23)', () => {
+  let result: ReturnType<typeof runCheck>;
+  beforeAll(() => {
+    result = runCheck();
+  }, 30_000);
+  const report = (index: number) => result.reports[index] ?? '';
+
+  it('passes the shipped stylesheet', () => {
+    expect(report(0)).toBe('src/styles.css: stylesheet contract OK');
+  });
+
+  it('exits with a failure when any file breaks the contract', () => {
+    expect(result.status).toBe(1);
+  });
+
+  it.each(FAILING.map(([name, , message], index) => [name, message, index + 1] as const))(
+    'fails %s',
+    (_name, message, index) => {
+      expect(report(index)).toContain('breaks the stylesheet contract');
+      expect(report(index)).toContain(message);
+    }
+  );
+
+  it('accepts at-rules, pseudo-classes, pseudo-elements and anchored documented attributes', () => {
+    expect(report(FAILING.length + 1)).toMatch(/: stylesheet contract OK$/);
+  });
+});
+
+describe('namespace (§21, OQ-25)', () => {
+  it('keeps no 0.x class', () => {
+    const classes = new Set(
+      rules.flatMap(rule => [...rule.selector.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)].map(m => m[1]))
+    );
+    expect(LEGACY_CLASSES.filter(name => classes.has(name))).toEqual([]);
+    expect([...classes].every(name => name?.startsWith('ret-'))).toBe(true);
+  });
+
+  it('declares and reads only --ret- custom properties', () => {
+    for (const rule of rules) {
+      for (const [property, value] of Object.entries(declarations(rule.style))) {
+        if (property.startsWith('--')) expect(property).toMatch(/^--ret-/);
+        for (const match of value.matchAll(/var\(\s*(--[\w-]+)/g)) {
+          expect(match[1]).toMatch(/^--ret-/);
+        }
+      }
+    }
+  });
+
+  it('anchors data-theme to the toaster root', () => {
+    for (const rule of rules.filter(r => r.selector.includes('data-theme'))) {
+      expect(rule.selector).toMatch(/^:where\(\.ret-toaster\[data-theme='(dark|system)'\]\)$/);
+    }
+  });
+});
+
+describe('tokens (§21, OQ-25)', () => {
+  it('declares every documented token on the toaster root, and no other token anywhere', () => {
+    const documented = [...COLOUR_TOKENS, ...LAYOUT_TOKENS].sort();
+    expect(tokensOf(LIGHT.style).sort()).toEqual(documented);
+    expect([...new Set(rules.flatMap(rule => tokensOf(rule.style)))].sort()).toEqual(documented);
+  });
+
+  it('scopes every token to .ret-toaster, never :root or a document element', () => {
+    for (const rule of rules.filter(r => tokensOf(r.style).length > 0)) {
+      expect(rule.selector).toMatch(/^:where\(\.ret-toaster(\[data-theme='(dark|system)'\])?\)$/);
+    }
+    for (const rule of rules) expect(rule.selector).not.toMatch(/:root|\bhtml\b|\bbody\b/);
+  });
+
+  // OQ-25: an ordinary consumer rule such as `.ret-toaster { --ret-surface: … }` overrides every
+  // default without `!important`. A selector made only of one `:where()` has zero specificity, so
+  // any consumer selector outranks it, and no default is important.
+  it('lets any consumer selector override every token default without !important', () => {
+    for (const rule of rules.filter(r => tokensOf(r.style).length > 0)) {
+      expect(rule.selector).toMatch(/^:where\([^()]*\)$/);
+      for (const token of tokensOf(rule.style)) {
+        expect(rule.style.getPropertyPriority(token)).toBe('');
+      }
+    }
+  });
+
+  it('defines no motion, stack, progress or swipe token, which later phases own', () => {
+    const tokens = rules.flatMap(rule => tokensOf(rule.style));
+    expect(
+      tokens.filter(token =>
+        /motion|duration|delay|eas(e|ing)|animation|transition|enter|exit|spin|stack|progress|swipe/.test(
+          token
+        )
+      )
+    ).toEqual([]);
+  });
+});
+
+describe('themes (§21, §23, AC-CSS-2)', () => {
+  it('defaults to the light colour scheme, which also covers system in light mode', () => {
+    expect(LIGHT.style.getPropertyValue('color-scheme')).toBe('light');
+  });
+
+  it('gives dark every colour token', () => {
+    expect(DARK.style.getPropertyValue('color-scheme')).toBe('dark');
+    expect(tokensOf(DARK.style).sort()).toEqual([...COLOUR_TOKENS].sort());
+  });
+
+  it('resolves system through prefers-color-scheme, with exactly the dark values', () => {
+    expect(declarations(SYSTEM_DARK.style)).toEqual(declarations(DARK.style));
+  });
+
+  it('changes only token values and the colour scheme per theme, with no theme-specific rules', () => {
+    for (const rule of [DARK, SYSTEM_DARK]) {
+      expect([...rule.style].filter(p => !p.startsWith('--') && p !== 'color-scheme')).toEqual([]);
+    }
+  });
+
+  it('adds no JavaScript colour-scheme listener', () => {
+    const sources = ['react', 'store']
+      .flatMap(dir =>
+        fs.readdirSync(path.join(root, 'src', dir)).map(f => path.join('src', dir, f))
+      )
+      .concat('src/index.ts', 'src/toast.ts', 'src/types.ts');
+    for (const file of sources) {
+      expect(fs.readFileSync(path.join(root, file), 'utf8')).not.toMatch(
+        /matchMedia|prefers-color-scheme/
+      );
+    }
+  });
+});
+
+/**
+ * The declarations that the stylesheet's top-level rules give `element`, by selector matching,
+ * later rules winning. Every default has the same zero specificity, so source order decides. This
+ * is the cascade of the stylesheet's own rules, not computed layout.
+ */
+function declared(element: Element): Record<string, string> {
+  return Object.assign(
+    {},
+    ...rules
+      .filter(r => r.media === null && element.matches(r.selector))
+      .map(r => declarations(r.style))
+  ) as Record<string, string>;
+}
+
+function listAt(position: string): HTMLOListElement {
+  const list = document.createElement('ol');
+  list.className = 'ret-toaster__list';
+  list.setAttribute('data-position', position);
+  return list;
+}
+
+const POSITIONS = [
+  'top-left',
+  'top-center',
+  'top-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
+] as const;
+// Placement and box properties that would let the region cover the viewport.
+const OVERLAY =
+  /^(position|inset|top|right|bottom|left|width|height|min-|max-|z-index|pointer-events)/;
+
+describe('positions and stacks (§12, P-17 S2)', () => {
+  it.each(POSITIONS)('places %s in the viewport from its physical edges', position => {
+    const [vertical, horizontal] = position.split('-') as [string, string];
+    const css = declared(listAt(position));
+    expect(css.position).toBe('fixed');
+    const other = vertical === 'top' ? 'bottom' : 'top';
+    expect(css[vertical]).toBe(`calc(var(--ret-offset) + env(safe-area-inset-${vertical}, 0px))`);
+    expect(css[other]).toBeUndefined();
+    if (horizontal === 'center') {
+      expect([css.left, css.right, css['margin-left'], css['margin-right']]).toEqual([
+        '0px',
+        '0px',
+        'auto',
+        'auto',
+      ]);
+    } else {
+      const opposite = horizontal === 'left' ? 'right' : 'left';
+      expect(css[horizontal]).toBe(
+        `calc(var(--ret-offset) + env(safe-area-inset-${horizontal}, 0px))`
+      );
+      expect(css[opposite]).toBeUndefined();
+    }
+  });
+
+  it('stacks each list as a plain column in DOM order, with no reordering anywhere', () => {
+    const css = declared(listAt('top-right'));
+    expect([css.display, css['flex-direction']]).toEqual(['flex', 'column']);
+    for (const rule of rules) {
+      for (const [property, value] of Object.entries(declarations(rule.style))) {
+        expect(property).not.toMatch(/^(order|direction|grid-auto-flow|writing-mode)$/);
+        expect(value).not.toMatch(/reverse|dense/);
+      }
+    }
+  });
+
+  it('resets the list and spaces toasts with the gap token, above the page by the z-index token', () => {
+    const css = declared(listAt('bottom-left'));
+    expect(css).toMatchObject({
+      margin: '0px',
+      padding: '0px',
+      'list-style': 'none',
+      'box-sizing': 'border-box',
+      gap: 'var(--ret-gap)',
+      'z-index': 'var(--ret-z-index)',
+    });
+  });
+
+  it('bounds the stack to --ret-width and to the viewport minus both gutters, so it shrinks', () => {
+    expect(declared(listAt('top-center')).width?.replace(/\s+/g, ' ')).toBe(
+      'min( var(--ret-width), 100% - 2 * var(--ret-offset) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) )'
+    );
+    // Viewport units would include the scrollbar; the fixed list's 100% is the viewport without it.
+    expect(css).not.toMatch(/\d(vw|vh|dvw|svw|lvw)\b/);
+  });
+
+  it('keeps every position physical: no logical inset, margin or size and no direction selector', () => {
+    for (const rule of rules.filter(r => r.selector.includes('ret-toaster__list'))) {
+      expect(rule.selector).not.toMatch(/dir/);
+      expect([...rule.style].filter(p => /inline|block|inset/.test(p))).toEqual([]);
+    }
+  });
+
+  it('gives the region no box or pointer rule, so it never covers the page', () => {
+    const region = document.createElement('section');
+    region.className = 'ret-toaster';
+    for (const theme of ['light', 'dark', 'system']) {
+      region.setAttribute('data-theme', theme);
+      expect(Object.keys(declared(region)).filter(p => OVERLAY.test(p))).toEqual([]);
+    }
+  });
+
+  it('leaves pointer input on for the lists and the toasts', () => {
+    const toast = document.createElement('li');
+    toast.className = 'ret-toast ret-toast--success';
+    for (const element of [listAt('top-right'), toast]) {
+      expect(declared(element)['pointer-events']).not.toBe('none');
+    }
+  });
+
+  it('lets a toast fill its stack with its padding and border inside it', () => {
+    const toast = document.createElement('li');
+    toast.className = 'ret-toast ret-toast--default';
+    expect(declared(toast)['box-sizing']).toBe('border-box');
+  });
+
+  it('gives the live regions only their visually hidden class rule (§17.1, S5)', () => {
+    for (const attributes of [
+      { role: 'status', 'aria-live': 'polite' },
+      { 'aria-live': 'assertive' },
+    ]) {
+      const region = document.createElement('div');
+      region.className = LIVE_REGION;
+      for (const [name, value] of Object.entries(attributes)) region.setAttribute(name, value);
+      expect(rules.filter(r => region.matches(r.selector)).map(r => r.selector)).toEqual([
+        `.${LIVE_REGION}`,
+      ]);
+    }
+  });
+});
+
+/** A toast `<li>` of `type`, with the normal or custom children the renderer gives it. */
+function toastOf(type: string, parts: readonly string[] = []): HTMLLIElement {
+  const item = document.createElement('li');
+  item.className = `ret-toast ret-toast--${type}`;
+  for (const part of parts) {
+    const child = document.createElement(
+      part === 'icon' ? 'span' : part.endsWith('n') ? 'button' : 'div'
+    );
+    if (part !== 'custom') child.className = `ret-toast__${part}`;
+    item.append(child);
+  }
+  return item;
+}
+
+const partOf = (item: Element, part: string): Element => {
+  const element = item.querySelector(`.ret-toast__${part}`);
+  if (!element) throw new Error(`no ${part}`);
+  return element;
+};
+
+// The card's properties, none of which a custom toast may receive (§6.4).
+const CARD =
+  /^(display|gap|padding|border|background|box-shadow|color|font|line-height|letter-spacing|text-)/;
+
+describe('the toast card, content and controls (§17.2, OQ-24, P-17 S3)', () => {
+  it('makes every normal type a neutral elevated card from the public tokens', () => {
+    for (const type of ['default', 'success', 'error', 'warning', 'info', 'loading']) {
+      expect(declared(toastOf(type))).toMatchObject({
+        display: 'flex',
+        'align-items': 'flex-start',
+        border: '1px solid var(--ret-border)',
+        'border-radius': 'var(--ret-radius)',
+        background: 'var(--ret-surface)',
+        'box-shadow': 'var(--ret-shadow)',
+        color: 'var(--ret-text)',
+        'font-family': 'var(--ret-font-family)',
+        'font-size': '14px',
+        'line-height': '20px',
+        'font-weight': '400',
+      });
+    }
+  });
+
+  it('gives a custom toast no card chrome, only its box sizing and the close anchor', () => {
+    const custom = declared(toastOf('custom', ['custom', 'close']));
+    expect(Object.keys(custom).filter(p => CARD.test(p))).toEqual([]);
+    expect(custom).toEqual({ 'box-sizing': 'border-box', position: 'relative' });
+  });
+
+  it('sets the description below the primary text: smaller, muted, still the same column', () => {
+    const item = toastOf('info', ['icon', 'content', 'close']);
+    const content = partOf(item, 'content');
+    const title = document.createElement('div');
+    title.className = 'ret-toast__title';
+    const description = document.createElement('div');
+    description.className = 'ret-toast__description';
+    content.append(title, description);
+    expect(declared(title)['font-weight']).toBe('600');
+    expect(declared(description)).toMatchObject({
+      color: 'var(--ret-text-muted)',
+      'font-size': '13px',
+      'line-height': '18px',
+    });
+  });
+
+  it('lets the text column shrink and wrap long words and URLs, without truncating', () => {
+    const content = partOf(toastOf('default', ['content']), 'content');
+    expect(declared(content)).toMatchObject({
+      'flex-grow': '1',
+      'flex-shrink': '1',
+      'min-inline-size': '0px',
+      'overflow-wrap': 'anywhere',
+    });
+    // Toast parts only: the visually hidden live regions clip by design (S5).
+    for (const rule of rules.filter(r => /ret-toast(?!er)/.test(r.selector))) {
+      const css = declarations(rule.style);
+      expect(css['white-space']).toBeUndefined();
+      expect(css['text-overflow']).toBeUndefined();
+      expect(Object.keys(css).filter(p => /line-clamp|^overflow(-x|-y)?$/.test(p))).toEqual([]);
+    }
+  });
+
+  it('gives the icon a fixed 28px footprint with an 18px glyph, in the content order', () => {
+    const icon = partOf(toastOf('success', ['icon', 'content']), 'icon');
+    expect(declared(icon)).toMatchObject({
+      'flex-grow': '0',
+      'flex-shrink': '0',
+      'inline-size': '28px',
+      'block-size': '28px',
+    });
+    const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.append(glyph);
+    expect(declared(glyph)).toMatchObject({ 'inline-size': '18px', 'block-size': '18px' });
+  });
+
+  it('styles the action as a compact filled control that wraps a long label', () => {
+    const action = partOf(toastOf('success', ['content', 'action', 'close']), 'action');
+    expect(declared(action)).toMatchObject({
+      background: 'var(--ret-action-surface)',
+      color: 'var(--ret-action-text)',
+      'font-size': '13px',
+      'max-inline-size': '45%',
+      'overflow-wrap': 'anywhere',
+      'flex-shrink': '0',
+    });
+  });
+
+  it('gives the close button exactly a 24×24 target with a muted 16px glyph', () => {
+    const close = partOf(toastOf('default', ['content', 'close']), 'close');
+    expect(declared(close)).toMatchObject({
+      'inline-size': '24px',
+      'block-size': '24px',
+      padding: '0px',
+      color: 'var(--ret-text-muted)',
+      'flex-shrink': '0',
+    });
+    const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    close.append(glyph);
+    expect(declared(glyph)).toMatchObject({ 'inline-size': '16px', 'block-size': '16px' });
+  });
+
+  it("puts a custom toast's close in the inline-end top corner, in the root's colour", () => {
+    const close = partOf(toastOf('custom', ['custom', 'close']), 'close');
+    expect(declared(close)).toMatchObject({
+      position: 'absolute',
+      'inset-block-start': '8px',
+      'inset-inline-end': '8px',
+      color: 'inherit',
+      'inline-size': '24px',
+      'block-size': '24px',
+    });
+    // No hover or other state rule recolours it with a theme token.
+    for (const rule of rules.filter(r => /:hover|:active/.test(r.selector))) {
+      expect(close.matches(rule.selector.replace(/:(hover|active)/g, ''))).toBe(false);
+    }
+  });
+
+  it('mirrors in RTL: toast parts use logical spacing and no physical side insets', () => {
+    for (const rule of rules.filter(r => /ret-toast(?!er)/.test(r.selector))) {
+      const css = declarations(rule.style);
+      expect(css.left ?? css.right).toBeUndefined();
+      for (const box of ['margin', 'padding']) {
+        expect(css[`${box}-left`]).toBe(css[`${box}-right`]);
+      }
+    }
+  });
+});
+
+const TYPES = ['success', 'error', 'warning', 'info', 'loading'] as const;
+
+/** WCAG 2.x relative luminance of an opaque `#rrggbb` colour. */
+function luminance(hex: string): number {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) throw new Error(`${hex} is not an opaque #rrggbb colour, so its contrast is unknown`);
+  const [r, g, b] = match.slice(1).map(channel => {
+    const value = parseInt(channel, 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** The WCAG contrast ratio of two opaque colours. */
+function contrast(a: string, b: string): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (light + 0.05) / (dark + 0.05);
+}
+
+// The pairs AC-A11Y-6 requires (§17.4, §17.5), as [foreground, background, minimum]. Toast text is
+// 13 to 14px, which is never large text, so all of it needs 4.5:1. The icon glyphs, the close glyph
+// and the focus colour are meaningful non-text and need 3:1 against what they sit on. The border,
+// the tints against the surface, and the shadow are decorative: the card is told apart by surface,
+// border and shadow together, so no single pair of them is claimed.
+const PAIRS: readonly (readonly [string, string, number])[] = [
+  ['--ret-text', '--ret-surface', 4.5],
+  ['--ret-text-muted', '--ret-surface', 4.5],
+  ['--ret-action-text', '--ret-action-surface', 4.5],
+  ...TYPES.map(type => [`--ret-${type}`, `--ret-${type}-subtle`, 3] as const),
+  ['--ret-focus', '--ret-surface', 3],
+];
+
+describe('semantic accents (OQ-24, P-17 S4)', () => {
+  it.each(TYPES)('colours only the %s icon slot, from its own token family', type => {
+    const item = toastOf(type, ['icon', 'content']);
+    expect(declared(partOf(item, 'icon'))).toMatchObject({
+      background: `var(--ret-${type}-subtle)`,
+      color: `var(--ret-${type})`,
+    });
+    // The card itself stays neutral: no semantic surface, border or text.
+    expect(declared(item)).toMatchObject({
+      background: 'var(--ret-surface)',
+      border: '1px solid var(--ret-border)',
+      color: 'var(--ret-text)',
+    });
+  });
+
+  it("keeps a default toast's icon neutral, with no tint", () => {
+    const icon = partOf(toastOf('default', ['icon', 'content']), 'icon');
+    expect(declared(icon).color).toBe('var(--ret-text-muted)');
+    expect(declared(icon).background).toBeUndefined();
+  });
+
+  it('limits type rules to the icon slot, so no type restyles the card or its other parts', () => {
+    for (const rule of rules.filter(r => /ret-toast--(?!custom)/.test(r.selector))) {
+      expect(rule.selector).toMatch(/^:where\(\.ret-toast--[a-z]+ > \.ret-toast__icon\)$/);
+      expect([...rule.style].filter(p => !/^(color|background)/.test(p))).toEqual([]);
+    }
+  });
+
+  it('reads every semantic token, so none is left unused', () => {
+    const read = new Set(
+      rules.flatMap(rule =>
+        Object.values(declarations(rule.style)).flatMap(value =>
+          [...value.matchAll(/var\((--ret-[\w-]+)\)/g)].map(m => m[1])
+        )
+      )
+    );
+    for (const type of TYPES) {
+      expect(read).toContain(`--ret-${type}`);
+      expect(read).toContain(`--ret-${type}-subtle`);
+    }
+  });
+
+  it('never gives a custom toast or its contents a semantic colour', () => {
+    const item = toastOf('custom', ['custom', 'close']);
+    const inside = item.firstElementChild as Element;
+    inside.className = 'ret-toast__icon';
+    // Every rule that reads a semantic token, whatever its selector.
+    const semantic = rules.filter(r =>
+      Object.values(declarations(r.style)).some(v =>
+        /var\(--ret-(success|error|warning|info|loading)/.test(v)
+      )
+    );
+    expect(semantic.length).toBeGreaterThan(0);
+    for (const rule of semantic) {
+      expect([item, inside, ...item.children].some(e => e.matches(rule.selector))).toBe(false);
+    }
+  });
+
+  it('has no light-scheme media rule, so system in a light scheme is exactly the light default', () => {
+    expect(css).not.toMatch(/prefers-color-scheme:\s*light/);
+  });
+});
+
+describe('AC-A11Y-6: palette contrast in both themes (D-20)', () => {
+  const themes = {
+    light: declarations(LIGHT.style),
+    dark: { ...declarations(LIGHT.style), ...declarations(DARK.style) },
+    'system dark': { ...declarations(LIGHT.style), ...declarations(SYSTEM_DARK.style) },
+  };
+
+  it.each(Object.entries(themes))('meets every required ratio in %s', (theme, tokens) => {
+    for (const [foreground, background, minimum] of PAIRS) {
+      const ratio = contrast(tokens[foreground] ?? '', tokens[background] ?? '');
+      expect(
+        ratio,
+        `${theme}: ${foreground} on ${background} is ${ratio.toFixed(2)}:1, below ${minimum}:1`
+      ).toBeGreaterThanOrEqual(minimum);
+    }
+  });
+
+  it('computes WCAG ratios correctly', () => {
+    expect(contrast('#000000', '#ffffff')).toBeCloseTo(21, 5);
+    expect(contrast('#777777', '#ffffff')).toBeCloseTo(4.48, 2);
+    expect(() => contrast('rgb(0 0 0 / 0.5)', '#ffffff')).toThrow(/opaque/);
+  });
+});
+
+const FORCED = '(forced-colors: active)';
+
+/**
+ * `selector` as if every user-action state held: each `:focus-visible` and `:hover` becomes
+ * `:is(*)`, which every element matches. Removing them instead would change the selector's
+ * structure: `.ret-toast--custom :focus-visible` would shrink to `.ret-toast--custom`.
+ */
+const inEveryState = (selector: string): string =>
+  selector.replace(/:(focus-visible|hover)/g, ':is(*)');
+
+/**
+ * The declarations the stylesheet gives `element`, or its `pseudo` element, while it shows focus
+ * (and is hovered): the rules that match in every state, later rules winning, as in `declared`. With
+ * `media`, the rules inside that media query apply too, after the top-level ones.
+ */
+function declaredWhenFocused(
+  element: Element,
+  { pseudo = '', media = null }: { pseudo?: string; media?: string | null } = {}
+): Record<string, string> {
+  return Object.assign(
+    {},
+    ...rules
+      .filter(r => r.media === null || r.media === media)
+      .filter(r => {
+        const [, base = '', own = ''] = /^(.*?)(::[\w-]+)?$/s.exec(r.selector) ?? [];
+        return own === pseudo && element.matches(inEveryState(base));
+      })
+      .map(r => declarations(r.style))
+  ) as Record<string, string>;
+}
+
+/** A section like the one the Toaster renders. */
+function regionOf(theme = 'system'): HTMLElement {
+  const region = document.createElement('section');
+  region.className = 'ret-toaster';
+  region.setAttribute('data-theme', theme);
+  return region;
+}
+
+/** A custom toast with the library close and consumer content holding its own controls. */
+function customToast(): { item: HTMLLIElement; consumer: Element[] } {
+  const item = toastOf('custom', ['custom', 'close']);
+  const content = item.firstElementChild as Element;
+  content.innerHTML =
+    '<button type="button">Open</button><a href="#x">Link</a><input aria-label="x">' +
+    '<div tabindex="0"><button type="button">Nested</button></div><ol><li>Item</li></ol>';
+  return { item, consumer: [content, ...content.querySelectorAll('*')] };
+}
+
+const focusRules = rules.filter(r => r.selector.includes(':focus-visible'));
+const SYSTEM_COLOURS =
+  /^(canvas|canvastext|buttonface|buttontext|buttonborder|field|fieldtext|highlight|highlighttext|selecteditem|selecteditemtext|linktext|visitedtext|activetext|graytext|mark|marktext|accentcolor|accentcolortext)$/;
+
+describe('focus (§17.4, §18, P-17 S5)', () => {
+  it('draws the region focus with a fixed pseudo-element just inside the viewport', () => {
+    for (const theme of ['light', 'dark', 'system']) {
+      const region = regionOf(theme);
+      expect(declaredWhenFocused(region)).toMatchObject({ outline: 'none' });
+      expect(declaredWhenFocused(region, { pseudo: '::after' })).toMatchObject({
+        content: '""',
+        position: 'fixed',
+        inset: '4px',
+        'z-index': 'var(--ret-z-index)',
+        border: '3px solid var(--ret-focus)',
+        outline: '2px solid var(--ret-surface)',
+        'pointer-events': 'none',
+      });
+    }
+  });
+
+  it('never gives the region a box of its own, focused or not, so it is never an overlay', () => {
+    const region = regionOf();
+    for (const css of [declared(region), declaredWhenFocused(region)]) {
+      expect(Object.keys(css).filter(p => OVERLAY.test(p))).toEqual([]);
+    }
+  });
+
+  it('has the region pseudo-element only while the region itself shows focus', () => {
+    const pseudo = rules.filter(r => r.selector.includes('::'));
+    expect(pseudo.length).toBeGreaterThan(0);
+    for (const rule of pseudo) {
+      expect(rule.selector).toBe(':where(.ret-toaster:focus-visible)::after');
+    }
+  });
+
+  it.each(['default', 'success', 'error', 'warning', 'info', 'loading'])(
+    'rings a focused %s toast root inside its edge, on the card surface',
+    type => {
+      const item = toastOf(type, ['icon', 'content', 'close']);
+      expect(declared(item).outline).toBeUndefined();
+      expect(declaredWhenFocused(item)).toMatchObject({
+        outline: '2px solid var(--ret-focus)',
+        'outline-offset': '-1px',
+      });
+    }
+  );
+
+  it('rings a focused custom toast root just outside it, never over its content', () => {
+    const { item } = customToast();
+    expect(declaredWhenFocused(item)).toMatchObject({
+      outline: '2px solid var(--ret-focus)',
+      'outline-offset': '2px',
+    });
+  });
+
+  it('rings the focused action and close buttons on the card surface', () => {
+    const item = toastOf('error', ['icon', 'content', 'action', 'close']);
+    for (const part of ['action', 'close']) {
+      const control = partOf(item, part);
+      expect(declared(control).outline).toBeUndefined();
+      expect(declaredWhenFocused(control)).toMatchObject({
+        outline: '2px solid var(--ret-focus)',
+        'outline-offset': '2px',
+      });
+      expect(declaredWhenFocused(control)['outline-color']).toBeUndefined();
+    }
+  });
+
+  it("rings a custom toast's focused library close in its own glyph colour", () => {
+    const close = partOf(customToast().item, 'close');
+    expect(declaredWhenFocused(close)).toMatchObject({
+      outline: '2px solid var(--ret-focus)',
+      'outline-offset': '2px',
+      'outline-color': 'currentcolor',
+      color: 'inherit',
+    });
+  });
+
+  it('changes no layout when focus arrives: rings are outlines only', () => {
+    for (const rule of focusRules.filter(r => !r.selector.includes('::'))) {
+      expect([...rule.style].filter(p => !p.startsWith('outline'))).toEqual([]);
+    }
+  });
+
+  it('styles nothing inside custom content except the library close, in any state or media', () => {
+    const { item, consumer } = customToast();
+    for (const element of consumer) {
+      const matched = rules.filter(r =>
+        element.matches(inEveryState(r.selector.replace(/::[\w-]+$/, '')))
+      );
+      expect(matched.map(r => r.selector)).toEqual([]);
+    }
+    // The library close is a direct child of the root, and the only one styled.
+    const styled = [...item.children].filter(child =>
+      rules.some(r => child.matches(inEveryState(r.selector.replace(/::[\w-]+$/, ''))))
+    );
+    expect(styled).toEqual([partOf(item, 'close')]);
+  });
+});
+
+/** The opaque colour a focus declaration draws, from the theme's tokens; null for currentColor. */
+function colourOf(value: string, tokens: Record<string, string>): string | null {
+  const rest = value
+    .replace(/(^|\s)-?\d*\.?\d+px\b/g, ' ')
+    .replace(/\b(solid|dashed|dotted|double|auto|none)\b/g, ' ')
+    .trim();
+  if (rest === '') return '';
+  if (rest === 'currentcolor') return null;
+  const token = /^var\((--ret-[\w-]+)\)$/.exec(rest)?.[1];
+  return token ? (tokens[token] ?? '') : rest;
+}
+
+describe('focus contrast (§17.4, AC-A11Y-6, P-17 S5)', () => {
+  const themes = {
+    light: declarations(LIGHT.style),
+    dark: { ...declarations(LIGHT.style), ...declarations(DARK.style) },
+    'system dark': { ...declarations(LIGHT.style), ...declarations(SYSTEM_DARK.style) },
+  };
+
+  // Every ring is drawn next to the card surface, or with a surface halo for the region, so each
+  // colour a focus rule draws must reach 3:1 against `--ret-surface`.
+  it.each(Object.entries(themes))('draws every library ring at 3:1 or more in %s', (_, tokens) => {
+    const drawn = focusRules
+      .filter(r => r.media === null)
+      .flatMap(r =>
+        ['outline', 'outline-color', 'border', 'border-color'].map(p => ({
+          selector: r.selector,
+          value: r.style.getPropertyValue(p),
+        }))
+      )
+      .filter(({ value }) => value !== '');
+    expect(drawn.length).toBeGreaterThan(0);
+    for (const { selector, value } of drawn) {
+      const colour = colourOf(value, tokens);
+      if (colour === '' || (selector.includes('::after') && value.includes('--ret-surface'))) {
+        continue;
+      }
+      if (colour === null) {
+        // currentColor: only the custom close, whose colour the consumer owns (§17.3).
+        expect(selector).toBe(':where(.ret-toast--custom > .ret-toast__close:focus-visible)');
+        continue;
+      }
+      const ratio = contrast(colour, tokens['--ret-surface'] ?? '');
+      expect(ratio, `${selector} draws ${value} at ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(
+        3
+      );
+    }
+  });
+
+  it('gives the region ring a surface halo, so the 3:1 pair holds over any page', () => {
+    const after = declaredWhenFocused(regionOf(), { pseudo: '::after' });
+    expect(after.outline).toContain('var(--ret-surface)');
+    expect(after.border).toContain('var(--ret-focus)');
+  });
+});
+
+describe('forced colours (§17.5, P-17 S5)', () => {
+  const forced = rules.filter(r => r.media === FORCED);
+
+  it('has a forced-colours block', () => {
+    expect(forced.length).toBeGreaterThan(0);
+  });
+
+  it('uses only system colours there, and no authored token or semantic hue', () => {
+    for (const rule of forced) {
+      for (const [property, value] of Object.entries(declarations(rule.style))) {
+        expect(value, `${rule.selector} ${property}`).not.toMatch(/var\(|#|rgb|hsl/);
+        if (/color$/.test(property)) expect(value).toMatch(SYSTEM_COLOURS);
+      }
+    }
+  });
+
+  it('never opts out of forced colours', () => {
+    expect(css).not.toMatch(/forced-color-adjust/);
+  });
+
+  it('rings every focused library element in Highlight, the custom close included', () => {
+    const item = toastOf('success', ['icon', 'content', 'action', 'close']);
+    const custom = customToast().item;
+    for (const element of [item, partOf(item, 'action'), partOf(item, 'close'), custom]) {
+      expect(declaredWhenFocused(element, { media: FORCED })['outline-color']).toBe('highlight');
+    }
+    expect(declaredWhenFocused(partOf(custom, 'close'), { media: FORCED })['outline-color']).toBe(
+      'highlight'
+    );
+    expect(declaredWhenFocused(regionOf(), { pseudo: '::after', media: FORCED })).toMatchObject({
+      'border-color': 'highlight',
+      'outline-color': 'canvas',
+      'pointer-events': 'none',
+    });
+  });
+
+  it('keeps the card edge and gives the action a border, with its size unchanged', () => {
+    const item = toastOf('warning', ['icon', 'content', 'action', 'close']);
+    expect(declaredWhenFocused(item, { media: FORCED })['border-color']).toBe('canvastext');
+    const action = declaredWhenFocused(partOf(item, 'action'), { media: FORCED });
+    expect(action).toMatchObject({
+      'border-width': '1px',
+      'border-style': 'solid',
+      'border-color': 'buttontext',
+      'padding-block': '3px',
+      'padding-inline': '9px',
+    });
+    // The 1px border replaces 1px of the S3 padding (4px and 10px) on each side.
+    expect(declared(partOf(item, 'action'))).toMatchObject({
+      'padding-block': '4px',
+      'padding-inline': '10px',
+    });
+  });
+
+  it('gives a custom toast no forced chrome beyond the library close ring', () => {
+    const { item } = customToast();
+    const forcedOnRoot = forced.filter(r => item.matches(inEveryState(r.selector)));
+    expect(forcedOnRoot.flatMap(r => [...r.style])).toEqual(['outline-color']);
+  });
+});
+
+describe('live regions: the hybrid visually hidden class (§17.1, §34, P-17 S5)', () => {
+  const block = new RegExp(`\\.${LIVE_REGION} \\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+  const written = block
+    .split(';')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  it('repeats the inline declarations exactly', () => {
+    const kebab = (name: string) => name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`);
+    const inline = Object.entries(VISUALLY_HIDDEN).map(([name, value]) => {
+      const text = String(value);
+      return `${kebab(name)}: ${text}`;
+    });
+    expect(written.sort()).toEqual(inline.sort());
+  });
+
+  it('hides visually without removing the regions from the accessibility tree', () => {
+    const region = document.createElement('div');
+    region.className = LIVE_REGION;
+    region.setAttribute('aria-live', 'polite');
+    // Whatever matches it, in any media: nothing that would drop it from the accessibility tree.
+    for (const media of [null, FORCED, '(prefers-color-scheme: dark)']) {
+      const properties = Object.keys(declaredWhenFocused(region, { media }));
+      expect(
+        properties.filter(p => /^(display|visibility|content-visibility|opacity)$/.test(p))
+      ).toEqual([]);
+    }
+    // Clipped to nothing in place, not removed.
+    expect(written).toEqual(expect.arrayContaining(['overflow: hidden', 'clip-path: inset(50%)']));
+  });
+});
+
+describe('motion boundary (P-17; P-18 owns motion)', () => {
+  it('has no keyframes, animations, transitions, transforms or reduced-motion rules', () => {
+    expect(css).not.toMatch(/@keyframes|prefers-reduced-motion/);
+    for (const rule of rules) {
+      expect(
+        [...rule.style].filter(p =>
+          /^(animation|transition|transform|translate|scale|rotate)/.test(p)
+        )
+      ).toEqual([]);
+    }
+  });
+});
+
+describe('the D1 prototype stays demo-only (P-17)', () => {
+  it('is never referenced by library source, the stylesheet or what builds the package', () => {
+    const library = ['react', 'store']
+      .flatMap(dir =>
+        fs.readdirSync(path.join(root, 'src', dir)).map(f => path.join('src', dir, f))
+      )
+      .concat('src/index.ts', 'src/toast.ts', 'src/types.ts', 'tsup.config.ts');
+    for (const file of library) {
+      expect(fs.readFileSync(path.join(root, file), 'utf8')).not.toMatch(/p17-prototype|demo\//);
+    }
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+      files: string[];
+      exports: unknown;
+    };
+    const shipped = [pkg.scripts.build, pkg.scripts['build:js'], pkg.scripts['build:css']];
+    expect(JSON.stringify([shipped, pkg.files, pkg.exports])).not.toMatch(/prototype|demo/);
+    expect(css).not.toMatch(/PROTOTYPE/);
+  });
+});
+
+describe('package validation marker (P-07)', () => {
+  const marker = /const CSS_MARKER = '([^']+)';/.exec(
+    fs.readFileSync(path.join(root, 'scripts/validate-package.js'), 'utf8')
+  )?.[1];
+
+  it('is a ret- class, which the 0.x stylesheet never had', () => {
+    expect(marker).toMatch(/^\.ret-[\w-]+$/);
+  });
+
+  it('is a selector of the shipped stylesheet', () => {
+    expect(rules.some(rule => marker !== undefined && rule.selector.includes(marker))).toBe(true);
+  });
+});

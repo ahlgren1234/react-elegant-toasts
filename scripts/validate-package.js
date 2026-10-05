@@ -29,8 +29,9 @@ const BLOCKED_DEEP_IMPORTS = [
   'src/index.ts',
   'index.js',
 ];
-// A selector from the current packed stylesheet. P-17 updates it with the stylesheet redesign.
-const CSS_MARKER = '.toast-progress';
+// The 2.x stylesheet's root class (P-17). The 0.x stylesheet had no `ret-` selector, so stale CSS
+// cannot satisfy it, and minifiers keep class names.
+const CSS_MARKER = '.ret-toaster';
 // The public export surface (§6.1, §6.7, AC-API-1).
 const VALUE_EXPORTS = ['Toaster', 'toast'];
 const TYPE_EXPORTS = [

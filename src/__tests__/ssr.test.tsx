@@ -15,12 +15,13 @@ beforeEach(() => {
 });
 
 // The two persistent live regions (§17.1): present and empty in the server HTML, so hydration
-// matches and they exist before anything is announced.
+// matches and they exist before anything is announced. Hidden both inline and by the stylesheet's
+// class, which still applies when a restrictive CSP blocks the `style` attribute (P-17 S5, §34).
 const HIDDEN =
   'position:absolute;width:1px;height:1px;margin:-1px;border:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap';
 const LIVE_REGIONS =
-  `<div role="status" aria-live="polite" aria-atomic="false" style="${HIDDEN}"></div>` +
-  `<div aria-live="assertive" aria-atomic="false" style="${HIDDEN}"></div>`;
+  `<div role="status" aria-live="polite" aria-atomic="false" class="ret-toaster__live-region" style="${HIDDEN}"></div>` +
+  `<div aria-live="assertive" aria-atomic="false" class="ret-toaster__live-region" style="${HIDDEN}"></div>`;
 
 describe('<Toaster /> on the server (§23)', () => {
   it('runs without a window', () => {

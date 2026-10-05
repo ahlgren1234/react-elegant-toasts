@@ -27,7 +27,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.lib.json && tsc -p tsconfig.test.json && tsc -p tsconfig.tooling.json",
     "typecheck:demo": "tsc -p demo/tsconfig.json",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint . --max-warnings 0 && node scripts/check-styles.js",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

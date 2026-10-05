@@ -1,225 +1,432 @@
-.toast {
-  position: relative;
-  min-width: 300px;
-  max-width: 500px;
-  padding: 16px;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  background: white;
-  color: #333;
-  transition: opacity 0.3s ease;
-  overflow: hidden;
+/*
+ * react-elegant-toasts 2.x stylesheet, shipped as `react-elegant-toasts/styles.css` (§21).
+ *
+ * Public contract (OQ-25): the documented `--ret-*` custom properties, the `ret-*` classes and the
+ * `data-theme`, `data-position` and `data-phase` attributes. Every selector carries a `ret-` class,
+ * which `npm run lint` checks (scripts/check-styles.js, AC-CSS-1). Defaults sit inside `:where()`,
+ * so any consumer selector overrides them without `!important`.
+ *
+ * Tokens are scoped to `.ret-toaster`, never `:root`. Override them for a Toaster with
+ * `.ret-toaster { --ret-surface: … }`, or for one theme with `.ret-toaster[data-theme="dark"]`
+ * (and the same rule inside `@media (prefers-color-scheme: dark)` for
+ * `.ret-toaster[data-theme="system"]`). Motion tokens belong to P-18 and progress tokens to P-20.
+ */
+
+/* Light theme: the default, so it also covers `system` in a light colour scheme. */
+:where(.ret-toaster) {
+  color-scheme: light;
+
+  --ret-surface: #ffffff;
+  --ret-text: #18181b;
+  --ret-text-muted: #52525b;
+  --ret-border: #e4e4e7;
+  --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 12px rgb(0 0 0 / 0.08);
+  --ret-focus: #2563eb;
+  --ret-action-surface: #18181b;
+  --ret-action-text: #ffffff;
+
+  --ret-success: #15803d;
+  --ret-success-subtle: #dcfce7;
+  --ret-error: #b91c1c;
+  --ret-error-subtle: #fee2e2;
+  --ret-warning: #b45309;
+  --ret-warning-subtle: #fef3c7;
+  --ret-info: #1d4ed8;
+  --ret-info-subtle: #dbeafe;
+  --ret-loading: #52525b;
+  --ret-loading-subtle: #f4f4f5;
+
+  /* The font family only: sizes, weights and line heights stay the library's. `inherit` makes the
+     token take the parent's value, normally none, so the toasts keep the application's font. */
+  --ret-font-family: inherit;
+  --ret-radius: 10px;
+  --ret-gap: 10px;
+  --ret-offset: 16px;
+  --ret-width: 360px;
+  --ret-z-index: 9999;
 }
 
-.toast.success {
-  background: #4caf50;
-  color: white;
+/* Dark theme. The `system` block below repeats these values; the style contract test keeps the
+   two identical. */
+:where(.ret-toaster[data-theme='dark']) {
+  color-scheme: dark;
+
+  --ret-surface: #27272a;
+  --ret-text: #fafafa;
+  --ret-text-muted: #a1a1aa;
+  --ret-border: #3f3f46;
+  --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.4);
+  --ret-focus: #93c5fd;
+  --ret-action-surface: #fafafa;
+  --ret-action-text: #18181b;
+
+  --ret-success: #4ade80;
+  --ret-success-subtle: #1c3a28;
+  --ret-error: #f87171;
+  --ret-error-subtle: #4a2326;
+  --ret-warning: #fbbf24;
+  --ret-warning-subtle: #45351a;
+  --ret-info: #60a5fa;
+  --ret-info-subtle: #1e3354;
+  --ret-loading: #a1a1aa;
+  --ret-loading-subtle: #3f3f46;
 }
 
-.toast.error {
-  background: #f44336;
-  color: white;
+/* System theme: follows the colour scheme in CSS, with no JavaScript and no re-render (§21). */
+@media (prefers-color-scheme: dark) {
+  :where(.ret-toaster[data-theme='system']) {
+    color-scheme: dark;
+
+    --ret-surface: #27272a;
+    --ret-text: #fafafa;
+    --ret-text-muted: #a1a1aa;
+    --ret-border: #3f3f46;
+    --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.4);
+    --ret-focus: #93c5fd;
+    --ret-action-surface: #fafafa;
+    --ret-action-text: #18181b;
+
+    --ret-success: #4ade80;
+    --ret-success-subtle: #1c3a28;
+    --ret-error: #f87171;
+    --ret-error-subtle: #4a2326;
+    --ret-warning: #fbbf24;
+    --ret-warning-subtle: #45351a;
+    --ret-info: #60a5fa;
+    --ret-info-subtle: #1e3354;
+    --ret-loading: #a1a1aa;
+    --ret-loading-subtle: #3f3f46;
+  }
 }
 
-.toast.warning {
-  background: #ff9800;
-  color: white;
+/*
+ * Position lists (§12). Each rendered `<ol>` places itself in the viewport; the region itself has
+ * no box, so it never covers the page. Positions are physical, so placement uses `top`, `bottom`,
+ * `left` and `right`, also in RTL (§20). Each list is a plain column: the DOM already puts the
+ * newest toast nearest the anchored edge (first at top positions, last at bottom positions), and
+ * the hotkey and focus restoration walk that same order (§18), so nothing reorders it.
+ *
+ * Gutters are `--ret-offset` plus the safe-area inset of that edge, so the offset stays the
+ * minimum distance from the usable viewport. `--ret-width` is a stack's preferred width; it never
+ * exceeds the viewport minus the gutters on both sides, so narrow screens shrink it instead of
+ * overflowing. Only the lists take pointer input: the page stays clickable around them, and a
+ * pointer moving across the gap between toasts stays inside its list, which keeps the P-15 hover
+ * pause steady.
+ */
+:where(.ret-toaster__list) {
+  position: fixed;
+  z-index: var(--ret-z-index);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ret-gap);
+  box-sizing: border-box;
+  width: min(
+    var(--ret-width),
+    100% - 2 * var(--ret-offset) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)
+  );
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.toast.info {
-  background: #2196f3;
-  color: white;
+:where(.ret-toaster__list[data-position^='top-']) {
+  top: calc(var(--ret-offset) + env(safe-area-inset-top, 0px));
 }
 
-.toast-content {
+:where(.ret-toaster__list[data-position^='bottom-']) {
+  bottom: calc(var(--ret-offset) + env(safe-area-inset-bottom, 0px));
+}
+
+:where(.ret-toaster__list[data-position$='-left']) {
+  left: calc(var(--ret-offset) + env(safe-area-inset-left, 0px));
+}
+
+:where(.ret-toaster__list[data-position$='-right']) {
+  right: calc(var(--ret-offset) + env(safe-area-inset-right, 0px));
+}
+
+/* Centred by its auto margins between both edges, with no transform (§12). */
+:where(.ret-toaster__list[data-position$='-center']) {
+  right: 0;
+  left: 0;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+/* A toast fills its stack's width, with any padding and border inside it. */
+:where(.ret-toast) {
+  box-sizing: border-box;
+}
+
+/*
+ * The normal toast: a neutral elevated card (OQ-24). Custom toasts are excluded rather than reset,
+ * so no card property can reach them (§6.4). The DOM is flat, in reading and focus order: icon,
+ * content, action, close. A plain row shows it as it is, with the close at the inline end and
+ * every part aligned to the top. Inner spacing is logical, so RTL mirrors the card (§20); the
+ * stack's position stays physical. Type sizes are set here, so the application's own text styles
+ * do not reshape the hierarchy; only the family follows `--ret-font-family`.
+ */
+:where(.ret-toast:not(.ret-toast--custom)) {
   display: flex;
   align-items: flex-start;
+  gap: 12px;
+  padding-block: 12px;
+  padding-inline: 12px 10px;
+  border: 1px solid var(--ret-border);
+  border-radius: var(--ret-radius);
+  background: var(--ret-surface);
+  box-shadow: var(--ret-shadow);
+  color: var(--ret-text);
+  font-family: var(--ret-font-family);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: normal;
+  text-align: start;
+  text-transform: none;
 }
 
-.toast-icon {
-  margin-right: 12px;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
+/* A fixed footprint for the decorative icon, neutral by default: a default toast's icon, which only
+   a consumer can give it, stays neutral. */
+:where(.ret-toast__icon) {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 8px;
+  color: var(--ret-text-muted);
 }
 
-.toast-message {
-  flex: 1;
+:where(.ret-toast__icon > svg) {
+  inline-size: 18px;
+  block-size: 18px;
 }
 
-.toast-title {
-  font-weight: bold;
-  margin-bottom: 4px;
+/*
+ * The semantic accent (OQ-24): each type colours only its icon slot, as an accent glyph on a subtle
+ * tint of the same family. The card stays neutral. The glyph inherits `color`, so library icons and
+ * consumer icons drawn in `currentColor` take the accent; other consumer icons keep their own
+ * colours on the tint. Loading has its own neutral family, so a pending toast reads as in progress
+ * rather than as a result.
+ */
+:where(.ret-toast--success > .ret-toast__icon) {
+  background: var(--ret-success-subtle);
+  color: var(--ret-success);
 }
 
-.toast-progress {
+:where(.ret-toast--error > .ret-toast__icon) {
+  background: var(--ret-error-subtle);
+  color: var(--ret-error);
+}
+
+:where(.ret-toast--warning > .ret-toast__icon) {
+  background: var(--ret-warning-subtle);
+  color: var(--ret-warning);
+}
+
+:where(.ret-toast--info > .ret-toast__icon) {
+  background: var(--ret-info-subtle);
+  color: var(--ret-info);
+}
+
+:where(.ret-toast--loading > .ret-toast__icon) {
+  background: var(--ret-loading-subtle);
+  color: var(--ret-loading);
+}
+
+/* The text column takes the remaining width and may shrink below its content, so long words and
+   URLs wrap inside the card instead of widening it. Nothing is truncated. The 4px block padding
+   centres the first 20px line on the 28px icon. */
+:where(.ret-toast__content) {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding-block: 4px;
+  overflow-wrap: anywhere;
+}
+
+:where(.ret-toast__title) {
+  font-weight: 600;
+}
+
+:where(.ret-toast__description) {
+  margin-block-start: 2px;
+  color: var(--ret-text-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* Library controls: native buttons with the application's button styles reset. */
+:where(.ret-toast__action, .ret-toast__close) {
+  flex: none;
+  margin: 0;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* A compact filled action. A long label wraps within its share of the card. */
+:where(.ret-toast__action) {
+  max-inline-size: 45%;
+  min-block-size: 28px;
+  padding-block: 4px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  background: var(--ret-action-surface);
+  color: var(--ret-action-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* An unobtrusive 24×24 close target (§17.2, WCAG 2.5.8). */
+:where(.ret-toast__close) {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ret-text-muted);
+}
+
+:where(.ret-toast__close > svg) {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+/* Centred on the 28px icon row of a normal toast. */
+:where(.ret-toast:not(.ret-toast--custom) > .ret-toast__close) {
+  margin-block-start: 2px;
+}
+
+:where(.ret-toast:not(.ret-toast--custom) > .ret-toast__close):hover {
+  color: var(--ret-text);
+}
+
+/*
+ * Custom toasts are chrome-less (§6.4): the consumer owns the surface, padding and typography. The
+ * root only anchors the optional library close button in the inline-end top corner, over the
+ * content, with no wrapper (AC-API-10). The close button inherits the toast root's colour, which
+ * a consumer sets through the toast's `className`; it cannot see the custom content's own colour,
+ * because it is that content's sibling.
+ */
+:where(.ret-toast--custom) {
+  position: relative;
+}
+
+:where(.ret-toast--custom > .ret-toast__close) {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.7);
-  transition: width 0.1s linear;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+  color: inherit;
 }
 
-.toast.rtl {
-  direction: rtl;
+/*
+ * Focus (§17.4, §18). The region, each toast root and the library's own action and close buttons
+ * show a ring in `--ret-focus` whenever the browser shows focus (`:focus-visible`). Rings are
+ * outlines, so they never change layout, and nothing animates them (P-18 owns motion). The colour
+ * meets 3:1 against `--ret-surface` in every theme (AC-A11Y-6). No rule reaches into custom content
+ * other than the library's own close button; the consumer styles focus there (§17.3).
+ *
+ * The region takes focus from script only, as the last step of focus restoration (§18). It has no
+ * box of its own and must never become an overlay, so its own outline gives way to a ring drawn by
+ * a fixed pseudo-element just inside the viewport. The pseudo-element exists only while the region
+ * shows focus and never takes pointer input. It is two-tone, a `--ret-focus` band inside a
+ * `--ret-surface` halo, so the 3:1 pair holds over whatever page lies beneath it.
+ */
+:where(.ret-toaster:focus-visible) {
+  outline: none;
 }
 
-.toast.rtl .toast-icon {
-  margin-right: 0;
-  margin-left: 12px;
+:where(.ret-toaster:focus-visible)::after {
+  content: '';
+  position: fixed;
+  inset: 4px;
+  z-index: var(--ret-z-index);
+  border: 3px solid var(--ret-focus);
+  border-radius: 12px;
+  outline: 2px solid var(--ret-surface);
+  pointer-events: none;
 }
 
-/* Animations */
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
+/* A toast root takes focus from the hotkey and from focus restoration (§18). On a card the ring
+   takes the border's place, next to the known surface. A custom toast has no surface of its own,
+   so its ring sits just outside it and never covers the consumer's content. */
+:where(.ret-toast:focus-visible) {
+  outline: 2px solid var(--ret-focus);
+  outline-offset: -1px;
+}
+
+:where(.ret-toast--custom:focus-visible) {
+  outline-offset: 2px;
+}
+
+/* The action and close rings sit on the card's surface, outside the button. */
+:where(.ret-toast__action:focus-visible, .ret-toast__close:focus-visible) {
+  outline: 2px solid var(--ret-focus);
+  outline-offset: 2px;
+}
+
+/* A custom toast's close sits on the consumer's background, which the library cannot know. Its
+   ring takes the glyph's colour, which the consumer sets through the toast's `className` to suit
+   that background (S3), so ring and glyph contrast alike. */
+:where(.ret-toast--custom > .ret-toast__close:focus-visible) {
+  outline-color: currentColor;
+}
+
+/*
+ * The persistent live regions (§17.1): hidden visually, never from assistive technology. The same
+ * declarations are also inline on each region (`VISUALLY_HIDDEN`), which works without this
+ * stylesheet. This class is for server-rendered HTML under a restrictive `style-src`, which may
+ * block the inline `style` attribute; hydration does not apply it again (§34). An implementation
+ * detail, not public contract (OQ-25). A plain class rather than `:where()`, so element rules in
+ * the page do not undo it.
+ */
+.ret-toaster__live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * Forced colours (§17.5): the user's palette replaces authored colours and drops shadows and
+ * tints. Meaning never depended on them: each type has its own icon shape and the content carries
+ * the message (S4), so no authored hue is preserved and nothing opts out of forced colours. What
+ * needs help is structure the palette would otherwise erase: the card keeps a visible edge, the
+ * action, a filled button with no border, gets one (its padding gives back the 1px, so the size
+ * holds), and every library ring uses the system `Highlight`, with the region's halo in `Canvas`.
+ */
+@media (forced-colors: active) {
+  :where(.ret-toast:not(.ret-toast--custom)) {
+    border-color: CanvasText;
   }
-  to {
-    transform: translateX(0);
-  }
-}
 
-@keyframes slideOut {
-  from {
-    transform: translateX(0);
+  :where(.ret-toast__action) {
+    padding-block: 3px;
+    padding-inline: 9px;
+    border: 1px solid ButtonText;
   }
-  to {
-    transform: translateX(100%);
+
+  :where(
+    .ret-toast:focus-visible,
+    .ret-toast__action:focus-visible,
+    .ret-toast__close:focus-visible
+  ) {
+    outline-color: Highlight;
   }
-}
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes zoomIn {
-  from {
-    transform: scale(0.5);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes zoomOut {
-  from {
-    transform: scale(1);
-    opacity: 1;
-  }
-  to {
-    transform: scale(0.5);
-    opacity: 0;
-  }
-}
-
-@keyframes bounceIn {
-  0% {
-    transform: scale(0.3);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-  70% {
-    transform: scale(0.9);
-    opacity: 0.9;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes bounceOut {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  30% {
-    transform: scale(0.9);
-    opacity: 0.9;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(0.3);
-    opacity: 0;
-  }
-}
-
-.slideIn {
-  animation: slideIn 0.3s ease forwards;
-}
-
-.slideOut {
-  animation: slideOut 0.3s ease forwards;
-}
-
-.fadeIn {
-  animation: fadeIn 0.3s ease forwards;
-}
-
-.fadeOut {
-  animation: fadeOut 0.3s ease forwards;
-}
-
-.zoomIn {
-  animation: zoomIn 0.3s ease forwards;
-}
-
-.zoomOut {
-  animation: zoomOut 0.3s ease forwards;
-}
-
-.bounceIn {
-  animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
-}
-
-.bounceOut {
-  animation: bounceOut 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
-}
-
-/* Position-specific animations */
-.top-right .slideIn,
-.bottom-right .slideIn {
-  animation: slideIn 0.3s ease forwards;
-}
-
-.top-left .slideIn,
-.bottom-left .slideIn {
-  animation: slideIn 0.3s ease forwards reverse;
-}
-
-.top-center .slideIn,
-.bottom-center .slideIn {
-  animation: fadeIn 0.3s ease forwards;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .toast {
-    background: #333;
-    color: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  :where(.ret-toaster:focus-visible)::after {
+    border-color: Highlight;
+    outline-color: Canvas;
   }
 }
