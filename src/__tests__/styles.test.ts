@@ -491,10 +491,10 @@ describe('the toast card, content and controls (§17.2, OQ-24, P-17 S3)', () => 
     }
   });
 
-  it('gives a custom toast no card chrome, only its box sizing and the close anchor', () => {
+  it('gives a custom toast no card chrome, only its box sizing, the close anchor and repositioning', () => {
     const custom = declared(toastOf('custom', ['custom', 'close']));
     expect(Object.keys(custom).filter(p => CARD.test(p))).toEqual([]);
-    expect(custom).toEqual({ 'box-sizing': 'border-box', position: 'relative' });
+    expect(custom).toEqual({ 'box-sizing': 'border-box', position: 'relative', ...REPOSITION });
   });
 
   it('sets the description below the primary text: smaller, muted, still the same column', () => {
@@ -1056,6 +1056,14 @@ function toastIn(
 }
 
 const ANIMATION = /^animation/;
+
+/** The toast root's stack-repositioning transition (P-19 D2 decision 8): internal timing. */
+const REPOSITION = {
+  'transition-property': 'transform',
+  'transition-duration': '200ms',
+  'transition-timing-function': 'cubic-bezier(0.2, 0, 0, 1)',
+  'transition-delay': '0s',
+};
 const animationOf = (element: Element): Record<string, string> =>
   Object.fromEntries(
     Object.entries(declared(element)).filter(([property]) => ANIMATION.test(property))
@@ -1206,8 +1214,13 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       for (const element of animated) expect(animationOf(element)).toEqual({});
     });
 
-    it('adds no transition', () => {
-      expect(css).not.toMatch(/transition/);
+    // Narrowed by P-19 S2 from "adds no transition": the one transition is stack repositioning's.
+    it("adds no transition of its own: the only one is the toast root's reposition transition", () => {
+      expect(
+        rules
+          .filter(r => Object.keys(declarations(r.style)).some(p => /^transition/.test(p)))
+          .map(r => [r.selector, r.media])
+      ).toEqual([[':where(.ret-toast)', null]]);
     });
 
     it('leaves motion to CSS: no JavaScript reads the reduced-motion preference', () => {
@@ -1323,6 +1336,61 @@ function spinnerIn(phase: (typeof PHASES)[number], position = 'top-right'): Elem
   partOf(item, 'icon').append(svg);
   return svg;
 }
+
+describe('stack repositioning (§22, P-19 S2)', () => {
+  const transitionsOf = (element: Element): Record<string, string> =>
+    Object.fromEntries(
+      Object.entries(declared(element)).filter(([property]) => /^transition/.test(property))
+    );
+
+  it('transitions only transform on the toast root, with the internal D2 timing', () => {
+    const rule = rules.filter(
+      r => r.selector === ':where(.ret-toast)' && r.style.getPropertyValue('transition-property')
+    );
+    expect(rule).toHaveLength(1);
+    expect(declarations(rule[0]!.style)).toEqual(REPOSITION);
+  });
+
+  it('declares no transform, so a toast at rest has none', () => {
+    for (const rule of rules) {
+      expect(Object.keys(declarations(rule.style))).not.toContain('transform');
+    }
+  });
+
+  it.each(POSITIONS)('applies to normal and custom toasts in every phase at %s', position => {
+    for (const phase of PHASES) {
+      for (const type of ['success', 'default', 'loading', 'custom']) {
+        expect(transitionsOf(toastIn(phase, position, type))).toEqual(REPOSITION);
+      }
+    }
+  });
+
+  it('never transitions the region, the lists, the toast parts or the icon', () => {
+    const item = toastIn('visible', 'top-right');
+    const others = [
+      regionOf(),
+      ...POSITIONS.map(listAt),
+      ...item.children,
+      ...toastIn('exiting', 'bottom-right', 'loading').children,
+      spinnerIn('visible'),
+    ];
+    for (const element of others) expect(transitionsOf(element)).toEqual({});
+  });
+
+  it('uses longhands only, fixed values and no token', () => {
+    for (const rule of rules) {
+      expect(Object.keys(declarations(rule.style))).not.toContain('transition');
+    }
+    for (const value of Object.values(REPOSITION)) expect(value).not.toMatch(/var\(/);
+  });
+
+  it('leaves the P-18 enter and exit animations on the individual properties', () => {
+    expect(animationOf(toastIn('entering', 'top-left'))['animation-name']).toBe('ret-enter-top');
+    expect(animationOf(toastIn('exiting', 'bottom-right'))['animation-name']).toBe(
+      'ret-exit-bottom'
+    );
+  });
+});
 
 describe('reduced motion (§17.5, §22, P-18 S4)', () => {
   it('is one media block, after every motion rule, that only removes animation names', () => {

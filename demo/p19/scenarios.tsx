@@ -1,6 +1,6 @@
-// P-19 D1 — TEMPORARY DEMO-ONLY PROTOTYPE CODE. Not library code, not public API, never shipped.
+// P-19 — TEMPORARY DEMO-ONLY CHECKPOINT CODE. Not library code, not public API, never shipped.
 //
-// Repeatable comparison scenarios. They use only the public `toast` API, so every toast goes
+// Repeatable checkpoint scenarios. They use only the public `toast` API, so every toast goes
 // through the real store, queue, lifecycle and renderer. Toasts are persistent unless a scenario
 // says otherwise, so stacks hold still between steps.
 import { toast, type ToastOptions, type ToastPosition } from '../../src';

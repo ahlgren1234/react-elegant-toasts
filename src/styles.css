@@ -337,8 +337,8 @@
  * positions and from below at bottom positions, and exits in reverse; the horizontal placement
  * never changes the direction (§20). Normal and custom toasts move alike, since the library owns
  * a custom toast's motion but none of its chrome (§6.4). Only `opacity` and the individual
- * `translate` and `scale` properties move, never `transform`, which stays free for later stack
- * and swipe motion.
+ * `translate` and `scale` properties move, never `transform`, which stays free for stack
+ * repositioning (below) and later swipe motion.
  *
  * Each keyframe authors only its moving end. The other end is the toast's ordinary style, so a
  * settled toast looks exactly as it does with no motion, and a `visible` toast has no animation.
@@ -439,6 +439,21 @@
   animation-timing-function: linear;
   animation-delay: 0s;
   animation-iteration-count: infinite;
+}
+
+/*
+ * Stack repositioning (§22, P-19). When a stack gains or loses a toast, the renderer puts each
+ * surviving toast back where it was with a brief inline `transform` and removes it again; this
+ * transition then carries the toast to its place in the column. Normal and custom toasts move
+ * alike. Only `transform` transitions, and nothing here declares one, so a toast at rest has
+ * none and P-18's individual `translate` and `scale` compose with it. The timing is internal, not
+ * a token.
+ */
+:where(.ret-toast) {
+  transition-property: transform;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  transition-delay: 0s;
 }
 
 /*
