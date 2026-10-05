@@ -1,0 +1,329 @@
+/*
+ * P-17 D1 VISUAL PROTOTYPE — DEMO ONLY. NOT THE PRODUCTION STYLESHEET.
+ *
+ * Exists only so the maintainer can approve or reject the OQ-24 direction (a neutral elevated
+ * card with a semantic accent) in Chromium. Only demo/index.tsx imports it. It is not shipped,
+ * exported or copied by the package build, and src/styles.css stays the 0.x file until S1.
+ * Nothing here is final: S1–S5 rewrite the production stylesheet from the approved direction.
+ *
+ * It styles the real v2 DOM as rendered (§6 of the P-17 review), with no wrappers:
+ *   section.ret-toaster[data-theme] > ol.ret-toaster__list[data-position] > li.ret-toast…
+ *
+ * Motion boundary (P-17): no animation, no transition, no transform on toasts. P-18 owns motion.
+ * The live regions keep their inline styles; this file has no rule for them (S5).
+ */
+
+/* Tokens, light by default. Defaults use :where() so any consumer selector wins. */
+:where(.ret-toaster) {
+  color-scheme: light;
+  --ret-surface: #ffffff;
+  --ret-border: #e4e4e7;
+  --ret-text: #18181b;
+  --ret-text-muted: #52525b;
+  --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 12px rgb(0 0 0 / 0.08);
+  --ret-control-hover: #f4f4f5;
+  --ret-action-bg: #18181b;
+  --ret-action-bg-hover: #3f3f46;
+  --ret-action-text: #ffffff;
+  --ret-focus: #2563eb;
+  --ret-accent-success: #15803d;
+  --ret-tint-success: #dcfce7;
+  --ret-accent-error: #b91c1c;
+  --ret-tint-error: #fee2e2;
+  --ret-accent-warning: #b45309;
+  --ret-tint-warning: #fef3c7;
+  --ret-accent-info: #1d4ed8;
+  --ret-tint-info: #dbeafe;
+  --ret-accent-loading: #52525b;
+  --ret-tint-loading: #f4f4f5;
+  --ret-radius: 10px;
+  --ret-gap: 10px;
+  --ret-offset: 16px;
+  --ret-width: 360px;
+  --ret-font: inherit;
+  --ret-z-index: 9999;
+}
+
+:where(.ret-toaster[data-theme='dark']) {
+  color-scheme: dark;
+  --ret-surface: #27272a;
+  --ret-border: #3f3f46;
+  --ret-text: #fafafa;
+  --ret-text-muted: #a1a1aa;
+  --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.4);
+  --ret-control-hover: #3f3f46;
+  --ret-action-bg: #fafafa;
+  --ret-action-bg-hover: #d4d4d8;
+  --ret-action-text: #18181b;
+  --ret-focus: #93c5fd;
+  --ret-accent-success: #4ade80;
+  --ret-tint-success: #1c3a28;
+  --ret-accent-error: #f87171;
+  --ret-tint-error: #4a2326;
+  --ret-accent-warning: #fbbf24;
+  --ret-tint-warning: #45351a;
+  --ret-accent-info: #60a5fa;
+  --ret-tint-info: #1e3354;
+  --ret-accent-loading: #a1a1aa;
+  --ret-tint-loading: #3f3f46;
+}
+
+@media (prefers-color-scheme: dark) {
+  :where(.ret-toaster[data-theme='system']) {
+    color-scheme: dark;
+    --ret-surface: #27272a;
+    --ret-border: #3f3f46;
+    --ret-text: #fafafa;
+    --ret-text-muted: #a1a1aa;
+    --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.4);
+    --ret-control-hover: #3f3f46;
+    --ret-action-bg: #fafafa;
+    --ret-action-bg-hover: #d4d4d8;
+    --ret-action-text: #18181b;
+    --ret-focus: #93c5fd;
+    --ret-accent-success: #4ade80;
+    --ret-tint-success: #1c3a28;
+    --ret-accent-error: #f87171;
+    --ret-tint-error: #4a2326;
+    --ret-accent-warning: #fbbf24;
+    --ret-tint-warning: #45351a;
+    --ret-accent-info: #60a5fa;
+    --ret-tint-info: #1e3354;
+    --ret-accent-loading: #a1a1aa;
+    --ret-tint-loading: #3f3f46;
+  }
+}
+
+/* Region: a minimal structural box, never a viewport overlay (decision 3). */
+:where(.ret-toaster) {
+  display: block;
+}
+
+/* The section has no meaningful box of its own, so its own outline is replaced by a fixed,
+   viewport-inset, two-tone ring that exists only while the region has visible focus. */
+:where(.ret-toaster):focus-visible {
+  outline: none;
+}
+
+:where(.ret-toaster):focus-visible::after {
+  content: '';
+  position: fixed;
+  inset: 4px;
+  z-index: var(--ret-z-index);
+  border: 3px solid var(--ret-focus);
+  border-radius: 12px;
+  outline: 2px solid var(--ret-surface);
+  pointer-events: none;
+}
+
+/* Position lists: each owns its fixed placement. Physical sides, because positions are physical
+   (§12, §20). DOM order is visual order, so the column is never reversed. */
+:where(.ret-toaster__list) {
+  position: fixed;
+  z-index: var(--ret-z-index);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ret-gap);
+  box-sizing: border-box;
+  width: min(
+    var(--ret-width),
+    calc(
+      100% - 2 * var(--ret-offset) - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    )
+  );
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where(.ret-toaster__list[data-position^='top-']) {
+  top: calc(var(--ret-offset) + env(safe-area-inset-top, 0px));
+}
+
+:where(.ret-toaster__list[data-position^='bottom-']) {
+  bottom: calc(var(--ret-offset) + env(safe-area-inset-bottom, 0px));
+}
+
+:where(.ret-toaster__list[data-position$='-left']) {
+  left: calc(var(--ret-offset) + env(safe-area-inset-left, 0px));
+}
+
+:where(.ret-toaster__list[data-position$='-right']) {
+  right: calc(var(--ret-offset) + env(safe-area-inset-right, 0px));
+}
+
+/* Centred without a transform on the container (§12). */
+:where(.ret-toaster__list[data-position$='-center']) {
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+}
+
+/* The normal shell: a neutral elevated card. */
+:where(.ret-toast) {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-sizing: border-box;
+  padding-block: 12px;
+  padding-inline: 12px 10px;
+  border: 1px solid var(--ret-border);
+  border-radius: var(--ret-radius);
+  background: var(--ret-surface);
+  box-shadow: var(--ret-shadow);
+  color: var(--ret-text);
+  font-family: var(--ret-font);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+/* The toast root takes focus from the hotkey and from focus restoration (§18). The ring replaces
+   the border, so it sits next to the known card surface. */
+:where(.ret-toast):focus-visible {
+  outline: 2px solid var(--ret-focus);
+  outline-offset: -1px;
+}
+
+/* Semantic accent: the icon in the accent colour on a subtle tint of it. */
+:where(.ret-toast__icon) {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 8px;
+  background: var(--ret-tint, transparent);
+  color: var(--ret-accent, currentColor);
+}
+
+:where(.ret-toast__icon > svg) {
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+:where(.ret-toast--success) {
+  --ret-accent: var(--ret-accent-success);
+  --ret-tint: var(--ret-tint-success);
+}
+
+:where(.ret-toast--error) {
+  --ret-accent: var(--ret-accent-error);
+  --ret-tint: var(--ret-tint-error);
+}
+
+:where(.ret-toast--warning) {
+  --ret-accent: var(--ret-accent-warning);
+  --ret-tint: var(--ret-tint-warning);
+}
+
+:where(.ret-toast--info) {
+  --ret-accent: var(--ret-accent-info);
+  --ret-tint: var(--ret-tint-info);
+}
+
+:where(.ret-toast--loading) {
+  --ret-accent: var(--ret-accent-loading);
+  --ret-tint: var(--ret-tint-loading);
+}
+
+/* Text: aligned with the 28px icon box. */
+:where(.ret-toast__content) {
+  flex: 1;
+  min-width: 0;
+  padding-block: 4px;
+}
+
+:where(.ret-toast__title) {
+  font-weight: 600;
+}
+
+:where(.ret-toast__description) {
+  margin-block-start: 2px;
+  color: var(--ret-text-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* Controls: native buttons, colour-only hover, outline focus next to the card surface. */
+:where(.ret-toast__action, .ret-toast__close) {
+  flex: none;
+  margin: 0;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+:where(.ret-toast__action) {
+  align-self: center;
+  min-block-size: 28px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  background: var(--ret-action-bg);
+  color: var(--ret-action-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+:where(.ret-toast__action):hover {
+  background: var(--ret-action-bg-hover);
+}
+
+:where(.ret-toast__close) {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ret-text-muted);
+}
+
+:where(.ret-toast__close > svg) {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+:where(.ret-toast__close):hover {
+  background: var(--ret-control-hover);
+  color: var(--ret-text);
+}
+
+:where(.ret-toast__action, .ret-toast__close):focus-visible {
+  outline: 2px solid var(--ret-focus);
+  outline-offset: 2px;
+}
+
+/* Custom toasts are chrome-less (§6.4): layout only. The optional library close button sits in
+   the inline-end top corner, over the consumer's content, with no wrapper. */
+:where(.ret-toast--custom) {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+}
+
+:where(.ret-toast--custom > .ret-toast__close) {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+}
+
+/* Forced colours: keep the card edge and the rings visible. */
+@media (forced-colors: active) {
+  :where(.ret-toast:not(.ret-toast--custom)) {
+    border-color: CanvasText;
+  }
+
+  :where(.ret-toast__icon) {
+    background: none;
+  }
+}

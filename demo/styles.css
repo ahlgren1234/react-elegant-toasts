@@ -234,3 +234,101 @@ body {
     background-color: #333;
   }
 }
+
+/* P-17 D1 review harness (interim; P-25 rebuilds the demo). */
+.demo-prototype h2 {
+  margin: 0 0 0.5rem;
+}
+
+.demo-note {
+  margin: 0 0 1.5rem;
+  color: #555;
+}
+
+.demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.demo-controls label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.demo-prototype .demo-button {
+  min-width: 0;
+  padding: 10px 16px;
+  background-color: #2563eb;
+  color: white;
+}
+
+.demo-prototype .demo-button.danger {
+  background-color: #b91c1c;
+}
+
+/* A consumer's custom toast: it owns its surface, padding and typography (§6.4, §17.3). The
+   end padding leaves room for the optional library close button in the corner. */
+.demo-custom-toast {
+  display: flex;
+  gap: 12px;
+  padding: 14px 44px 14px 14px;
+  border-radius: 14px;
+  background: #1e1b4b;
+  color: #eef2ff;
+  box-shadow: 0 6px 20px rgb(30 27 75 / 0.35);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.demo-custom-toast p {
+  margin: 2px 0 10px;
+  color: #c7d2fe;
+}
+
+.demo-custom-toast button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1e1b4b;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.demo-custom-toast button:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 2px;
+}
+
+.demo-custom-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: white;
+  font-weight: 700;
+}
+
+/* The library close button over this consumer's dark surface. */
+.demo-custom-toast + .ret-toast__close {
+  color: #c7d2fe;
+}
+
+.demo-custom-toast + .ret-toast__close:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: white;
+}
+
+@media (prefers-color-scheme: dark) {
+  .demo-note {
+    color: #aaa;
+  }
+}
