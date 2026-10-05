@@ -239,10 +239,23 @@ describe('filtering (P-18 D0, decisions 1 and 9)', () => {
       toast.loading('loading', { id: 'l' });
     });
     const icon = itemOf('loading').querySelector('.ret-toast__icon') as Element;
+    const spinner = icon.firstElementChild as Element;
+    expect(spinner).toHaveClass('ret-toast__spinner');
     animationEnd(icon, 'ret-enter-top');
-    animationEnd(icon.firstElementChild as Element, 'ret-spin');
+    animationEnd(spinner, 'ret-spin');
+    animationEnd(spinner, 'ret-enter-top');
     animationEnd(itemOf('loading'), 'ret-spin');
     expect(phaseOf('l')).toBe('entering');
+    // Nor while it exits: the spinner turns until its toast is removed.
+    animationEnd(itemOf('loading'), 'ret-enter-top');
+    act(() => dismiss('l'));
+    animationEnd(spinner, 'ret-spin');
+    animationEnd(spinner, 'ret-exit-top');
+    expect(phaseOf('l')).toBe('exiting');
+    advance(EXIT_FALLBACK - 1);
+    expect(phaseOf('l')).toBe('exiting');
+    advance(1);
+    expect(recordOf('l')).toBeUndefined();
   });
 
   it("ignores a consumer's animation on the toast root, at either phase", () => {

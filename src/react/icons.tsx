@@ -1,12 +1,20 @@
 // Built-in icons (§17.2, D-19): inline SVG, decorative, never announced and never focusable. Each
 // type has a distinct shape, so type is not conveyed by colour alone. Neutral toasts have no icon.
-// The loading icon is static until motion arrives (P-18).
+// The loading icon is the library's spinner: its own internal class rotates it (`ret-spin`, §22),
+// so a consumer's icon on a loading toast never spins (P-18 D0, decision 8).
 import type { ReactElement, ReactNode } from 'react';
 import type { ToastType } from '../types';
 
-function Svg({ children }: { readonly children: ReactNode }): ReactElement {
+function Svg({
+  className,
+  children,
+}: {
+  readonly className?: string;
+  readonly children: ReactNode;
+}): ReactElement {
   return (
     <svg
+      className={className}
       viewBox="0 0 24 24"
       width="20"
       height="20"
@@ -49,7 +57,7 @@ const ICONS: Partial<Record<ToastType, ReactElement>> = {
     </Svg>
   ),
   loading: (
-    <Svg>
+    <Svg className="ret-toast__spinner">
       <path d="M12 3a9 9 0 1 0 9 9" />
     </Svg>
   ),

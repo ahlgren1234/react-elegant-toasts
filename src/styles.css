@@ -416,6 +416,32 @@
 }
 
 /*
+ * The loading spinner (§22, P-18): only the library's built-in loading icon turns, marked by its
+ * internal `ret-toast__spinner` class, so a consumer's icon on a loading toast stays as it is.
+ * One steady turn a second, for as long as the icon is rendered, whatever the toast's phase. It
+ * moves the icon, not the toast, so it composes with the toast's enter and exit, and the lifecycle
+ * never completes on it. It uses the individual `rotate` property, never `transform`. The class
+ * and the keyframes are implementation details, not public API.
+ */
+@keyframes ret-spin {
+  from {
+    rotate: 0deg;
+  }
+
+  to {
+    rotate: 360deg;
+  }
+}
+
+:where(.ret-toast__spinner) {
+  animation-name: ret-spin;
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-delay: 0s;
+  animation-iteration-count: infinite;
+}
+
+/*
  * Focus (§17.4, §18). The region, each toast root and the library's own action and close buttons
  * show a ring in `--ret-focus` whenever the browser shows focus (`:focus-visible`). Rings are
  * outlines, so they never change layout, and nothing animates them; a moving toast carries its

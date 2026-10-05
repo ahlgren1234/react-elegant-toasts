@@ -200,6 +200,12 @@ describe('fallbackDelay (P-18 D0, decisions 2, 3 and 9)', () => {
     it('never supply a fallback of their own', () => {
       expect(fallbackDelay(style('consumer-pop', '10s', '1s'), ENTER)).toBe(0);
     });
+
+    it("never count the spinner's ret-spin, which is not an enter or exit animation", () => {
+      expect(fallbackDelay(style('ret-spin', '1s'), ENTER)).toBe(0);
+      expect(fallbackDelay(style('ret-spin', '1s'), 'ret-exit-bottom')).toBe(0);
+      expect(fallbackDelay(style('ret-spin, ret-enter-top', '5s, 180ms'), ENTER)).toBe(280);
+    });
   });
 
   // A negative delay starts the animation part-way through its run, so it ends that much sooner.

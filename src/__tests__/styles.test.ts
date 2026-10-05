@@ -1065,12 +1065,13 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
   const frames = keyframes();
 
   describe('keyframes', () => {
-    it('are exactly the four library enter and exit animations, all ret- prefixed', () => {
+    it('are the four library enter and exit animations and the spinner, all ret- prefixed', () => {
       expect([...frames.keys()].sort()).toEqual([
         'ret-enter-bottom',
         'ret-enter-top',
         'ret-exit-bottom',
         'ret-exit-top',
+        'ret-spin',
       ]);
     });
 
@@ -1089,7 +1090,8 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
     );
 
     it('move only opacity and the individual translate and scale, never transform', () => {
-      for (const list of frames.values()) {
+      for (const [name, list] of frames) {
+        if (name === 'ret-spin') continue;
         for (const frame of list) {
           expect(Object.keys(frame.style).sort()).toEqual(['opacity', 'scale', 'translate']);
         }
@@ -1160,8 +1162,9 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       }
     });
 
-    it('keeps the names in their own rules, apart from the timing', () => {
-      for (const rule of rules.filter(r => r.style.getPropertyValue('animation-name'))) {
+    it("keeps the toast's names in their own rules, apart from the timing", () => {
+      const named = rules.filter(r => r.style.getPropertyValue('animation-name'));
+      for (const rule of named.filter(r => r.selector.includes('data-phase'))) {
         expect(Object.keys(declarations(rule.style))).toEqual(['animation-name']);
       }
     });
@@ -1182,7 +1185,7 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       );
     });
 
-    it('authors no settled opacity, translate, scale or transform on any rule', () => {
+    it('authors no settled opacity, translate, scale, rotate or transform on any rule', () => {
       for (const rule of rules) {
         expect(
           Object.keys(declarations(rule.style)).filter(property =>
@@ -1203,8 +1206,8 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       for (const element of animated) expect(animationOf(element)).toEqual({});
     });
 
-    it('adds no transition, reduced-motion rule or spinner yet (S3, S4)', () => {
-      expect(css).not.toMatch(/transition|prefers-reduced-motion|ret-spin/);
+    it('adds no transition or reduced-motion rule yet (S4)', () => {
+      expect(css).not.toMatch(/transition|prefers-reduced-motion/);
     });
 
     it('leaves motion to CSS: no JavaScript reads the reduced-motion preference', () => {
@@ -1219,6 +1222,82 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
         );
       }
     });
+  });
+});
+
+/** A built-in or consumer `<svg>` inside a toast's icon slot. */
+function iconSvg(type: string, className?: string): SVGSVGElement {
+  const item = toastIn('visible', 'top-right', type);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  if (className) svg.setAttribute('class', className);
+  partOf(item, 'icon').append(svg);
+  return svg;
+}
+
+describe('the loading spinner (§22, P-18 S3)', () => {
+  const frames = keyframes();
+
+  it('turns once from 0deg to 360deg with the individual rotate, and nothing else', () => {
+    expect(frames.get('ret-spin')).toEqual([
+      { key: '0%', style: { rotate: '0deg' } },
+      { key: '100%', style: { rotate: '360deg' } },
+    ]);
+  });
+
+  it('runs on the internal spinner class: steady, endless, one turn a second', () => {
+    const spinner = rules.filter(r => r.style.getPropertyValue('animation-name') === 'ret-spin');
+    expect(spinner.map(r => r.selector)).toEqual([':where(.ret-toast__spinner)']);
+    expect(declarations(spinner[0]?.style as CSSStyleDeclaration)).toEqual({
+      'animation-name': 'ret-spin',
+      'animation-duration': '1s',
+      'animation-timing-function': 'linear',
+      'animation-delay': '0s',
+      'animation-iteration-count': 'infinite',
+    });
+  });
+
+  it('spins the library loading icon in every phase and position', () => {
+    for (const position of POSITIONS) {
+      for (const phase of PHASES) {
+        const item = toastIn(phase, position, 'loading');
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'ret-toast__spinner');
+        partOf(item, 'icon').append(svg);
+        expect(declared(svg)['animation-name']).toBe('ret-spin');
+      }
+    }
+  });
+
+  it('never spins a consumer icon, another type or the icon slot', () => {
+    for (const type of ['success', 'error', 'warning', 'info', 'default', 'loading']) {
+      expect(animationOf(iconSvg(type))).toEqual({});
+      expect(animationOf(iconSvg(type, 'consumer-icon'))).toEqual({});
+    }
+    const loading = toastIn('entering', 'top-right', 'loading');
+    expect(animationOf(partOf(loading, 'icon'))).toEqual({});
+  });
+
+  it('adds no token and leaves the enter and exit motion as it was', () => {
+    expect(rules.flatMap(rule => tokensOf(rule.style)).filter(t => /spin/.test(t))).toEqual([]);
+    expect(animationOf(toastIn('entering', 'bottom-center', 'loading'))).toMatchObject({
+      'animation-name': 'ret-enter-bottom',
+      'animation-duration': 'var(--ret-enter-duration)',
+    });
+  });
+
+  it('is not one of the library animations that complete a toast (§9 rule 3)', () => {
+    for (const position of POSITIONS) {
+      for (const phase of ['entering', 'exiting'] as const) {
+        expect(libraryAnimationName(phase, position)).not.toBe('ret-spin');
+      }
+    }
+  });
+
+  it('stays out of forced colours', () => {
+    for (const rule of rules.filter(r => r.media === '(forced-colors: active)')) {
+      expect(rule.selector).not.toContain('spinner');
+      expect(Object.keys(declarations(rule.style)).filter(p => ANIMATION.test(p))).toEqual([]);
+    }
   });
 });
 
