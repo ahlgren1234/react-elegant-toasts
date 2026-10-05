@@ -11,7 +11,7 @@
 
 - Sections 1–38 follow the agreed plan structure. Appendix A maps every known v0.1.2 defect to the v2 section, phase and acceptance criterion that addresses it. Appendix B records how each earlier open question was decided.
 - Statements written with **must**, **is** or **are** in sections 5–34 are normative. They come from the authoritative v2 decisions or from the open-question review the maintainer accepted.
-- **OPEN QUESTION (OQ-n)** marks the few items that are still undecided. All of them are listed in §38. Question IDs from revision 1 are kept so the history stays readable. Resolved IDs are logged in Appendix B and are never reused.
+- **OPEN QUESTION (OQ-n)** marks an item that is still undecided. Any such item is listed in §38, which has been empty since P-17 D2. Question IDs from revision 1 are kept so the history stays readable. Resolved IDs are logged in Appendix B and are never reused.
 - **Defect IDs (D-nn)** refer to v0.1.2 problems (§4). **Phase IDs (P-nn)** refer to §35. **Acceptance criteria (AC-xx-n)** are in §36.
 - "0.x" means the published 0.1.x line. No 1.x release exists, so the upgrade path is **0.x → 2.0**.
 
@@ -797,7 +797,16 @@ The docs (§31) state this boundary explicitly. The demo's custom-toast example 
 - **Escape hatches:** `className` on the Toaster and on each toast.
 - **Fonts** inherit from the application. No web fonts are loaded.
 - **Public CSS contract (OQ-25, resolved before P-17).** Stable for 2.x: the documented `--ret-*` custom properties, the documented `ret-*` BEM classes, and the documented `data-theme`, `data-position` and `data-phase` attributes. Not part of 2.0: `@layer` as part of the public contract, a `classNames` slot map, and a per-toast public `style`. No 0.x selector or variable is part of the v2 contract. Anything undocumented, such as `tabindex`, `inert`, the live regions' inline styles or DOM order across positions, is an implementation detail.
-- **Visual direction (OQ-24, still open, the P-17 entry gate).** Proposed and locked as the direction to prototype: a **neutral elevated card with a semantic accent**. Light and dark themes use neutral card surfaces. Success, error, warning, info and loading are conveyed by an accent treatment, not a saturated toast background, and the default toast stays neutral. Text and description stay readable on the neutral surface. The look is modern and restrained, not the 0.x filled-colour design. Custom toasts stay chrome-less apart from library-owned controls such as the optional close button. OQ-24 covers no motion. It closes only when the maintainer explicitly signs off the direction after seeing it in a Chromium prototype (P-17, D1 and D2).
+- **Visual direction (OQ-24, resolved at P-17 D2).** Approved by the maintainer after reviewing the P-17 D1 prototype in Chromium: a **neutral elevated card with a semantic accent**. This is visual design sign-off only, not browser certification (P-22).
+  - **Surfaces:** neutral in light and dark themes. Semantic state never colours the whole toast surface.
+  - **Accent:** success, error, warning, info and loading are shown by an **accent-coloured icon on a subtle tinted icon container**. The default toast stays neutral. Not used: a dominant inline-start status stripe, full semantic card backgrounds, or a strong semantic border tint as the primary signal.
+  - **Card:** a restrained elevated card with a subtle border and soft shadow, roughly a 10px radius, and compact but comfortable spacing.
+  - **Typography:** compact, with strong primary text and a visually secondary but accessible description. The prototype's roughly 14/20 primary and 13/18 description sizes are the starting point, not a public contract.
+  - **Long content:** it wraps. Long unbroken strings and URLs never overflow, and nothing is truncated automatically to keep a toast short.
+  - **Controls:** a compact action, an unobtrusive 24×24 close control, and a visible, accessible focus treatment. The prototype's toast-root ring, drawn inside the toast against the known surface, is the preferred direction. The final focus styles are implemented in P-17 S5.
+  - **Custom content:** chrome-less. The library close control sits in the logical top/end corner without a wrapper. Its default colour is an S3 implementation detail, not part of OQ-24.
+  - **Themes:** light, dark and system share one visual language, and `system` stays CSS-driven. The light theme's card must stay distinguishable against white and lightly tinted backgrounds through its whole border, surface and elevation treatment. Its decorative border does not need to become a heavy high-contrast one.
+  - Exact token values may be refined in S1 to S4 while keeping this character. OQ-24 covers no motion.
 
 ## 22. Animation and motion architecture
 
@@ -1556,7 +1565,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - **Entry gate:** OQ-24 (visual direction signed off from a mockup or prototype) and OQ-25 (public CSS contract) must both be resolved before implementation starts.
   - **OQ-25 is resolved** (§21).
-  - **OQ-24 is still open.** The direction to prototype is locked (§21). The gate closes only when the maintainer explicitly signs off that direction after reviewing it in a Chromium prototype (D1, D2 below). Until then the only implementation allowed is the prototype.
+  - **OQ-24 is resolved** (§21). The maintainer approved the visual direction after reviewing the D1 prototype in Chromium (D2 below).
+  - **The entry gate is open.** No P-17 entry-gate question remains.
   - `ret-` CSS, the tokens, and the light, dark and system themes
   - variant design and AA contrast checks
   - forced colours, logical properties, safe-area insets
@@ -1568,8 +1578,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - The region (`<section tabindex="-1">`) takes focus as the last step of focus restoration (§18). It needs an intentional, accessible `:focus-visible` treatment (§17.4, §17.5).
   - Each toast root (`<li tabindex="-1">`) takes focus from the hotkey and from focus restoration (§18). It needs one too.
   - The live regions are hidden by inline styles (`VISUALLY_HIDDEN` in `src/react/announcer.ts`), so they stay hidden even when the stylesheet is not loaded. Review whether they move into the stylesheet and token architecture. Either way they must stay visually hidden and exposed to assistive technology. (Decided: decision 4 below.)
-- Decisions locked before implementation (D0). They are not yet implemented.
-  1. **Visual direction:** a neutral elevated card with a semantic accent, as the direction to prototype (§21). OQ-24 stays open until sign-off.
+- Decisions locked before implementation (D0), the visual direction approved at D2. They are implemented from S1 on.
+  1. **Visual direction:** a neutral elevated card with a semantic accent: an accent-coloured icon on a subtle tinted icon container (§21). Approved at D2, which resolved OQ-24.
   2. **Public CSS contract:** OQ-25 is resolved as recorded in §21. Library defaults use deliberately low specificity, preferably `:where()`. Tokens are scoped to `.ret-toaster`. P-17 does not finalise the motion tokens (P-18) or the progress tokens (P-20).
   3. **Region and containers:**
      - The `<section>` never becomes a permanent viewport-sized fixed overlay. It stays a minimal structural region that is not an overlay.
@@ -1587,9 +1597,17 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
      - It is not the P-25 demo rebuild. P-25 still owns the final demo.
 - **Motion boundary.** P-17 adds no animations, no transitions that create motion, no `transform` on `.ret-toast`, no `ret-enter`, `ret-exit` or `ret-spin`, and no reduced-motion implementation. P-18 owns the animation lifecycle and reduced motion, P-19 stack repositioning, P-20 progress and P-21 swipe.
 - **Sequence:**
-  - **D0, decision record:** this entry and §21, §34, §37, §38 and Appendix B. Documentation only.
-  - **D1, visual prototype:** the only implementation allowed before OQ-24 closes. It exists solely to satisfy the prototype and sign-off gate. It may add the interim demo controls and a deliberately minimal prototype stylesheet, or another isolated prototype mechanism. It must not silently become the final production stylesheet. Before D1 is implemented, it records how prototype styling is isolated from production styling, so the gate stays meaningful and no unreviewed production CSS reaches `src/styles.css` or the package. After D1, the maintainer reviews the demo in Chromium. OQ-24 stays open until explicit approval.
-  - **D2, OQ-24 sign-off:** after explicit approval, OQ-24 is recorded as resolved here, in §21, §38 and Appendix B, which closes the entry gate. Only then does the P-17 implementation branch and its slices start.
+  - **D0, decision record (done):** this entry and §21, §34, §37, §38 and Appendix B. Documentation only.
+  - **D1, visual prototype (done):**
+    - It was the only implementation allowed before OQ-24 closed.
+    - It is `demo/p17-prototype.css`, imported only by the demo, together with an interim review harness in `demo/index.tsx` that drives the real toast API and DOM.
+    - It is not shipped, exported or copied by the package build. `src/styles.css`, the production DOM and `CSS_MARKER` were not changed.
+    - It stays a demo-only visual reference while S1 to S5 are implemented. It never becomes the production stylesheet, and it stays until an explicit later decision removes or replaces it.
+  - **D2, OQ-24 sign-off (done):**
+    - The maintainer reviewed D1 in Chromium in the light and dark themes: default, success, error, warning, info and loading toasts, description, close, long content and custom content.
+    - The maintainer approved the direction recorded in §21, and OQ-24 is resolved here, in §21, §38 and Appendix B. The entry gate is open.
+    - This is visual design sign-off only. P-22 still owns systematic browser verification.
+    - D2 does not authorise motion: the motion boundary above still applies.
   - **S1, CSS foundation:** remove the 0.x CSS; establish the final `ret-*` stylesheet, its tokens and the light, dark and system token architecture; add the prefix lint and contract check (AC-CSS-1); update `CSS_MARKER` (P-07).
   - **S2, position, stack and responsive structure:** the six positions, offsets, safe areas, gaps, the z-index token, the pointer-event architecture (empty space clicks through, while the lists keep the P-15 hover pause) and responsive width, with no visual reordering (§12, §18).
   - **S3, toast shell and custom styling:**
@@ -1821,11 +1839,7 @@ These are deliberately left out of 2.0:
 
 ## 38. Open questions
 
-Only one question remains, and it is the P-17 entry gate. OQ-25 was resolved before P-17 (Appendix B, §21).
-
-| ID    | Question                                                                                                                         | Status                                                                                                                                                                                                                    | Gate                |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| OQ-24 | **Visual design direction.** The final look of the normal shell and its variants, signed off from an actual mockup or prototype. | **Open.** The direction to prototype is locked: a neutral elevated card with a semantic accent (§21). It closes only on the maintainer's explicit sign-off after reviewing it in a Chromium prototype (P-17 D1, then D2). | **P-17 entry gate** |
+No open questions remain. The last two, OQ-24 and OQ-25, were the P-17 entry gate. OQ-25 was resolved before P-17, and OQ-24 at P-17 D2 after the maintainer's review of the Chromium prototype. Both are recorded in §21 and Appendix B.
 
 ---
 
@@ -1874,42 +1888,42 @@ Only one question remains, and it is the P-17 entry gate. OQ-25 was resolved bef
 
 IDs are kept for history. A resolved ID is never reused.
 
-| ID    | Outcome                                                                                                                                                                                         | Where it now lives         |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| OQ-01 | Resolved: ESM-only, a plain module singleton, no `globalThis` store                                                                                                                             | §8.2, §24, C-01            |
-| OQ-02 | Resolved: one active Toaster, the first to attach wins, extra Toasters warn and render nothing, handover on unmount                                                                             | §8.5                       |
-| OQ-03 | Resolved: pending retention, a hard cap of 100 with rejection and no `evicted` reason, deduplicated warnings, timers suspended, unmount returns toasts to queued                                | §8.4                       |
-| OQ-04 | Resolved: `maxVisible` is 4 per position                                                                                                                                                        | §11                        |
-| OQ-05 | Accepted: a slot frees only at removal                                                                                                                                                          | §11                        |
-| OQ-06 | Accepted: 5000 ms default                                                                                                                                                                       | §10                        |
-| OQ-07 | Resolved and accepted: replacement (not merge), revival from exiting, relocation on a position change                                                                                           | §14                        |
-| OQ-08 | Accepted: the timer resets on replacement and pause reasons are kept                                                                                                                            | §10, §14                   |
-| OQ-09 | Accepted: hover pauses the stack, focus-within pauses the toast                                                                                                                                 | §10                        |
-| OQ-10 | Resolved: focus-within is a pause reason                                                                                                                                                        | §10                        |
-| OQ-11 | Accepted: no pause toggles in 2.0                                                                                                                                                               | §10, §37                   |
-| OQ-12 | Accepted: persistent hidden polite and assertive regions, text taken from the rendered DOM, warning and error prefixes, no per-toast override                                                   | §17.1                      |
-| OQ-13 | Resolved and accepted: only error is assertive, and loading and custom are polite                                                                                                               | §17.1                      |
-| OQ-14 | Accepted: Alt+T (configurable and disableable), Escape returns focus                                                                                                                            | §18                        |
-| OQ-15 | Accepted: `labels` on the Toaster                                                                                                                                                               | §6.5                       |
-| OQ-16 | Accepted: an action dismisses unless `preventDefault()` is called, and its label is a `ReactNode`                                                                                               | §15                        |
-| OQ-17 | Resolved: `toast.custom` accepts only a `ReactNode`, is chrome-less, and has `closeButton` off by default                                                                                       | §6.4, §17.3                |
-| OQ-18 | Accepted: messages are required, a promise never revives a dismissed toast (ownership token), and one set of options applies to every state                                                     | §13                        |
-| OQ-19 | Accepted: `onDismiss` receives the dismiss reason                                                                                                                                               | §16                        |
-| OQ-20 | Accepted: centre positions swipe in either horizontal direction, thresholds come from a prototype, no mouse drag                                                                                | §19, P-21                  |
-| OQ-21 | Accepted: positions are physical, and there is no `dir` prop                                                                                                                                    | §12, §20                   |
-| OQ-22 | Accepted: progress is off by default and still depletes under reduced motion                                                                                                                    | §22                        |
-| OQ-23 | Converted into a phase task: a prototype gate in P-19                                                                                                                                           | §22, P-19                  |
-| OQ-24 | **Still open:** the P-17 entry gate. The direction to prototype is locked (a neutral elevated card with a semantic accent); it closes on explicit sign-off of a Chromium prototype              | §21, §38, P-17             |
-| OQ-25 | Resolved before P-17: documented `--ret-*` tokens, `ret-*` BEM classes and `data-theme`, `data-position` and `data-phase` are stable for 2.x; no public `@layer`, slot map or per-toast `style` | §21, P-17                  |
-| OQ-26 | Accepted: rendered inline with `position: fixed`                                                                                                                                                | §12, §23                   |
-| OQ-27 | Accepted: on the server, creation is rejected, with one warning in development                                                                                                                  | §8.3                       |
-| OQ-28 | Accepted: the ESM package shape, no `engines` field, TypeScript 5.0 or later                                                                                                                    | §24                        |
-| OQ-29 | Converted into a phase task: size-limit in P-24                                                                                                                                                 | §33, P-24                  |
-| OQ-30 | Converted into a phase task: tsup 8 with directive preservation in P-03                                                                                                                         | §24, P-03, P-07            |
-| OQ-31 | Accepted: the `next` dist-tag, the demo deployed at 2.0.0, 0.x deprecated, "0.x → 2.0" wording                                                                                                  | §29, §30                   |
-| OQ-32 | Converted into phase tasks: jsdom, vitest-axe, Playwright on three browsers, a Next.js fixture, no visual regression                                                                            | §26, §27, P-04, P-22, P-23 |
-| OQ-33 | Removed (it was an unused placeholder)                                                                                                                                                          | n/a                        |
-| OQ-34 | Accepted: `ToastId` is `string`                                                                                                                                                                 | §6.6                       |
-| OQ-35 | Accepted: development warning for normal toasts only                                                                                                                                            | §17.2                      |
-| OQ-36 | Resolved: the default position is `top-right`                                                                                                                                                   | §6.5, §12                  |
-| OQ-37 | Resolved: creation returns `ToastId \| undefined`, with `undefined` for any rejected creation (server or cap) even if an explicit `id` was supplied, and never an empty or placeholder ID       | §6.2, §8.3, §8.4, §13      |
+| ID    | Outcome                                                                                                                                                                                             | Where it now lives         |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| OQ-01 | Resolved: ESM-only, a plain module singleton, no `globalThis` store                                                                                                                                 | §8.2, §24, C-01            |
+| OQ-02 | Resolved: one active Toaster, the first to attach wins, extra Toasters warn and render nothing, handover on unmount                                                                                 | §8.5                       |
+| OQ-03 | Resolved: pending retention, a hard cap of 100 with rejection and no `evicted` reason, deduplicated warnings, timers suspended, unmount returns toasts to queued                                    | §8.4                       |
+| OQ-04 | Resolved: `maxVisible` is 4 per position                                                                                                                                                            | §11                        |
+| OQ-05 | Accepted: a slot frees only at removal                                                                                                                                                              | §11                        |
+| OQ-06 | Accepted: 5000 ms default                                                                                                                                                                           | §10                        |
+| OQ-07 | Resolved and accepted: replacement (not merge), revival from exiting, relocation on a position change                                                                                               | §14                        |
+| OQ-08 | Accepted: the timer resets on replacement and pause reasons are kept                                                                                                                                | §10, §14                   |
+| OQ-09 | Accepted: hover pauses the stack, focus-within pauses the toast                                                                                                                                     | §10                        |
+| OQ-10 | Resolved: focus-within is a pause reason                                                                                                                                                            | §10                        |
+| OQ-11 | Accepted: no pause toggles in 2.0                                                                                                                                                                   | §10, §37                   |
+| OQ-12 | Accepted: persistent hidden polite and assertive regions, text taken from the rendered DOM, warning and error prefixes, no per-toast override                                                       | §17.1                      |
+| OQ-13 | Resolved and accepted: only error is assertive, and loading and custom are polite                                                                                                                   | §17.1                      |
+| OQ-14 | Accepted: Alt+T (configurable and disableable), Escape returns focus                                                                                                                                | §18                        |
+| OQ-15 | Accepted: `labels` on the Toaster                                                                                                                                                                   | §6.5                       |
+| OQ-16 | Accepted: an action dismisses unless `preventDefault()` is called, and its label is a `ReactNode`                                                                                                   | §15                        |
+| OQ-17 | Resolved: `toast.custom` accepts only a `ReactNode`, is chrome-less, and has `closeButton` off by default                                                                                           | §6.4, §17.3                |
+| OQ-18 | Accepted: messages are required, a promise never revives a dismissed toast (ownership token), and one set of options applies to every state                                                         | §13                        |
+| OQ-19 | Accepted: `onDismiss` receives the dismiss reason                                                                                                                                                   | §16                        |
+| OQ-20 | Accepted: centre positions swipe in either horizontal direction, thresholds come from a prototype, no mouse drag                                                                                    | §19, P-21                  |
+| OQ-21 | Accepted: positions are physical, and there is no `dir` prop                                                                                                                                        | §12, §20                   |
+| OQ-22 | Accepted: progress is off by default and still depletes under reduced motion                                                                                                                        | §22                        |
+| OQ-23 | Converted into a phase task: a prototype gate in P-19                                                                                                                                               | §22, P-19                  |
+| OQ-24 | Resolved at P-17 D2, after the maintainer's Chromium review of the D1 prototype: a neutral elevated card with a semantic accent, shown by an accent-coloured icon on a subtle tinted icon container | §21, P-17                  |
+| OQ-25 | Resolved before P-17: documented `--ret-*` tokens, `ret-*` BEM classes and `data-theme`, `data-position` and `data-phase` are stable for 2.x; no public `@layer`, slot map or per-toast `style`     | §21, P-17                  |
+| OQ-26 | Accepted: rendered inline with `position: fixed`                                                                                                                                                    | §12, §23                   |
+| OQ-27 | Accepted: on the server, creation is rejected, with one warning in development                                                                                                                      | §8.3                       |
+| OQ-28 | Accepted: the ESM package shape, no `engines` field, TypeScript 5.0 or later                                                                                                                        | §24                        |
+| OQ-29 | Converted into a phase task: size-limit in P-24                                                                                                                                                     | §33, P-24                  |
+| OQ-30 | Converted into a phase task: tsup 8 with directive preservation in P-03                                                                                                                             | §24, P-03, P-07            |
+| OQ-31 | Accepted: the `next` dist-tag, the demo deployed at 2.0.0, 0.x deprecated, "0.x → 2.0" wording                                                                                                      | §29, §30                   |
+| OQ-32 | Converted into phase tasks: jsdom, vitest-axe, Playwright on three browsers, a Next.js fixture, no visual regression                                                                                | §26, §27, P-04, P-22, P-23 |
+| OQ-33 | Removed (it was an unused placeholder)                                                                                                                                                              | n/a                        |
+| OQ-34 | Accepted: `ToastId` is `string`                                                                                                                                                                     | §6.6                       |
+| OQ-35 | Accepted: development warning for normal toasts only                                                                                                                                                | §17.2                      |
+| OQ-36 | Resolved: the default position is `top-right`                                                                                                                                                       | §6.5, §12                  |
+| OQ-37 | Resolved: creation returns `ToastId \| undefined`, with `undefined` for any rejected creation (server or cap) even if an explicit `id` was supplied, and never an empty or placeholder ID           | §6.2, §8.3, §8.4, §13      |
