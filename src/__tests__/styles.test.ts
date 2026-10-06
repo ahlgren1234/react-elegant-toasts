@@ -70,6 +70,8 @@ const COLOUR_TOKENS = [
     `--ret-${type}`,
     `--ret-${type}-subtle`,
   ]),
+  // P-20 S3 (decision 8, D1 sign-off): the neutral progress fill, set by every theme.
+  '--ret-progress',
 ];
 const LAYOUT_TOKENS = [
   '--ret-font-family',
@@ -78,6 +80,8 @@ const LAYOUT_TOKENS = [
   '--ret-offset',
   '--ret-width',
   '--ret-z-index',
+  // P-20 S3: the progress strip's thickness, the same in every theme.
+  '--ret-progress-height',
 ];
 // Enter and exit motion (P-18 D0, decision 5; S2), with their defaults.
 const MOTION_DEFAULTS: Readonly<Record<string, string>> = {
@@ -236,7 +240,8 @@ describe('namespace (§21, OQ-25)', () => {
 describe('tokens (§21, OQ-25)', () => {
   it('declares every documented token on the toaster root, and no other token anywhere', () => {
     const documented = [...COLOUR_TOKENS, ...LAYOUT_TOKENS, ...MOTION_TOKENS].sort();
-    expect(documented).toHaveLength(28);
+    // 28 until P-20 S3, which adds exactly the two progress tokens.
+    expect(documented).toHaveLength(30);
     expect(tokensOf(LIGHT.style).sort()).toEqual(documented);
     expect([...new Set(rules.flatMap(rule => tokensOf(rule.style)))].sort()).toEqual(documented);
   });
@@ -277,9 +282,15 @@ describe('tokens (§21, OQ-25)', () => {
     }
   });
 
-  it('defines no stack, progress, spinner or swipe token, which later phases own', () => {
-    const tokens = rules.flatMap(rule => tokensOf(rule.style));
-    expect(tokens.filter(token => /transition|spin|stack|progress|swipe/.test(token))).toEqual([]);
+  // Narrowed by P-20 S3 from "no progress token": exactly the two locked progress tokens, and
+  // still no stack, spinner, swipe, track, duration or easing token.
+  it('defines exactly the two progress tokens, and no stack, spinner or swipe token', () => {
+    const tokens = [...new Set(rules.flatMap(rule => tokensOf(rule.style)))];
+    expect(tokens.filter(token => /progress/.test(token)).sort()).toEqual([
+      '--ret-progress',
+      '--ret-progress-height',
+    ]);
+    expect(tokens.filter(token => /transition|spin|stack|swipe|track/.test(token))).toEqual([]);
   });
 });
 
@@ -628,6 +639,8 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ['--ret-action-text', '--ret-action-surface', 4.5],
   ...TYPES.map(type => [`--ret-${type}`, `--ret-${type}-subtle`, 3] as const),
   ['--ret-focus', '--ret-surface', 3],
+  // P-20 decision 8: progress is information, so its fill is meaningful non-text.
+  ['--ret-progress', '--ret-surface', 3],
 ];
 
 describe('semantic accents (OQ-24, P-17 S4)', () => {
@@ -1081,6 +1094,7 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
         'ret-enter-top',
         'ret-exit-bottom',
         'ret-exit-top',
+        'ret-progress',
         'ret-spin',
       ]);
     });
@@ -1101,7 +1115,8 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
 
     it('move only opacity and the individual translate and scale, never transform', () => {
       for (const [name, list] of frames) {
-        if (name === 'ret-spin') continue;
+        // The spinner and the progress fill have their own exact tests.
+        if (name === 'ret-spin' || name === 'ret-progress') continue;
         for (const frame of list) {
           expect(Object.keys(frame.style).sort()).toEqual(['opacity', 'scale', 'translate']);
         }
@@ -1164,11 +1179,17 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       });
     });
 
-    it('uses longhands only: no animation shorthand, direction or play state', () => {
+    // Narrowed by P-20 S3: only the internal progress fill sets a play state (§22). No rule sets
+    // the shorthand or a direction, and no other rule a play state.
+    it('uses longhands only: no animation shorthand, direction or play state but the fill', () => {
       for (const rule of rules) {
-        expect(Object.keys(declarations(rule.style))).not.toEqual(
-          expect.arrayContaining([expect.stringMatching(/^animation(-direction|-play-state)?$/)])
+        const own = Object.keys(declarations(rule.style));
+        expect(own).not.toEqual(
+          expect.arrayContaining([expect.stringMatching(/^animation(-direction)?$/)])
         );
+        if (!/ret-toast__progress-fill\b/.test(rule.selector)) {
+          expect(own, rule.selector).not.toContain('animation-play-state');
+        }
       }
     });
 
@@ -1195,13 +1216,21 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       );
     });
 
+    // Narrowed by P-20 S3: the internal progress fill's rules may set `transform-origin` (§20),
+    // and nothing else of these. Every other rule still sets none of them.
     it('authors no settled opacity, translate, scale, rotate or transform on any rule', () => {
       for (const rule of rules) {
-        expect(
-          Object.keys(declarations(rule.style)).filter(property =>
-            /^(opacity|translate|scale|rotate|transform)/.test(property)
-          )
-        ).toEqual([]);
+        const own = Object.keys(declarations(rule.style)).filter(property =>
+          /^(opacity|translate|scale|rotate|transform)/.test(property)
+        );
+        if (/ret-toast__progress-fill\b/.test(rule.selector)) {
+          expect(
+            own.filter(property => property !== 'transform-origin'),
+            rule.selector
+          ).toEqual([]);
+        } else {
+          expect(own, rule.selector).toEqual([]);
+        }
       }
     });
 
@@ -1454,7 +1483,8 @@ describe('reduced motion (§17.5, §22, P-18 S4)', () => {
   });
 
   it('adds no keyframes, fade, token or settled style of its own', () => {
-    expect([...keyframes().keys()]).toHaveLength(5);
+    // Six since P-20 S3 (`ret-progress`), none of them in the block.
+    expect([...keyframes().keys()]).toHaveLength(6);
     for (const rule of reducedRules) expect(tokensOf(rule.style)).toEqual([]);
     // Narrowed by P-19 S4: only P-18's rules; P-19's one declaration is tested below.
     for (const rule of p18ReducedRules) {
@@ -1551,14 +1581,182 @@ describe('reduced-motion stack repositioning (§17.5, §22, P-19 S4)', () => {
     expect(rules.indexOf(rule()!)).toBeGreaterThan(normal);
   });
 
-  it('keeps the public contract: 28 tokens, no reposition token, no new hook', () => {
+  // Updated by P-20 S3: 30 tokens and the documented `data-paused` hook; still no reposition token.
+  it('keeps the public contract: 30 tokens, no reposition token, no other hook', () => {
     const tokens = [...new Set(rules.flatMap(r => tokensOf(r.style)))];
-    expect(tokens).toHaveLength(28);
+    expect(tokens).toHaveLength(30);
     expect(tokens.filter(t => /reposition|move|transition|stack/.test(t))).toEqual([]);
     const attributes = new Set(css.match(/\[[a-z-]+/g)?.map(a => a.slice(1)));
-    expect([...attributes].sort()).toEqual(['data-phase', 'data-position', 'data-theme']);
+    expect([...attributes].sort()).toEqual([
+      'data-paused',
+      'data-phase',
+      'data-position',
+      'data-theme',
+    ]);
   });
 });
+
+describe('progress (§20, §22, P-20 S3, D1 candidate B)', () => {
+  /** A normal toast root with the S2 progress DOM, optionally held, inside a `dir` container. */
+  function progressIn(
+    phase: (typeof PHASES)[number],
+    { paused = false, dir = 'ltr' }: { paused?: boolean; dir?: 'ltr' | 'rtl' } = {}
+  ) {
+    const host = document.createElement('div');
+    host.setAttribute('dir', dir);
+    const item = toastIn(phase, 'top-right');
+    if (paused) item.setAttribute('data-paused', '');
+    const strip = document.createElement('div');
+    strip.className = 'ret-toast__progress';
+    const fill = document.createElement('div');
+    fill.className = 'ret-toast__progress-fill';
+    strip.append(fill);
+    item.append(strip);
+    host.append(item);
+    document.body.append(host);
+    return { host, item, strip, fill };
+  }
+  const STRIP = {
+    position: 'absolute',
+    'inset-block-end': '0px',
+    'inset-inline': '0px',
+    'block-size': 'var(--ret-progress-height)',
+    'clip-path':
+      'inset(calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 max(0px, var(--ret-radius) - 1px) max(0px, var(--ret-radius) - 1px) )',
+    'pointer-events': 'none',
+  };
+  const FILL = {
+    display: 'block',
+    'block-size': '100%',
+    background: 'var(--ret-progress)',
+    'transform-origin': 'left',
+    'animation-name': 'ret-progress',
+    'animation-timing-function': 'linear',
+    'animation-iteration-count': '1',
+    'animation-fill-mode': 'both',
+    'animation-play-state': 'paused',
+  };
+
+  it('defaults its two tokens: 3px, #52525b in light and #a1a1aa in dark and system dark', () => {
+    expect(LIGHT.style.getPropertyValue('--ret-progress-height').trim()).toBe('3px');
+    expect(LIGHT.style.getPropertyValue('--ret-progress').trim()).toBe('#52525b');
+    for (const block of [DARK, SYSTEM_DARK]) {
+      expect(block.style.getPropertyValue('--ret-progress').trim()).toBe('#a1a1aa');
+      expect(tokensOf(block.style)).not.toContain('--ret-progress-height');
+    }
+  });
+
+  it('shrinks only the fill, by scaleX from 1 to 0, and nothing else', () => {
+    expect(keyframes().get('ret-progress')).toEqual([
+      { key: '0%', style: { transform: 'scaleX(1)' } },
+      { key: '100%', style: { transform: 'scaleX(0)' } },
+    ]);
+  });
+
+  it('lays a static, clipped strip over the block-end edge, out of flow, with no track', () => {
+    const { host, strip } = progressIn('visible');
+    expect(squashed(declared(strip))).toEqual(STRIP);
+    host.remove();
+  });
+
+  it('gives the fill the neutral token, a straight moving edge, and a held linear animation', () => {
+    const { host, fill } = progressIn('visible', { paused: true });
+    expect(declared(fill)).toEqual(FILL);
+    expect(Object.keys(declared(fill)).filter(p => /radius|duration|delay/.test(p))).toEqual([]);
+    host.remove();
+  });
+
+  it('D-11: anchors the fill at the inline start, left in LTR and right in RTL', () => {
+    const ltr = progressIn('visible');
+    const rtl = progressIn('visible', { dir: 'rtl' });
+    expect(declared(ltr.fill)['transform-origin']).toBe('left');
+    expect(declared(rtl.fill)['transform-origin']).toBe('right');
+    expect(squashed(declared(rtl.strip))).toEqual(STRIP);
+    ltr.host.remove();
+    rtl.host.remove();
+  });
+
+  it('runs only while the timer runs: visible and not data-paused', () => {
+    for (const phase of PHASES) {
+      for (const paused of [false, true]) {
+        const { host, fill } = progressIn(phase, { paused });
+        const running = phase === 'visible' && !paused;
+        expect(declared(fill)['animation-play-state'], `${phase} paused=${paused}`).toBe(
+          running ? 'running' : 'paused'
+        );
+        host.remove();
+      }
+    }
+  });
+
+  it('anchors the strip to the card, and still never clips, transforms or moves the toast', () => {
+    const { host, item } = progressIn('visible');
+    const own = declared(item);
+    expect(own.position).toBe('relative');
+    expect(Object.keys(own).filter(p => /overflow|clip|mask|^transform|contain/.test(p))).toEqual(
+      []
+    );
+    expect(transitionsOfRoot(own)).toEqual(REPOSITION);
+    expect(animationOf(item)).toEqual({});
+    host.remove();
+  });
+
+  it('keeps every other toast part, the region and the lists unanimated', () => {
+    const { host, item } = progressIn('visible');
+    const others = [
+      regionOf(),
+      ...POSITIONS.map(listAt),
+      ...[...item.children].filter(child => !child.classList.contains('ret-toast__progress')),
+      item.querySelector('.ret-toast__progress') as Element,
+    ];
+    for (const element of others) expect(animationOf(element)).toEqual({});
+    host.remove();
+  });
+
+  it('keeps depleting under reduced motion: no reduced-motion rule reaches the strip or fill', () => {
+    const { host, strip, fill } = progressIn('visible');
+    for (const element of [strip, fill]) {
+      expect(reducedRules.filter(r => element.matches(r.selector))).toEqual([]);
+    }
+    expect(declaredReduced(fill)).toEqual({ ...FILL, 'animation-play-state': 'running' });
+    host.remove();
+  });
+
+  it('draws the fill in a system colour under forced colours, with no track', () => {
+    const { host, strip, fill } = progressIn('visible');
+    const forced = rules.filter(r => r.media === FORCED);
+    const own = forced.filter(r => fill.matches(r.selector)).map(r => declarations(r.style));
+    expect(own.map(d => Object.keys(d))).toEqual([['background-color']]);
+    expect(own[0]?.['background-color']?.toLowerCase()).toBe('canvastext');
+    expect(forced.filter(r => strip.matches(r.selector))).toEqual([]);
+    host.remove();
+  });
+
+  it('keeps every progress rule at zero specificity, inside :where()', () => {
+    for (const rule of rules.filter(r => /ret-toast__progress/.test(r.selector))) {
+      expect(rule.selector, rule.selector).toMatch(/^:where\(.*\)$/s);
+    }
+  });
+
+  it('styles no custom toast: progress rules need the strip, which custom toasts never get', () => {
+    const custom = toastIn('visible', 'top-right', 'custom');
+    expect(rules.filter(r => /progress/.test(r.selector) && custom.matches(r.selector))).toEqual(
+      []
+    );
+  });
+});
+
+/** Declarations with runs of whitespace collapsed, as the stylesheet's formatting may wrap them. */
+function squashed(own: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(own).map(([p, v]) => [p, v.replace(/\s+/g, ' ').replace(/\( /g, '(')])
+  );
+}
+
+/** The toast root's transition longhands, from its declared styles. */
+function transitionsOfRoot(own: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(own).filter(([p]) => /^transition/.test(p)));
+}
 
 describe('the D1 prototype stays demo-only (P-17)', () => {
   it('is never referenced by library source, the stylesheet or what builds the package', () => {
