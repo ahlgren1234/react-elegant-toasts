@@ -8,8 +8,11 @@ import './styles.css';
 // stylesheet, and not the P-25 demo rebuild. It loads after the production stylesheet and masks
 // it, so `?production-css` skips it and shows the production stylesheet alone (P-17 review).
 const PRODUCTION_CSS_ONLY = new URLSearchParams(window.location.search).has('production-css');
+// P-21 D1: `?p21` shows the self-contained swipe prototype instead of the demo. Demo only; S5
+// removes it with `demo/p21/`.
+const P21 = new URLSearchParams(window.location.search).has('p21');
 if (PRODUCTION_CSS_ONLY) document.documentElement.classList.add('demo-production-css');
-else void import('./p17-prototype.css');
+else if (!P21) void import('./p17-prototype.css');
 
 const POSITIONS: readonly ToastPosition[] = [
   'top-left',
@@ -371,5 +374,6 @@ const Demo = () => (
 
 const container = document.getElementById('root');
 if (container) {
-  createRoot(container).render(<Demo />);
+  if (P21) void import('./p21/prototype').then(module => module.mountP21Prototype(container));
+  else createRoot(container).render(<Demo />);
 }
