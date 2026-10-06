@@ -2526,6 +2526,132 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
+- **Status: in progress.** D0 is done. D1 (the visual prototype) is next.
+- **Already decided, not reopened here:**
+  - `ToastOptions.progress` and `ToasterProps.progress`, off by default, resolved toast, then Toaster, then `false` (§6.3, §6.5, P-14);
+  - custom toasts reject progress, in the types and at runtime (§6.4, P-12, AC-API-10);
+  - the CSS technique (§22): a `ret-progress` keyframe animating `transform: scaleX(1 → 0)` over the duration, a negative `animation-delay` of `duration − remaining`, and `animation-play-state: paused` under `data-paused`;
+  - no clock of its own (§10) and no per-frame React state (§5, §32, AC-PR-1);
+  - anchored at inline-start and depleting toward it, with `transform-origin` switched under `:dir(rtl)` (§20, AC-RTL-1);
+  - still depleting under reduced motion (§22, OQ-22).
+- Acceptance: AC-PR-1 and AC-RTL-1 are P-20's. Their real-browser proof ("progress direction and pause sync", §26) is P-22's. AC-TM-1 to AC-TM-5, AC-LC-1 to AC-LC-3, AC-MO-1 to AC-MO-3, AC-KB-1, AC-KB-2, AC-A11Y-1 to AC-A11Y-7, AC-API-1, AC-API-10, AC-CSS-1 to AC-CSS-3 and the §32 render-count rules must not regress, except for the render-count change decision 1 makes deliberately.
+- **Pre-D0 browser spike (done, temporary and removed).** The question was whether the literal §22 model, with no remount on pause and resume, stays in sync with the store. Call it T2. The alternative re-derives the delay from the store at every timer run boundary. Call it T1.
+  - **Setup:** headful Chrome 154 on Windows, driven over CDP. A page imported the real, unmodified store and rendered a T2 bar and a T1 bar for the same toast. The pause triggers were wired as in P-15. Each animation frame, the bar's computed `scaleX` was compared with the store's `remaining`.
+  - **Genuine hiding:** a real tab switch and a real window minimise both produced `document.hidden` and Chrome's own `visibilitychange` and `blur`.
+  - **Results:**
+    - T2 never reset.
+    - In ordinary foreground pause and resume, T2 stayed within about two frames.
+    - While the page was hidden, the store held correctly: the timer was paused, `remaining` was frozen and nothing expired. T2's play-state change was never applied before the page became visible again, so its bar kept depleting. It came back ahead by about the hidden time: about 5 s after 5 s hidden, and empty while about 5.9 s remained after 12 s or 30 s hidden.
+    - The error persisted after resume and accumulated: −7.5 s after five 1.5 s tab switches.
+    - Pauses shorter than a frame (40 pause-resume pairs inside one task) were lost entirely, at −333 ms.
+    - T1 stayed within about one frame (−6 to +14 ms) in every case, including every hidden round trip, with no accumulation.
+  - **Not tested:** intensive throttling (hidden for more than about 5 minutes), occlusion-only hiding, mobile backgrounding, WebKit and Firefox. This is Chromium evidence, not cross-browser evidence.
+- **Decisions locked before implementation (D0).** They refine §10, §20, §21 and §22 and are implemented from S1 on. Decision 6 leaves the visual treatment to D1.
+  1. **`data-paused`:**
+     - A documented public hook on the toast root. Its meaning: the toast's finite auto-close countdown is currently held. It mirrors the store's combined pause state for that toast (§10).
+     - It applies to finite normal toasts and to finite custom toasts, whether or not progress is shown. Persistent toasts (`Infinity` and loading) never carry it.
+     - Every pause reason collapses into the one attribute, which does not say which reason applies. P-21's internal `swipe` reason takes part like any other.
+     - With `data-phase`, it is the whole running state the stylesheet needs: a rendered finite toast's timer runs exactly while it is `visible` and has no `data-paused`.
+     - It joins the stable public CSS contract (OQ-25, §21) beside `data-theme`, `data-position` and `data-phase`. `scripts/check-styles.js` adds it to its allowlist (P-17 S1).
+     - **This deliberately changes P-15's render behaviour.** A pause boundary now re-renders the toasts whose held state changes, and only those. Nothing renders while time passes. There is still no per-frame render.
+  2. **View plumbing:**
+     - The store's timer (P-11) stays the only clock. Rendering learns what it needs through the existing snapshot and view subscription: no second per-toast subscription, and no other countdown.
+     - A view gains the held state and, for a finite toast, its folded `remaining`. Their internal names are an implementation detail.
+     - `remaining` is authoritative at timer segment boundaries. While the timer is running, CSS depletes the bar, not React or the store. Pausing and resuming therefore cause boundary renders; the passage of time causes none.
+     - This is the addition P-11 left to P-20 ("P-14 and P-20 add what rendering and progress need"). S1 records how it affects render scope and P-19's per-commit layout measurement.
+  3. **Synchronisation (T1):**
+     - The bar uses the §22 technique: the `ret-progress` keyframe, `transform: scaleX(1)` to `scaleX(0)`, linear timing, a duration from the toast's timer duration, an `animation-delay` of `−(duration − remaining)`, and `animation-play-state` controlled by the lifecycle and pause state (decision 1).
+     - In addition, at every timer run boundary that changes the authoritative folded `remaining` or the running state, the progress animation is recreated from that store-derived value. These boundaries are each start and stop, and each new definition.
+     - The animation is never the source of truth: each boundary corrects it from the store. The mechanism (for example remounting the element) is an implementation detail, provided recreation is guaranteed at each such boundary.
+     - The reason is the pre-D0 spike above: under genuine hiding, play state alone (T2) let the bar run ahead of the held timer, and the error accumulated. WebKit and Firefox behaviour is P-22's.
+  4. **Outside `visible`:**
+     - The bar shows the current timer snapshot in every rendered phase, and depletes only while the timer actually runs.
+       - First enter: frozen full.
+       - Re-queued, then entered again: frozen at the kept `remaining / duration` (§8.4, AC-NT-3).
+       - `visible` and not paused: running.
+       - `visible` and paused: frozen.
+       - Exiting for a reason other than timeout: frozen at the folded `remaining`.
+       - Exiting on timeout: empty (`remaining` 0).
+       - Revival or replacement with a fresh timer: full, and frozen until it runs.
+       - Loading to finite (promise settlement): eligible once the finite timer exists.
+     - No timer semantics change.
+  5. **Timing to CSS:**
+     - The per-toast duration and the negative delay reach CSS as inline `animation-duration` and `animation-delay`, through React's `style` property (§34).
+     - They are not tokens. They are also not token-like internal `--ret-*` properties.
+     - The easing is `linear`, fixed in the stylesheet and not configurable.
+  6. **Visual treatment (chosen at D1, not here):**
+     - D0 locks only these constraints:
+       - the progress element is a direct, non-focusable child of a normal toast's root;
+       - no wrapper that breaks P-17 decision 3;
+       - it never owns or transitions the root's `transform` or `transition` (P-18 decision 6, P-19 D2 decisions 5 and 9); it animates its own `transform: scaleX(…)`;
+       - no new card-wide clipping that could unexpectedly clip consumer content;
+       - a neutral colour, with no semantic type accent (OQ-24 keeps the accent in the icon slot);
+       - exactly the two public tokens of decision 8;
+       - `pointer-events: none` (decision 11);
+       - perceivable in forced colours (decision 9);
+       - logical positioning and insets, with the RTL origin under `:dir(rtl)`;
+       - never rendered for custom toasts.
+     - D1 compares only treatments that meet these constraints: an inset single bar, a full-width treatment with safe corner handling, and a track and fill if it is materially better. It selects the placement, the radius and clipping treatment, the defaults of both tokens and the light and dark appearance. It decides nothing about the timer.
+  7. **Accessibility:**
+     - The element is `aria-hidden="true"`, with no `role="progressbar"`, no `aria-valuenow`, `aria-valuemin` or `aria-valuemax`, and no `tabindex`.
+     - It sits outside `.ret-toast__content`, so it never changes the announcement text (§17.1).
+     - Timing stays adjustable through the §10 pauses, and a toast never expires while it holds focus.
+     - Screen-reader and operating-system evidence is P-29's.
+  8. **Public tokens:**
+     - Exactly two: `--ret-progress-height` and `--ret-progress`, the neutral colour, not by type. They follow the P-17 token model (OQ-25).
+     - The public set becomes **30**.
+     - There is no duration or easing token.
+     - D1 selects both defaults. If `--ret-progress` varies by theme, it joins the dark and system blocks, and the AC-A11Y-6 contrast pairs as meaningful non-text (3:1 against `--ret-surface`), since §22 treats progress as information.
+  9. **Forced colours:**
+     - The bar stays perceivable under `forced-colors: active` through a rule that uses system colours only, in the existing forced-colours block. `forced-color-adjust` stays unused.
+     - P-20's evidence is structural style tests plus Chromium forced-colours emulation. Real Windows High Contrast is P-22's, as for P-17, and is not claimed here.
+  10. **Guard narrowing:**
+      - These existing guards must be narrowed on purpose, never deleted:
+        - the closed keyframe list;
+        - the transform restrictions on toast roots and parts. Their pattern also catches `transform-origin`. P-18's individual-property motion and P-19's root `transform` ownership stay guarded.
+        - the ban on `animation-play-state`;
+        - "never animates the toast parts";
+        - the token count and the "no progress token" guard;
+        - the documented `data-*` attribute set, in the style tests and in the `check-styles.js` allowlist;
+        - the P-14/P-20 boundary test that renders no progress yet;
+        - P-15's expectation that pause changes render nothing;
+        - the expectation that a `<Toaster progress>` toggle re-renders no toast, where it applies.
+      - Each narrowing keeps the original invariant and makes only the P-20 exception.
+      - The regression tests carry their defect names: `D-10: …` and `D-11: …` (§26).
+  11. **Pointer input:** the progress element is `pointer-events: none`. It is never an interactive descendant and never interferes with P-21's swipe hit testing.
+  12. **Sequence and boundaries:**
+      - **D0:** this decision record. Documentation only.
+      - **D1, demo-only visual prototype:**
+        - It compares only viable treatments and selects the placement, the radius and clipping treatment, the `--ret-progress-height` and `--ret-progress` defaults and the light and dark appearance.
+        - It never reaches `src/`, the package or the public contract. It is a temporary P-20 decision harness, not the P-25 demo redesign.
+        - Stop for the maintainer's visual approval.
+      - **S1, timer and view plumbing:**
+        - The view fields, the pause-boundary notifications, the exact render scope, no per-frame render, no second timer, and the interaction with P-19's per-commit layout measurement.
+        - Stop for an architecture and render-count review.
+      - **S2, DOM and `data-paused`:**
+        - When the bar is present, its recreation at run boundaries, the inline timing, the lifecycle, accessibility, the Toaster default, the exclusion of custom toasts, the environment and focus pause wiring, and isolation from P-18's `animationend` completion.
+        - Stop for review.
+      - **S3, production CSS from the D1 winner:**
+        - The keyframe, the placement, the tokens and their defaults, the pause and run selectors, the RTL origin, forced colours and the guard narrowing.
+        - Manual Chromium checkpoint.
+      - **S4, hardening:**
+        - The reduced-motion proof that progress still depletes.
+        - The genuine hidden-tab and minimised-window Chromium resynchronisation check, repeated against production code.
+        - Repeated pause and resume, StrictMode, lifecycle edge cases, render counts and mutations.
+        - It carries WebKit and Firefox hidden-document behaviour forward to P-22.
+      - **S5, reconciliation:**
+        - D-10, D-11, AC-PR-1 and AC-RTL-1.
+        - The P-22, P-26 and P-29 carry-forwards.
+        - Full validation, and removal of the prototype if it still exists.
+      - The PR into `v2`, CI and a merge commit follow only after the S5 review.
+      - **Out of scope:**
+        - swipe (P-21);
+        - cross-browser automation (P-22);
+        - React 19 and `<Activity>` (P-23);
+        - the demo redesign (P-25);
+        - the final public documentation (P-26);
+        - the final accessibility audit (P-29).
+- **Open until D1:** the placement, the radius and clipping treatment, the two token defaults and the light and dark appearance. Nothing else is open.
 
 **P-21 Swipe to dismiss**
 
