@@ -18,7 +18,7 @@ import { JSDOM } from 'jsdom';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PREFIX = 'ret-';
 // The documented data attributes (OQ-25). Later phases extend this list as they document more.
-const ATTRIBUTES = ['data-theme', 'data-position', 'data-phase'];
+const ATTRIBUTES = ['data-theme', 'data-position', 'data-phase', 'data-paused'];
 
 /**
  * Splits `text` at top-level occurrences of characters matched by `isSeparator`: outside

@@ -2,14 +2,14 @@
  * react-elegant-toasts 2.x stylesheet, shipped as `react-elegant-toasts/styles.css` (§21).
  *
  * Public contract (OQ-25): the documented `--ret-*` custom properties, the `ret-*` classes and the
- * `data-theme`, `data-position` and `data-phase` attributes. Every selector carries a `ret-` class,
+ * `data-theme`, `data-position`, `data-phase` and `data-paused` (P-20) attributes. Every selector carries a `ret-` class,
  * which `npm run lint` checks (scripts/check-styles.js, AC-CSS-1). Defaults sit inside `:where()`,
  * so any consumer selector overrides them without `!important`.
  *
  * Tokens are scoped to `.ret-toaster`, never `:root`. Override them for a Toaster with
  * `.ret-toaster { --ret-surface: … }`, or for one theme with `.ret-toaster[data-theme="dark"]`
  * (and the same rule inside `@media (prefers-color-scheme: dark)` for
- * `.ret-toaster[data-theme="system"]`). Progress tokens belong to P-20.
+ * `.ret-toaster[data-theme="system"]`).
  */
 
 /* Light theme: the default, so it also covers `system` in a light colour scheme. */
@@ -35,6 +35,8 @@
   --ret-info-subtle: #dbeafe;
   --ret-loading: #52525b;
   --ret-loading-subtle: #f4f4f5;
+  /* The progress fill (P-20): neutral, never by type. It matches the muted text on purpose. */
+  --ret-progress: #52525b;
 
   /* The font family only: sizes, weights and line heights stay the library's. `inherit` makes the
      token take the parent's value, normally none, so the toasts keep the application's font. */
@@ -44,6 +46,8 @@
   --ret-offset: 16px;
   --ret-width: 360px;
   --ret-z-index: 9999;
+  /* The progress strip's thickness (P-20), the same in every theme. */
+  --ret-progress-height: 3px;
 
   /* Enter and exit motion (P-18): the same in every theme, so the theme blocks do not repeat them.
      The lifecycle reads the resolved values, so an override here also times the toast's exit. */
@@ -77,6 +81,7 @@
   --ret-info-subtle: #1e3354;
   --ret-loading: #a1a1aa;
   --ret-loading-subtle: #3f3f46;
+  --ret-progress: #a1a1aa;
 }
 
 /* System theme: follows the colour scheme in CSS, with no JavaScript and no re-render (§21). */
@@ -103,6 +108,7 @@
     --ret-info-subtle: #1e3354;
     --ret-loading: #a1a1aa;
     --ret-loading-subtle: #3f3f46;
+    --ret-progress: #a1a1aa;
   }
 }
 
@@ -174,6 +180,8 @@
  * do not reshape the hierarchy; only the family follows `--ret-font-family`.
  */
 :where(.ret-toast:not(.ret-toast--custom)) {
+  /* Anchors the progress strip (P-20); it adds no clipping, overflow or stacking. */
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -457,6 +465,67 @@
 }
 
 /*
+ * Progress (§20, §22, P-20). The strip is the toast's last child, laid over its block-end edge,
+ * out of flow, so it changes no layout. It is full width and follows the card's inner corner curve
+ * (the card radius less its 1px border) by clipping itself: a negative top inset gives the clip a
+ * box taller than the strip, so the radii are not clamped by its height. The strip never moves, so
+ * its corners never distort. Nothing clips the toast.
+ *
+ * Only the fill moves. `ret-progress` shrinks its own `transform: scaleX(1 → 0)` toward the
+ * inline start (§20): the left in LTR, the right in RTL, so the moving edge stays straight. The
+ * renderer sets each fill's duration and its negative delay from the timer's folded `remaining`,
+ * and recreates the fill at every run boundary (P-20 decision 3). The fill runs exactly while the
+ * timer does, `visible` and not `data-paused`; in every other phase and while paused it holds.
+ * Progress is information, not decoration, so reduced motion leaves it running (OQ-22). The
+ * fill's class is an implementation detail; `.ret-toast__progress` and the tokens are public.
+ */
+@keyframes ret-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+:where(.ret-toast__progress) {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  block-size: var(--ret-progress-height);
+  clip-path: inset(
+    calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 max(0px, var(--ret-radius) - 1px)
+      max(0px, var(--ret-radius) - 1px)
+  );
+  pointer-events: none;
+}
+
+:where(.ret-toast__progress-fill) {
+  display: block;
+  block-size: 100%;
+  background: var(--ret-progress);
+  transform-origin: left;
+  animation-name: ret-progress;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+  animation-play-state: paused;
+}
+
+:where(.ret-toast__progress-fill:dir(rtl)) {
+  transform-origin: right;
+}
+
+:where(
+  .ret-toast[data-phase='visible']:not([data-paused])
+    > .ret-toast__progress
+    > .ret-toast__progress-fill
+) {
+  animation-play-state: running;
+}
+
+/*
  * Reduced motion (§17.5, §22, P-18 D0 decision 4): no enter or exit motion at all, not even a
  * fade, and a static spinner. Removing the animation name is the whole rule: with no animation
  * there is nothing to fill, so an exiting toast keeps its ordinary look until it is removed, and
@@ -464,7 +533,8 @@
  * they are. Stack repositioning (P-19) is instant: its transition takes no time, so a moved
  * toast is at its new place at once, with no fade or translation instead; the renderer still
  * seeds and releases it as usual. It comes after every motion rule, so it wins at the same zero
- * specificity. CSS only: nothing in JavaScript reads the preference.
+ * specificity. CSS only: nothing in JavaScript reads the preference. The progress fill (above) is
+ * deliberately absent: it shows the remaining time, so it keeps depleting (§22, OQ-22).
  */
 @media (prefers-reduced-motion: reduce) {
   :where(.ret-toast[data-phase='entering'], .ret-toast[data-phase='exiting']) {
@@ -584,5 +654,10 @@
   :where(.ret-toaster:focus-visible)::after {
     border-color: Highlight;
     outline-color: Canvas;
+  }
+
+  /* The progress fill keeps a system colour, so it stays visible; it has no track (P-20). */
+  :where(.ret-toast__progress-fill) {
+    background-color: CanvasText;
   }
 }

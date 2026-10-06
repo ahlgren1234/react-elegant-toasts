@@ -114,6 +114,21 @@ export interface ToastView {
   readonly options: StoredOptions;
   /** Whether the effective duration is persistent: loading, or `Infinity` given or by default. */
   readonly persistent: boolean;
+  /** The effective duration in ms (§10); `Infinity` when persistent. Changes only with a definition. */
+  readonly duration: number;
+  /**
+   * The timer's folded remaining time (§10, P-20 decision 2): what was left at the last run
+   * boundary (a start, stop or new definition), never recomputed from the clock. While the timer
+   * runs it stays the value its segment started from, so the passage of time changes no view.
+   * `Infinity` when persistent.
+   */
+  readonly remaining: number;
+  /**
+   * Whether the finite countdown is held by a pause reason (P-20 decision 1): the store's combined
+   * pause state, while entering or visible. A lifecycle phase alone never holds it. Always false for
+   * a persistent toast, which has no countdown, and for an exiting toast, whose countdown is over.
+   */
+  readonly held: boolean;
 }
 
 export interface StoreSnapshot {

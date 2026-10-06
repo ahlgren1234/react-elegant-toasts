@@ -20,7 +20,7 @@ import {
 import type { ToasterToken, ToastView } from '../store/types';
 import type { ToastId, ToasterProps, ToastPosition, ToastTheme } from '../types';
 import { AnnouncerContext, createAnnouncer, LIVE_REGION, VISUALLY_HIDDEN } from './announcer';
-import { resolveCloseButton, resolveLabels } from './defaults';
+import { resolveCloseButton, resolveLabels, resolveProgress } from './defaults';
 import { ToastItem } from './ToastItem';
 import { useEnvironmentPause } from './useEnvironmentPause';
 import { keyShortcutsOf, useHotkey } from './useHotkey';
@@ -35,6 +35,8 @@ interface PositionListProps {
   readonly views: readonly ToastView[];
   /** The Toaster's `closeButton` prop, as given. */
   readonly closeButton: boolean | undefined;
+  /** The Toaster's `progress` prop, as given. */
+  readonly progress: boolean | undefined;
   /** The close button's resolved name. */
   readonly closeLabel: string;
   /** The resolved prefixes of warning and error announcements. */
@@ -52,6 +54,7 @@ const PositionList = memo(function PositionList({
   position,
   views,
   closeButton,
+  progress,
   closeLabel,
   warningPrefix,
   errorPrefix,
@@ -72,6 +75,9 @@ const PositionList = memo(function PositionList({
             view={view}
             closeButton={shown}
             closeLabel={shown ? closeLabel : undefined}
+            // Only a finite toast has a countdown to show (P-20), so a persistent or loading toast
+            // never re-renders for a Toaster `progress` change.
+            progress={!view.persistent && resolveProgress(view, progress)}
             announcePrefix={
               view.type === 'warning'
                 ? warningPrefix
@@ -135,6 +141,7 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
   position,
   duration,
   closeButton,
+  progress,
   theme,
   hotkey,
   labels,
@@ -195,6 +202,7 @@ export const Toaster: (props: ToasterProps) => ReactElement | null = ({
               position={position}
               views={snapshot.byPosition[position]}
               closeButton={closeButton}
+              progress={progress}
               closeLabel={close}
               warningPrefix={warningPrefix}
               errorPrefix={errorPrefix}

@@ -311,17 +311,25 @@ describe('custom toasts (§6.4)', () => {
   });
 });
 
-describe('progress (§6.3, P-20 boundary)', () => {
-  it('renders no progress indicator yet, whether progress is on by the toast or the Toaster', () => {
+// Narrowed by P-20 S2 from "renders no progress indicator yet": the indicator now renders, after
+// the controls, from the toast's own option or the Toaster's. Its full behaviour is in
+// `progress-render.test.tsx`.
+describe('progress (§6.3, P-20 S2)', () => {
+  it('renders the progress strip last, whether progress is on by the toast or the Toaster', () => {
     const { rerender } = render(<Toaster progress />);
     show('by Toaster', { id: 'a' });
     show('by toast', { id: 'b', progress: true });
     rerender(<Toaster progress={false} />);
+    expect(classesOf(itemOf('by Toaster'))).toEqual(['ret-toast__content', 'ret-toast__close']);
     rerender(<Toaster progress />);
     for (const text of ['by Toaster', 'by toast']) {
       const item = itemOf(text);
-      expect(classesOf(item)).toEqual(['ret-toast__content', 'ret-toast__close']);
-      expect(item.querySelector('[class*="progress"], [role="progressbar"], progress')).toBeNull();
+      expect(classesOf(item)).toEqual([
+        'ret-toast__content',
+        'ret-toast__close',
+        'ret-toast__progress',
+      ]);
+      expect(item.querySelector('[role="progressbar"], progress')).toBeNull();
     }
   });
 });

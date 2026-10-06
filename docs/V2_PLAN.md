@@ -2526,6 +2526,646 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
+- **Status: complete.** D0, D1 and S1 to S5 are done, the final reconciliation and validation passed, and every checkpoint is recorded. Progress ships as candidate B, synchronised by T1, with two public tokens (30 in all) and the `data-paused` hook. The publication review is next. What P-20 leaves open is listed in the S5 record and in the P-22, P-26 and P-29 entries.
+- **Already decided, not reopened here:**
+  - `ToastOptions.progress` and `ToasterProps.progress`, off by default, resolved toast, then Toaster, then `false` (§6.3, §6.5, P-14);
+  - custom toasts reject progress, in the types and at runtime (§6.4, P-12, AC-API-10);
+  - the CSS technique (§22): a `ret-progress` keyframe animating `transform: scaleX(1 → 0)` over the duration, a negative `animation-delay` of `duration − remaining`, and `animation-play-state: paused` under `data-paused`;
+  - no clock of its own (§10) and no per-frame React state (§5, §32, AC-PR-1);
+  - anchored at inline-start and depleting toward it, with `transform-origin` switched under `:dir(rtl)` (§20, AC-RTL-1);
+  - still depleting under reduced motion (§22, OQ-22).
+- Acceptance: AC-PR-1 and AC-RTL-1 are P-20's. Their real-browser proof ("progress direction and pause sync", §26) is P-22's. AC-TM-1 to AC-TM-5, AC-LC-1 to AC-LC-3, AC-MO-1 to AC-MO-3, AC-KB-1, AC-KB-2, AC-A11Y-1 to AC-A11Y-7, AC-API-1, AC-API-10, AC-CSS-1 to AC-CSS-3 and the §32 render-count rules must not regress, except for the render-count change decision 1 makes deliberately.
+- **Pre-D0 browser spike (done, temporary and removed).** The question was whether the literal §22 model, with no remount on pause and resume, stays in sync with the store. Call it T2. The alternative re-derives the delay from the store at every timer run boundary. Call it T1.
+  - **Setup:** headful Chrome 154 on Windows, driven over CDP. A page imported the real, unmodified store and rendered a T2 bar and a T1 bar for the same toast. The pause triggers were wired as in P-15. Each animation frame, the bar's computed `scaleX` was compared with the store's `remaining`.
+  - **Genuine hiding:** a real tab switch and a real window minimise both produced `document.hidden` and Chrome's own `visibilitychange` and `blur`.
+  - **Results:**
+    - T2 never reset.
+    - In ordinary foreground pause and resume, T2 stayed within about two frames.
+    - While the page was hidden, the store held correctly: the timer was paused, `remaining` was frozen and nothing expired. T2's play-state change was never applied before the page became visible again, so its bar kept depleting. It came back ahead by about the hidden time: about 5 s after 5 s hidden, and empty while about 5.9 s remained after 12 s or 30 s hidden.
+    - The error persisted after resume and accumulated: −7.5 s after five 1.5 s tab switches.
+    - Pauses shorter than a frame (40 pause-resume pairs inside one task) were lost entirely, at −333 ms.
+    - T1 stayed within about one frame (−6 to +14 ms) in every case, including every hidden round trip, with no accumulation.
+  - **Not tested:** intensive throttling (hidden for more than about 5 minutes), occlusion-only hiding, mobile backgrounding, WebKit and Firefox. This is Chromium evidence, not cross-browser evidence.
+- **Decisions locked before implementation (D0).** They refine §10, §20, §21 and §22 and are implemented from S1 on. Decision 6 leaves the visual treatment to D1.
+  1. **`data-paused`:**
+     - A documented public hook on the toast root. Its meaning: the toast's finite auto-close countdown is currently held. It mirrors the store's combined pause state for that toast (§10).
+     - It applies to finite normal toasts and to finite custom toasts, whether or not progress is shown. Persistent toasts (`Infinity` and loading) never carry it.
+     - Every pause reason collapses into the one attribute, which does not say which reason applies. P-21's internal `swipe` reason takes part like any other.
+     - With `data-phase`, it is the whole running state the stylesheet needs: a rendered finite toast's timer runs exactly while it is `visible` and has no `data-paused`.
+     - It joins the stable public CSS contract (OQ-25, §21) beside `data-theme`, `data-position` and `data-phase`. `scripts/check-styles.js` adds it to its allowlist (P-17 S1).
+     - **This deliberately changes P-15's render behaviour.** A pause boundary now re-renders the toasts whose held state changes, and only those. Nothing renders while time passes. There is still no per-frame render.
+  2. **View plumbing:**
+     - The store's timer (P-11) stays the only clock. Rendering learns what it needs through the existing snapshot and view subscription: no second per-toast subscription, and no other countdown.
+     - A view gains the held state and, for a finite toast, its folded `remaining`. Their internal names are an implementation detail.
+     - `remaining` is authoritative at timer segment boundaries. While the timer is running, CSS depletes the bar, not React or the store. Pausing and resuming therefore cause boundary renders; the passage of time causes none.
+     - This is the addition P-11 left to P-20 ("P-14 and P-20 add what rendering and progress need"). S1 records how it affects render scope and P-19's per-commit layout measurement.
+  3. **Synchronisation (T1):**
+     - The bar uses the §22 technique: the `ret-progress` keyframe, `transform: scaleX(1)` to `scaleX(0)`, linear timing, a duration from the toast's timer duration, an `animation-delay` of `−(duration − remaining)`, and `animation-play-state` controlled by the lifecycle and pause state (decision 1).
+     - In addition, at every timer run boundary that changes the authoritative folded `remaining` or the running state, the progress animation is recreated from that store-derived value. These boundaries are each start and stop, and each new definition.
+     - The animation is never the source of truth: each boundary corrects it from the store. The mechanism (for example remounting the element) is an implementation detail, provided recreation is guaranteed at each such boundary.
+     - The reason is the pre-D0 spike above: under genuine hiding, play state alone (T2) let the bar run ahead of the held timer, and the error accumulated. WebKit and Firefox behaviour is P-22's.
+  4. **Outside `visible`:**
+     - The bar shows the current timer snapshot in every rendered phase, and depletes only while the timer actually runs.
+       - First enter: frozen full.
+       - Re-queued, then entered again: frozen at the kept `remaining / duration` (§8.4, AC-NT-3).
+       - `visible` and not paused: running.
+       - `visible` and paused: frozen.
+       - Exiting for a reason other than timeout: frozen at the folded `remaining`.
+       - Exiting on timeout: empty (`remaining` 0).
+       - Revival or replacement with a fresh timer: full, and frozen until it runs.
+       - Loading to finite (promise settlement): eligible once the finite timer exists.
+     - No timer semantics change.
+  5. **Timing to CSS:**
+     - The per-toast duration and the negative delay reach CSS as inline `animation-duration` and `animation-delay`, through React's `style` property (§34).
+     - They are not tokens. They are also not token-like internal `--ret-*` properties.
+     - The easing is `linear`, fixed in the stylesheet and not configurable.
+  6. **Visual treatment (chosen at D1, not here):**
+     - D0 locks only these constraints:
+       - the progress element is a direct, non-focusable child of a normal toast's root;
+       - no wrapper that breaks P-17 decision 3;
+       - it never owns or transitions the root's `transform` or `transition` (P-18 decision 6, P-19 D2 decisions 5 and 9); it animates its own `transform: scaleX(…)`;
+       - no new card-wide clipping that could unexpectedly clip consumer content;
+       - a neutral colour, with no semantic type accent (OQ-24 keeps the accent in the icon slot);
+       - exactly the two public tokens of decision 8;
+       - `pointer-events: none` (decision 11);
+       - perceivable in forced colours (decision 9);
+       - logical positioning and insets, with the RTL origin under `:dir(rtl)`;
+       - never rendered for custom toasts.
+     - D1 compares only treatments that meet these constraints: an inset single bar, a full-width treatment with safe corner handling, and a track and fill if it is materially better. It selects the placement, the radius and clipping treatment, the defaults of both tokens and the light and dark appearance. It decides nothing about the timer.
+  7. **Accessibility:**
+     - The element is `aria-hidden="true"`, with no `role="progressbar"`, no `aria-valuenow`, `aria-valuemin` or `aria-valuemax`, and no `tabindex`.
+     - It sits outside `.ret-toast__content`, so it never changes the announcement text (§17.1).
+     - Timing stays adjustable through the §10 pauses, and a toast never expires while it holds focus.
+     - Screen-reader and operating-system evidence is P-29's.
+  8. **Public tokens:**
+     - Exactly two: `--ret-progress-height` and `--ret-progress`, the neutral colour, not by type. They follow the P-17 token model (OQ-25).
+     - The public set becomes **30**.
+     - There is no duration or easing token.
+     - D1 selects both defaults. If `--ret-progress` varies by theme, it joins the dark and system blocks, and the AC-A11Y-6 contrast pairs as meaningful non-text (3:1 against `--ret-surface`), since §22 treats progress as information.
+  9. **Forced colours:**
+     - The bar stays perceivable under `forced-colors: active` through a rule that uses system colours only, in the existing forced-colours block. `forced-color-adjust` stays unused.
+     - P-20's evidence is structural style tests plus Chromium forced-colours emulation. Real Windows High Contrast is P-22's, as for P-17, and is not claimed here.
+  10. **Guard narrowing:**
+      - These existing guards must be narrowed on purpose, never deleted:
+        - the closed keyframe list;
+        - the transform restrictions on toast roots and parts. Their pattern also catches `transform-origin`. P-18's individual-property motion and P-19's root `transform` ownership stay guarded.
+        - the ban on `animation-play-state`;
+        - "never animates the toast parts";
+        - the token count and the "no progress token" guard;
+        - the documented `data-*` attribute set, in the style tests and in the `check-styles.js` allowlist;
+        - the P-14/P-20 boundary test that renders no progress yet;
+        - P-15's expectation that pause changes render nothing;
+        - the expectation that a `<Toaster progress>` toggle re-renders no toast, where it applies.
+      - Each narrowing keeps the original invariant and makes only the P-20 exception.
+      - The regression tests carry their defect names: `D-10: …` and `D-11: …` (§26).
+  11. **Pointer input:** the progress element is `pointer-events: none`. It is never an interactive descendant and never interferes with P-21's swipe hit testing.
+  12. **Sequence and boundaries:**
+      - **D0:** this decision record. Documentation only.
+      - **D1, demo-only visual prototype:**
+        - It compares only viable treatments and selects the placement, the radius and clipping treatment, the `--ret-progress-height` and `--ret-progress` defaults and the light and dark appearance.
+        - It never reaches `src/`, the package or the public contract. It is a temporary P-20 decision harness, not the P-25 demo redesign.
+        - Stop for the maintainer's visual approval.
+      - **S1, timer and view plumbing:**
+        - The view fields, the pause-boundary notifications, the exact render scope, no per-frame render, no second timer, and the interaction with P-19's per-commit layout measurement.
+        - Stop for an architecture and render-count review.
+      - **S2, DOM and `data-paused`:**
+        - When the bar is present, its recreation at run boundaries, the inline timing, the lifecycle, accessibility, the Toaster default, the exclusion of custom toasts, the environment and focus pause wiring, and isolation from P-18's `animationend` completion.
+        - Stop for review.
+      - **S3, production CSS from the D1 winner:**
+        - The keyframe, the placement, the tokens and their defaults, the pause and run selectors, the RTL origin, forced colours and the guard narrowing.
+        - Manual Chromium checkpoint.
+      - **S4, hardening:**
+        - The reduced-motion proof that progress still depletes.
+        - The genuine hidden-tab and minimised-window Chromium resynchronisation check, repeated against production code.
+        - Repeated pause and resume, StrictMode, lifecycle edge cases, render counts and mutations.
+        - It carries WebKit and Firefox hidden-document behaviour forward to P-22.
+      - **S5, reconciliation:**
+        - D-10, D-11, AC-PR-1 and AC-RTL-1.
+        - The P-22, P-26 and P-29 carry-forwards.
+        - Full validation, and removal of the prototype if it still exists.
+      - The PR into `v2`, CI and a merge commit follow only after the S5 review.
+      - **Out of scope:**
+        - swipe (P-21);
+        - cross-browser automation (P-22);
+        - React 19 and `<Activity>` (P-23);
+        - the demo redesign (P-25);
+        - the final public documentation (P-26);
+        - the final accessibility audit (P-29).
+- **Open until D1 (all resolved by the D1 sign-off below):** the placement, the radius and clipping treatment, the two token defaults and the light and dark appearance. Nothing else is open.
+- **D1, visual prototype (done):**
+  - **Where:** `demo/p20/` (`prototype.tsx`, `prototype.css`), opened with `?p20`. The demo skips the P-17 D1 stylesheet there, so the cards are styled by the production stylesheet alone.
+  - **What it shows:**
+    - static cards in the production toast markup, held at 100, 65, 30 and 5%;
+    - short, wrapped, action, close, and action-and-close content;
+    - a loading card, labelled as a visual stress case only;
+    - an RTL pair per candidate;
+    - light and dark side by side.
+  - **How each bar is placed:** a paused animation of a demo keyframe (`scaleX(1 → 0)`, linear), positioned by a negative `animation-delay`, as production will place a held bar. The origin is the inline start, switched under `:dir(rtl)`. No timer runs. An optional CSS-only animate toggle is labelled as not production timing.
+  - **Controls:** height (2, 3 and 4px) and neutral colour (`--ret-text-muted`'s values; a softer #71717a / #8e8e98; `--ret-text`'s values) as demo-local stand-ins for the two tokens. Nothing reaches `src/`, and no candidate is pre-selected.
+  - **Candidates:**
+    - **A, inset:** one bar inside the bottom padding, inset 12px, clear of the corners. The element itself scales. Its ends are square: rounded ends were tried, and `scaleX` flattens them as the bar shortens, so at 5% they look square anyway.
+    - **B, full-width safe corners:** a static, full-width strip on the card's bottom edge. Its `clip-path: inset(… round …)` follows the card's inner corner curve, with a negative top inset so the radii are not clamped by the bar's height. Only the fill inside the strip scales, so the curve never distorts. The strip is the direct child; it is not a wrapper under P-17 decision 3.
+    - **C, track and fill:** B's strip with a visible `--ret-border` track.
+    - **B′, rejected:** the same full-width clip on a single scaled element. The clip scales with the bar, so near empty its start corner narrows and paints over the card's corner. It is shown only on request, as the reason B needs its static strip.
+  - **Constraints, checked in Chromium on all 72 cards:**
+    - no card overflow, clip-path, transform or new transition;
+    - the shadow is intact;
+    - the progress element is a direct, `aria-hidden` child with no focusable descendant;
+    - `pointer-events: none`;
+    - all 90 controls hit-testable, with no bar ever the hit target;
+    - no overlap with content or controls;
+    - card heights identical in every state and with the bar removed.
+  - **Limits:** Chromium evidence only (headless Chrome 154 over CDP, with screenshots and DOM checks). It is not cross-browser, Windows High Contrast or assistive-technology evidence, which stay with P-22 and P-29.
+- **D1 sign-off (done).** The maintainer reviewed the prototype and approved this production visual direction. It resolves decisions 6 and 8 and is locked for S1 to S5:
+  1. **Treatment, candidate B (full-width safe corners):**
+     - A static progress strip sits at the toast's block-end edge, full width, and owns the safe corner treatment: it follows the card's inner corner curve.
+     - The fill sits inside the strip. Only the fill runs the `scaleX(1 → 0)` animation of decision 3; the strip never scales, so its corner geometry never distorts.
+     - **The toast root is not clipped:** no `overflow: hidden`, `overflow: clip`, `clip-path` or equivalent on the root. The root's `transform` and `transition` ownership is unchanged (P-18 decision 6, P-19 D2 decisions 5 and 9).
+  2. **Structure is not a P-17 wrapper:**
+     - The progress visual may contain a fill child.
+     - That fill is the progress visual's own internal structure. It is not a wrapper inserted into the section → list → toast → content or control architecture that P-17 decision 3 protects.
+     - The strip is the toast root's one added direct child (decision 6). It holds no text and takes no focus. Focus restoration reads only the registered library controls, announcements read only `.ret-toast__content`, and repositioning measures only the list's `<li>` roots, so all three ignore it.
+     - Later reviews must not reject the strip and fill structure as a forbidden wrapper.
+  3. **Moving edge:** a clean, straight depletion edge, never rounded. The card's radius is carried only by the static strip's card-side corners, so the edge stays stable as the fill nears zero.
+  4. **Tokens (decision 8 resolved):**
+     - `--ret-progress-height: 3px`: 2px was too close to a hairline and the card border, and 4px was too heavy.
+     - `--ret-progress: #52525b` in light (the default) and `#a1a1aa` in dark. These match `--ret-text-muted` on purpose. They follow the P-17 theme architecture: the light value on the default block, the dark value in the dark block, and the same value in the system-dark block.
+     - The public set becomes exactly **30** in S3. There is no track, radius, duration, easing or semantic progress token, and no type-coloured progress.
+  5. **No track:** there is no visible track behind the fill. B already shows the remaining time clearly, a track adds weight, and in forced-colours emulation C's track was more prominent than its fill.
+  6. **RTL:** the same markup in RTL. Only the fill's `transform-origin` changes, under the `:dir(rtl)` rule (§20), and positioning and insets stay logical.
+  7. **Forced colours:** decision 9 stands. The fill takes a system-colour override, and no track exists to restyle. D1 is not Windows High Contrast evidence.
+  8. **Accessibility and pointer input:** decisions 7 and 11 stand. The progress visual is `aria-hidden="true"`, not focusable and `pointer-events: none`, with no progressbar role and no `aria-value*`. The internal fill adds no accessibility or pointer semantics.
+  9. **The other candidates:**
+     - **A** was viable but not selected. Its inset bar avoids the corners, but it reads as a line inside the card rather than as part of the card's edge, and it would need square ends, because scaled rounded ends distort near empty.
+     - **B′** is rejected. Scaling a single element scales its clip and corner geometry too, which gives wrong corners near empty. B avoids this by separating the static strip from the scaled fill.
+     - **C** was viable but not selected, for the reasons in item 5.
+  10. **Prototype status:** `demo/p20/` stays as a visual reference while S1 to S4 are implemented. S5 removes it at the latest (decision 12).
+- **S1, timer and view plumbing (done; awaiting review):**
+  - **Change:** `src/store/types.ts` and `src/store/store.ts` only. `ToastView` gains three internal fields, and they join `VIEW_KEYS`, so the existing equality and subscription alone decide who is notified. There is no new subscription, clock, timer, public API, DOM, CSS or token. The public set stays at 28 until S3.
+  - **`duration`:** the effective duration, `Infinity` when persistent, which S2 needs for `animation-duration`. It changes only with a new definition.
+  - **`remaining`:** the timer's stored, folded `remaining` (§7, P-11), `Infinity` when persistent. It is a boundary snapshot, never recomputed from the clock: a start leaves it as the value its segment runs from, and a stop folds the elapsed time into it.
+  - **`held`:** true when the effective duration is finite, the toast is not `exiting`, and the store's combined pause state (§10) applies to it. This is the fact `data-paused` will render (decision 1).
+    - A lifecycle phase alone never sets it. An entering, re-queued or promoted toast is held only by a reason, and an inactive or detached Toaster is a lifecycle state, not a pause.
+    - Persistent and loading toasts are never held.
+    - **Exiting toasts are excluded (an S1 interpretation, for review).** An exiting toast's countdown is over: it is stopped or expired, and a revival starts a new one. With it included, focus restoration away from a dismissed toast re-rendered that toast only to flip its held state.
+  - **Notification semantics:**
+    - **Time passing:** a running timer's record does not change, so it notifies nobody and renders nothing (49 steps of 100 ms; 4999 ms on mounted toasts).
+    - **Expiry:** still notifies once, as a phase change, with `remaining` 0.
+    - **Pause and resume:** each boundary notifies once, and re-renders exactly the toasts whose held state changes, each with its folded `remaining`. Resume exposes the value the next segment runs from, which T1 recreates from in S2.
+    - **Overlapping reasons:** a reason added or removed while another still holds the toast changes no view and notifies nobody.
+  - **Measured scope, in render counts:**
+    - focus within a toast: that toast;
+    - hover: the finite toasts of that stack whose state changes, and no other position's list;
+    - a global reason: every finite toast whose state changes, and no persistent or loading toast;
+    - the hotkey, Escape and focus restoration: only the toast that gains or loses focus, once.
+  - **P-19:** a pause-only commit runs the list's existing per-commit measurement (layout reads), and nothing more: no seed, flush or release, and every toast stays at rest (`reposition-render.test.tsx`).
+  - **Tests:**
+    - A new `progress-view.test.ts` (22 tests) covers:
+      - the view facts;
+      - time passing;
+      - expiry;
+      - pause, resume and repeated cycles;
+      - overlapping reasons;
+      - focus, stack and global scope;
+      - persistent and loading toasts;
+      - entering;
+      - timeout and non-timeout exits;
+      - revival;
+      - replacement, including finite to persistent;
+      - promise settlement from loading to finite;
+      - detach and re-queue;
+      - promotion.
+
+      Its store-side regression test is named `D-10 (store side)`.
+
+    - These guards were narrowed deliberately (decision 10). Each keeps its invariant and adds only the P-20 exception:
+      - P-15's "renders nothing for timer and pause changes" and "renders nothing for the DOM events that pause toasts" are now exact per-step scopes, with zero renders for time passing;
+      - P-16's hotkey, Escape and focus-restoration render tests now expect only the toast whose focus changes;
+      - `pause.test.ts` "notify nobody" became "notify only at held boundaries";
+      - `defaults.test.ts` lists the three new view fields, and still excludes pause reasons, the clock and pending state.
+    - The `<Toaster progress>` toggle test is unchanged: progress is not wired until S2.
+  - **Mutations:** 12, of which 10 were detected:
+    - held inverted;
+    - persistent held;
+    - exiting held;
+    - held left out of equality;
+    - `remaining` recomputed from the clock;
+    - hover widened to any stack;
+    - global reasons ignored;
+    - held sticky, so resume never notifies;
+    - held as "not running";
+    - `remaining` reported as the duration.
+
+    Two are equivalent by construction:
+    - leaving `remaining` out of equality: every stop that folds it coincides with a held flip or a phase change, and detach removes the view;
+    - leaving `duration` out: it changes only with a new revision.
+
+    Both keys stay, as guards of the invariant.
+
+  - **Validation:** all pass:
+    - `format:check`;
+    - `lint` with the stylesheet contract;
+    - `typecheck`, `typecheck:demo`;
+    - the full suite (34 files, 1,263 tests);
+    - `validate:package`;
+    - `build:demo`.
+  - **Review (approved):** the maintainer approved S1 as implemented, including that an exiting toast is never held. `held` means a finite countdown that is paused and can continue. Once a toast exits, its countdown has ended: a non-timeout exit has folded its `remaining`, and a timeout has none left. Its bar is frozen by the lifecycle, not by a pause, and a revival gets a fresh timer. Lifecycle freeze and pause stay distinct.
+  - **For S2:** derive the running state as `visible` and not held, which matches the stylesheet's `[data-phase='visible']:not([data-paused])`. Recreate the bar whenever `revision`, `remaining`, the phase's running state or `held` changes; under React batching, `remaining` alone still marks a boundary. The S4 hidden-tab Chromium check still applies.
+- **S2, progress DOM and state (done; awaiting review):**
+  - **Change:**
+    - `src/react/ToastItem.tsx`: the strip, the fill and `data-paused`.
+    - `src/react/Toaster.tsx`: the `progress` prop is wired.
+    - `src/react/defaults.ts`: a comment only.
+    - `scripts/check-styles.js`: `data-paused` joins the allowlist.
+
+    The store, the S1 view facts, `styles.css`, the tokens (still 28), the public types and the exports are unchanged. There is no new effect, listener, timer or React state.
+
+  - **DOM:**
+    - A normal toast that shows progress gains a last direct child: `<div class="ret-toast__progress" aria-hidden="true">`, the D1 strip.
+    - The strip holds one `<div class="ret-toast__progress-fill">` with inline `animation-duration` and `animation-delay`, and nothing else: no text, role, `aria-value*`, `tabindex` or other attribute.
+    - `.ret-toast__progress` is the documented BEM hook (§21).
+    - **The fill's class is internal**, like `ret-toast__spinner`: S3 styles it, but it is not documented contract, so the public CSS surface does not grow.
+  - **Presence:** the strip renders only on a normal toast whose resolved progress is on and whose duration is finite.
+    - Resolution keeps P-14's `resolveProgress`: the toast's own option, then the Toaster's prop, then off.
+    - `PositionList` resolves it per item as `!persistent && resolveProgress(...)`, so persistent and loading toasts never receive it.
+    - Custom toasts never render it, even from the Toaster or with the option smuggled past the types.
+    - A loading toast that settles finite gains the strip, and a replacement that becomes persistent loses it.
+  - **`data-paused`:** on the toast root exactly while the S1 view is `held`, normal and custom alike, as an empty attribute.
+    - Never on a persistent, loading or exiting toast.
+    - On an entering toast only for a real pause reason.
+    - It carries no reason.
+  - **Timing:** `animation-duration: {duration}ms` and `animation-delay: -{duration − remaining}ms`, from the S1 facts, rendered only for a finite duration.
+    - A full bar's `-0` formats as `0ms`.
+    - Zero and fractional durations format exactly. There is no `NaN` or `Infinity`, and no clamping.
+  - **Running and frozen state:** no new hook. The stylesheet (S3) runs the fill only under `[data-phase='visible']:not([data-paused])`, which for a rendered finite toast is exactly when the store's timer runs.
+  - **T1 identity:**
+    - The fill's key is `revision | remaining | running`, with `running = phase === 'visible' && !held`, derived from existing state with no new store identity.
+    - Every timer start or stop changes it:
+      - **Entering to visible:** `running` flips while `remaining` and `held` stay.
+      - **Pause and resume:** `held` flips and `remaining` folds.
+      - **Exits:** `running` drops.
+      - **Replacement, revival and settlement:** `revision` changes.
+      - **Detach:** the item unmounts.
+    - A pause and resume that reach React in one batched render change only `remaining`, which still recreates the fill.
+    - Time passing, an overlapping reason and another toast's or stack's pause change none of them, and S1 renders nothing for them anyway.
+    - Only the fill remounts. The strip, the root, the content and the controls keep their nodes.
+  - **Behaviour (5000 ms):**
+    - Entering shows a frozen full bar, and `entered()` creates a new fill: the running segment.
+    - A toast held while entering creates no segment at `entered()`, and its last release does.
+    - A pause at about 2000 ms recreates the fill at `-2000ms` and holds it. Resume recreates it at the same `-2000ms`.
+    - Overlapping reasons recreate it only at the first hold and the final release.
+    - A non-timeout exit freezes the folded value, without `data-paused`. A timeout freezes `-5000ms`, which is empty.
+    - A revival or replacement starts again at `0ms` with the new duration.
+    - A detached toast returns frozen at its kept `-2000ms`, then runs from it.
+  - **Isolation:**
+    - **P-18:** an `animationend` from the fill, named `ret-progress` or even a library name, completes nothing, because of the existing target filter, which is unchanged.
+    - **Announcements:** the strip adds no text and replays nothing.
+    - **Focus:** recreation keeps focus and the action and close nodes, and adds no focusable element.
+    - **P-19:** the root stays the same node, the order is unchanged, and the root has no inline style.
+    - **StrictMode:** one fill and one announcement, with recreation only at boundaries.
+  - **Render scope:**
+    - S1's zero-render time passing still holds.
+    - A `<Toaster progress>` change re-renders exactly the finite normal toasts that leave the option out. Toasts with their own option, persistent, loading and custom toasts never re-render, and the root and content keep their nodes.
+  - **Tests:**
+    - A new `progress-render.test.tsx` (31 tests) covers resolution and presence, structure, `data-paused`, T1, lifecycle and isolation. Its defect-named test is `D-10: …`.
+    - These guards were narrowed (decision 10):
+      - `toast-item.test.tsx` "renders no progress indicator yet" now checks the strip;
+      - `render-count.test.tsx` "a progress change re-renders no toast" is now an exact progress-toggle scope;
+      - `styles.test.ts` accepts `data-paused` in the lint's passing sample.
+  - **Mutations:** 14, all detected:
+    - progress on custom toasts;
+    - progress on persistent or loading toasts;
+    - the toast's `false` losing to the Toaster's `true`;
+    - `data-paused` on exiting toasts;
+    - `data-paused` missing from custom toasts;
+    - a revision-only key;
+    - a key without `running`;
+    - a key using `held` in place of `running`;
+    - a key without `remaining`, killed by the batched pause-and-resume test;
+    - a delay that ignores `remaining`;
+    - a duration from `remaining`;
+    - the key on the toast root;
+    - the P-18 target filter removed;
+    - the strip not `aria-hidden`.
+
+    Recreation on an overlapping reason cannot be mutated into existence: S1 renders nothing for it.
+
+  - **Validation:** all pass:
+    - `format:check`;
+    - `lint` with the stylesheet contract;
+    - `typecheck`, `typecheck:demo`;
+    - the full suite (35 files, 1,295 tests);
+    - `validate:package`;
+    - `build:demo`.
+  - **Review (approved):** the maintainer approved S2 as implemented:
+    - `revision | remaining | running` is the fill's correct animation identity, `running` covers the start at entering to visible, and `remaining` is needed when a pause and resume are batched;
+    - only the fill remounts, and the store is the only clock;
+    - `.ret-toast__progress` is the documented BEM hook, and **`.ret-toast__progress-fill` stays internal** and is never documented as stable surface;
+    - an exiting toast is never held.
+  - **For S3 and S4:**
+    - **S3:** the D1-selected CSS: the `ret-progress` keyframe, the strip and fill placement and the corners, `pointer-events: none`, the two tokens (30), the run and hold selectors, the `:dir(rtl)` origin and forced colours, with its guard narrowing.
+    - **S4:** the hidden-tab and minimised-window Chromium resynchronisation check against production code.
+- **S3, production progress CSS (done; awaiting visual and CSS review):**
+  - **Change:** `src/styles.css` and its contract test (`styles.test.ts`) only. No React, store, timer or T1 change.
+  - **Tokens (30 in all):**
+    - `--ret-progress-height: 3px` on `:where(.ret-toaster)` only, the same in every theme;
+    - `--ret-progress: #52525b` there, and `#a1a1aa` in the dark block and the system-dark block, as with every colour token.
+
+    `--ret-progress` joins the AC-A11Y-6 pairs as meaningful non-text, at 3:1 against the surface (7.73:1 light, 5.81:1 dark). There is no track, radius, duration, easing or semantic token.
+
+  - **Card:** the normal card's rule gains `position: relative`, to anchor the strip, and nothing else: no overflow, clip-path, mask, transform, containment or transition. The custom root already had it, and custom toasts have no strip.
+  - **Strip (`.ret-toast__progress`):**
+    - `position: absolute; inset-block-end: 0; inset-inline: 0; block-size: var(--ret-progress-height); pointer-events: none;`
+    - It sits inside the card's 1px border, out of flow, so it changes no layout.
+    - The safe corners are its own `clip-path: inset(calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 max(0px, var(--ret-radius) - 1px) max(0px, var(--ret-radius) - 1px))`. That is the card's inner curve (radius less border), on a clip box extended upward so the radii are not clamped by the bar's height. `max()` keeps a zero radius valid.
+    - The strip never moves and has no background: there is no track.
+  - **Fill (`.ret-toast__progress-fill`, internal):**
+    - `display: block; block-size: 100%; background: var(--ret-progress); transform-origin: left;`
+    - `animation-name: ret-progress; animation-timing-function: linear; animation-iteration-count: 1; animation-fill-mode: both; animation-play-state: paused;`
+    - Its duration and delay are S2's inline values. It has no radius, so the moving edge is straight.
+  - **Keyframe:** `@keyframes ret-progress { from { transform: scaleX(1) } to { transform: scaleX(0) } }`. It is the fill's own transform and never the root's.
+  - **Run and hold:** `:where(.ret-toast[data-phase='visible']:not([data-paused]) > .ret-toast__progress > .ret-toast__progress-fill) { animation-play-state: running; }`. Entering, held and exiting fills hold, and S2's recreation places each new segment.
+  - **Direction (D-11):**
+    - `transform-origin: left`, and `right` under `:where(.ret-toast__progress-fill:dir(rtl))`.
+    - The fill is anchored at the inline start and depletes toward it (§20).
+    - In LTR its remaining part stays at the physical **left** edge, and the moving edge travels from right to left.
+    - In RTL it stays at the physical **right**, and the edge travels from left to right.
+    - The same markup is used in both, with logical insets.
+  - **Reduced motion:** no rule in the block reaches the strip or the fill, so progress keeps depleting (§22, OQ-22). P-18's enter, exit and spinner rules and P-19's `transition-duration: 0s` are unchanged.
+  - **Forced colours:** `:where(.ret-toast__progress-fill) { background-color: CanvasText; }` in the existing block. The strip has no rule there, and `forced-color-adjust` stays unused.
+  - **Specificity:** every progress rule is a zero-specificity `:where()`, and the token overrides need no selector.
+  - **Guards narrowed (decision 10).** Each keeps its invariant for every other rule:
+    - the token lists and count, from 28 to 30;
+    - "no progress token" became "exactly the two progress tokens, and no stack, spinner, swipe or track token";
+    - the closed keyframe list gains `ret-progress`, and the enter and exit frame test skips it, since it has its own exact test;
+    - "no play state" now allows only the fill's rules;
+    - "no settled transform" allows only the fill's `transform-origin`;
+    - the reduced-motion keyframe count went from 5 to 6;
+    - the public-contract test now has 30 tokens and the four documented `data-*` hooks.
+  - **New contract tests (12)** cover:
+    - token defaults;
+    - the exact keyframe, strip and fill declarations;
+    - D-11 LTR and RTL origins;
+    - run only while `visible` and not `data-paused`, across all three phases, held and not;
+    - the card unclipped, with P-19's transition unchanged;
+    - no other part animated;
+    - no reduced-motion rule on the strip or fill;
+    - the forced-colours system colour with no track;
+    - zero specificity;
+    - no progress rule matching a custom toast.
+  - **Mutations:** 18 CSS mutations, all detected:
+    - the keyframe reversed;
+    - the keyframe removed;
+    - the RTL origin not switched;
+    - progress disabled under reduced motion;
+    - the run selector ignoring `data-paused`;
+    - entering and exiting running;
+    - the colour token bypassed;
+    - the height token bypassed;
+    - the forced-colours rule removed;
+    - card overflow clipping;
+    - a root transform;
+    - a rounded moving edge;
+    - a track;
+    - an extra token;
+    - the strip hit-testable;
+    - the corner clip removed;
+    - a wrong dark colour;
+    - a rule outside `:where()`.
+
+    Whether the fill class is internal is a documentation contract, recorded here, and is not mutation-tested.
+
+  - **Chromium checkpoint (production code, headless Chrome 154 over CDP, a temporary untracked harness with the real `Toaster` and stylesheet, since removed):**
+    - **Tokens, computed:** light and system-light are `#52525b`, dark and system-dark are `#a1a1aa`, and the height is `3px` everywhere.
+    - **Geometry, light and dark:**
+      - fills at exactly 0, 0.05, 0.3, 0.65 and 1;
+      - each fill's start aligned with the strip;
+      - the strip 3px, inset 1px from both sides and the bottom (the border);
+      - transparent, `pointer-events: none`, with no fill radius;
+      - the card `overflow: visible`, `clip-path: none`, `transform: none`, shadow intact;
+      - the card 54px with and without progress, so there is no layout shift.
+    - **Corners (8× crops):** at 5% and 30% the start corner follows the card's curve. At 100% the end corner does too. At 0% nothing shows, and the empty end has no track. The moving edge is straight.
+    - **Pause and resume (6000 ms):**
+      - a real hover held the scale exactly (0.7751 over 1 s, with `data-paused`);
+      - resume continued from 0.7751, with no reset, and fell by 0.1666 over 1 s, which is 1000/6000;
+      - focus held it the same way (0.8322), then it fell by 0.133 over 800 ms;
+      - with hover and focus together, releasing the hover kept it held, and only the final blur resumed it.
+    - **RTL:** the fill is anchored at the strip's right edge (origin `358px`, the right), and the running bar still depletes. LTR is anchored at the left.
+    - **375px:** no horizontal overflow, the strip spans the card less its border, and both controls are hit-testable.
+    - **Forced-colours emulation:** a white fill on the black surface, a transparent strip, no track, `forced-color-adjust: auto`.
+    - **Reduced-motion emulation:**
+      - the root has no animation, a `0s` transition, and no `transform`, `translate` or `scale`;
+      - the spinner is static;
+      - the fill keeps running `ret-progress` and falls by 0.1667 per second;
+      - a hover held it, and resume continued without a reset.
+    - **Consumer override:** `.ret-toaster { --ret-progress-height: 6px; --ret-progress: #ff0000 }` gave a 6px red bar with no selector override.
+    - **Capture note:** a screenshot that resizes the viewport briefly ended the hover, so the held toasts resumed and T1 correctly recreated each fill from the store, replacing a screenshot-only placement. The final captures used no resize, and each toast was confirmed held before and after.
+  - **Limits:** Chromium only, with emulated colour schemes, forced colours and reduced motion. It is not WebKit, Firefox or Windows High Contrast evidence (P-22), nor operating-system or assistive-technology evidence (P-29).
+  - **Validation:** all pass:
+    - `format:check`;
+    - `lint` with the stylesheet contract;
+    - `typecheck`, `typecheck:demo`;
+    - the full suite (35 files, 1,307 tests);
+    - `validate:package`, with `dist/styles.css` identical to the source;
+    - `build:demo`.
+  - **Review (approved):** the maintainer approved S3 as implemented, with no correction, and resolved the direction wording; see the S4 record below.
+  - **For S4:** the hidden-tab and minimised-window Chromium resynchronisation check against this production code, repeated pause and resume, StrictMode, lifecycle edge cases, render counts and mutations. Carry WebKit and Firefox hidden-document behaviour forward to P-22.
+- **S4, hardening (done; awaiting review):**
+  - **Change:** tests and this record only. **No production code changed**: no defect was found.
+    - A new `progress-hardening.test.tsx` (12 tests);
+    - a hidden round trip added to `render-count.test.tsx` and to `reposition-render.test.tsx`.
+  - **Direction (normative, resolved at the S3 review; never to be reopened):**
+    - The remaining fill is anchored at logical `inline-start`, with `scaleX(1 → 0)`.
+    - **LTR:** `transform-origin: left`. The remaining fill stays at the physical left, the moving edge travels right to left, and the vacated space grows from the physical right (inline-end).
+    - **RTL:** `transform-origin: right`. The fill stays at the physical right, the edge travels left to right, and the vacated space grows from the physical left (inline-end).
+    - The same markup is used in both: a test compares the whole toast's markup in each direction.
+    - The S3 request's phrase "depletion moves toward inline-end" was ambiguous. It does not override §20 or this browser-verified behaviour.
+  - **Production Chromium evidence:**
+    - **Setup:** headful Chrome 154 on Windows over CDP. A temporary, untracked harness bundled the real `Toaster`, `toast`, store and stylesheet, with the real P-15 wiring, and is now removed.
+    - **Truth:** read from the bundled store's records.
+    - **Measurement:** each animation frame, the fill's computed `scaleX` against `remaining − (frame − runningSince)`. The error is in ms; a positive error means the bar is behind the timer.
+    - **Recreations:** fill recreations counted by a harness-only `MutationObserver`.
+    - **Genuine tab switch:** a 20 000 ms toast, visible for 2000 ms, then hidden behind another tab for 12 s.
+      - `document.hidden` was true, and the store held at 18 142.6 ms.
+      - On return the first frame read +15.7 ms, a steady value of about one frame that did not grow.
+      - The pre-D0 literal model read −5918 ms there (an empty bar).
+      - The fill was recreated twice, once to hold and once to resume.
+    - **Genuine minimise and restore:** the same toast and timing. The store held at 18 126.9 ms, and on return the error was +11.8 ms (pre-D0: −5920 ms).
+    - **Five 1.5 s hidden cycles (30 000 ms):** per-cycle errors of +5.9, +4.9, +7.8, +8.5 and +10.2 ms, all within a frame. Each cycle derived a fresh fill from the store, with two recreations per cycle, so nothing could accumulate (pre-D0: −1.5 s per cycle, −7.5 s after five).
+    - **Near expiry:** about 550 ms left, then hidden for 3 s.
+      - The store held 540.4 ms. On return the toast was still visible at 0.1745 against an expected 0.174 (+1.6 ms), not empty.
+      - It expired normally once its 540 ms had run.
+    - **Reduced-motion emulation with a genuine tab switch (5 s):**
+      - +9 ms on return;
+      - the fill kept running `ret-progress`;
+      - the root had no animation and a `0s` transition.
+    - **Foreground repetition (30 000 ms toasts):**
+      - 15 real hover cycles (30 boundaries) made exactly 30 recreations, ending at −9.2 ms;
+      - 15 focus cycles made 30 recreations, ending at −1.9 ms, with the same close node throughout.
+      - Neither drifted, reset or emptied early.
+    - **Overlapping reasons:**
+      - the first hover recreated the fill once, held at 0 ms error;
+      - adding focus, then removing the hover, recreated nothing and stayed exact;
+      - the final blur recreated it once, and it ran from the held value (+15.3 ms).
+    - **StrictMode:**
+      - one toast, strip and fill, one announcement and one record;
+      - the same count of creations as without StrictMode (the entering fill, then the running one);
+      - only boundary recreations through a hover and a hidden cycle, and none over 1.5 s of idling;
+      - +13.1 ms afterwards.
+    - **Consumer override:** `--ret-progress-height: 6px` and `--ret-progress: #ff0000` held while running, paused, in dark and in RTL (origin at the right).
+    - **Forced-colours emulation:** unchanged since S3: a system-colour fill, a transparent strip and `forced-color-adjust: auto`.
+  - **jsdom hardening (`progress-hardening.test.tsx`):**
+    - **Timeout races:**
+      - a pause 1 ms before expiry holds at `-4999ms`, and the timeout comes only after resume, with `onAutoClose` once;
+      - a dismissal 1 ms before expiry exits once, with `programmatic`, and no timeout;
+      - a pause just after expiry changes nothing (empty, exiting, unmarked);
+      - a resume with 0.5 ms left runs out to `-5000ms`.
+    - **Duration edges:**
+      - zero gives `0ms` and `0ms`, never `NaN` or `-0`; its 0 ms expiry fires on the next fake tick;
+      - 1 ms runs out to empty;
+      - finite to persistent to finite removes the strip, then returns it full on a fresh fill.
+    - **Lifecycle:** a promoted toast enters full and frozen and runs only once visible. An exit completes while the bar is frozen and the page hidden (P-18).
+    - **The real P-15 `visibilitychange`:**
+      - a hidden round trip holds and resumes at the same folded value, with two recreations;
+      - focus and the close node are kept;
+      - no announcement node is added;
+      - the announcement text is unchanged.
+    - **StrictMode:** exactly one window or document listener of each environment kind, one fill and one record through a hidden cycle.
+    - **Markup:** identical in LTR and RTL.
+  - **Render counts:** a real hidden round trip renders each finite toast exactly twice and a persistent toast never. S1's zero renders for time passing, S2's batched pause-and-resume test and the progress-toggle scope all still hold. CSS animation frames never reach React (no listener, effect or state).
+  - **P-19:** a real hidden round trip recreates every fill on the same roots, in the same order, with no seed, flush or release, and every root at rest. Only the list's per-commit layout reads run.
+  - **Mutations:** 14 across S1 to S3, all detected:
+    - `remaining` dropped from the fill's identity, killed by S2's batched test;
+    - `running` dropped from it;
+    - a global or hidden pause never reaching the view;
+    - elapsed time not folded at a stop;
+    - no recreation at the final resume;
+    - `remaining` computed from the clock in the view;
+    - progress running while held;
+    - entering and exiting running;
+    - progress disabled under reduced motion;
+    - a child `animationend` satisfying P-18;
+    - the root remounting in place of the fill;
+    - detach losing `remaining`;
+    - revival keeping the old timer;
+    - an exiting toast held.
+
+    Recreation on an overlapping reason cannot be mutated into existence: S1 renders nothing for it.
+
+  - **Limits:**
+    - Chromium only (Chrome 154 on Windows), with colour scheme, forced colours and reduced motion emulated.
+    - Not tested: intensive throttling (hidden for more than about 5 minutes), occlusion-only hiding, mobile backgrounding, WebKit and Firefox, Windows High Contrast, and assistive technology.
+  - **Validation:** all pass:
+    - `format:check`;
+    - `lint` with the stylesheet contract;
+    - `typecheck`, `typecheck:demo`;
+    - the full suite (36 files, 1,321 tests);
+    - `validate:package`;
+    - `build:demo`.
+
+    The public set stays at 30 tokens.
+
+  - **Carry-forwards, recorded at S5:**
+    - **P-22:** WebKit and Firefox progress direction and pause synchronisation (§26), including hidden-document resynchronisation, and Windows High Contrast for the fill.
+    - **P-26:**
+      - document `--ret-progress-height`, `--ret-progress`, `.ret-toast__progress` and `data-paused`, but not the fill's class;
+      - that progress keeps depleting under reduced motion;
+      - the inline-start anchoring;
+      - that the normal card is now `position: relative`.
+    - **P-29:** that the strip is never announced, and that progress behaves under the operating system's reduced-motion setting.
+  - **Review (approved):** the maintainer approved S4 and its evidence as recorded, with no correction.
+- **S5, reconciliation (done):**
+  - **Implementation audit (read-only, before cleanup):** the final code matches every approved decision.
+    - **Timer and view (S1):** the store is the only clock. The view carries only the boundary facts: `duration`, the folded `remaining`, and `held`, which is finite, not exiting and paused.
+    - **`data-paused` (decision 1):** finite normal and custom toasts only, never persistent, loading or exiting, and it carries no reason.
+    - **Resolution:** the toast's option, then the Toaster's, then off. Never for custom, persistent or loading toasts.
+    - **DOM (S2):** `.ret-toast__progress` (`aria-hidden`), then `.ret-toast__progress-fill`.
+    - **T1 key:** `revision | remaining | running`.
+    - **CSS (S3):** candidate B, with a static clipped strip, a scaled fill, no track, a straight edge, and no clipping, transform or transition on the root.
+    - **Tokens:** `3px`, `#52525b`, `#a1a1aa`; 30 in all.
+    - **Origins:** `left`, and `right` under `:dir(rtl)`.
+    - **Reduced motion:** no rule reaches progress.
+    - **Forced colours:** `CanvasText` on the fill.
+  - **D-10 is closed by P-20.** Its wording: "progress re-renders every frame and resets on resume. The `requestAnimationFrame` loop calls `setState` every frame. On resume, progress jumps back to 100%."
+    - **No per-frame render:**
+      - S1 time-passing tests show zero notifications and zero renders;
+      - the S4 render counts show a hidden round trip renders each finite toast exactly twice;
+      - there is no rAF, interval or React state in the progress path, and the stylesheet animates the fill.
+    - **No reset on resume:**
+      - `D-10 (store side)` in `progress-view.test.ts` and `D-10: …` in `progress-render.test.tsx` cover pause and resume from the same folded `remaining`;
+      - S4's races, cycles and hidden round trips extend them;
+      - in Chromium, resume continued from 0.7751 with no reset (S3), and a genuinely hidden tab resynchronised to within 15.7 ms (S4).
+  - **D-11 is closed by P-20.** Its wording: "progress is wrong in RTL. The bar is fixed at `left: 0`. The per-toast `rtl` flag only swaps the icon margin."
+    - There is no per-toast flag, and the strip is placed with logical insets.
+    - The fill's origin follows the inherited direction: `left` in LTR, and `right` under `:dir(rtl)`.
+    - The evidence:
+      - the `D-11: …` style test;
+      - same-markup LTR and RTL tests;
+      - the S3 and S4 Chromium runs (anchored at the right in RTL, origin `358px`, still depleting).
+    - The normative reading from S4 stands: the remaining fill is anchored at logical inline-start, and the vacated space grows from inline-end.
+    - P-17 closed the layout half of D-11. Cross-browser confirmation is P-22's.
+  - **AC-PR-1 is met for P-20's scope.** Its wording: "Progress is off by default. When on, it pauses and resumes with the timer, never resets on resume, and causes no React render per frame. (D-10)"
+    - **Off by default:** automated, by the resolution table in `progress-render.test.tsx` and the P-14 `resolveProgress` tests.
+    - **Pauses and resumes with the timer:**
+      - automated, by S2 (T1 recreation at every boundary, run and hold state) and S4 (timeout races, hidden round trips);
+      - structural, in S3 (runs only under `[data-phase='visible']:not([data-paused])`);
+      - in Chromium, S3 and S4 (hover, focus, overlap, a genuine tab switch and minimise).
+    - **Never resets on resume:** automated (the D-10 tests and S4) and in Chromium (S3 and S4).
+    - **No React render per frame:** automated (S1 and S4 render counts). The browser animation is CSS only.
+    - The real-browser proof in WebKit and Firefox is P-22's (§26).
+  - **AC-RTL-1, the progress part, is met for P-20.** Its wording: "In RTL the layout mirrors, progress depletes toward inline-start, and positions stay physical. (D-11)"
+    - P-20 owns "progress depletes toward inline-start". It is met structurally (the origin tests, the same markup) and in Chromium (S3 and S4).
+    - The layout mirroring is P-17's (S3), and physical positions are P-14 and P-17's. P-20 changes neither.
+    - The criterion is verified in real browsers by P-22 (§20: "Playwright verifies RTL"). Its Chromium, WebKit and Firefox confirmation is left there.
+  - **Non-regression:**
+    - **Lifecycle (P-14, P-18):** AC-LC-1 to AC-LC-3 tests pass unchanged. A fill's `animationend` completes nothing, and exits complete while it holds.
+    - **Pausing (P-15):** AC-TM-1 to AC-TM-5 hold. Its render guards were narrowed deliberately (S1), not removed.
+    - **Focus and announcements (P-16):** focus restoration, the hotkey and the live regions are unchanged. Recreation never moves focus or announces anything.
+    - **CSS (P-17):** the AC-CSS-1 lint passes with `data-paused` documented, the themes are intact, and AC-A11Y-6 gains the progress pair.
+    - **Motion (P-18):** enter, exit, the spinner and reduced motion are unchanged.
+    - **Repositioning (P-19):** no seed is caused by progress, the roots stay stable, and the transition is untouched.
+    - **API and package:** the exports are exactly `Toaster` and `toast`, with the same eleven types, and `validate:package` passes.
+  - **Public surface (P-20's additions, for P-26):**
+    - visual behaviour for the existing `progress` option and prop;
+    - `data-paused`;
+    - `.ret-toast__progress`;
+    - `--ret-progress-height`;
+    - `--ret-progress`.
+
+    `.ret-toast__progress-fill` and the `ret-progress` keyframe are internal. No other class, attribute, token, export or type became public, and the count is exactly 30.
+
+  - **Prototype cleanup:**
+    - `demo/p20/` was removed, and `demo/index.tsx` is back to the `v2` file byte for byte: the `?p20` switch and the P-17 stylesheet bypass are gone.
+    - A search for `p20`, the candidate names and `TODO` or `FIXME` finds only this historical record and one test title that cites "D1 candidate B" as provenance. Two `package-lock.json` hashes contain "P20" by coincidence.
+    - The S4 and earlier browser harnesses were never in the tree, and are deleted.
+  - **Tests:** reviewed and kept as they are. Each encodes an invariant:
+    - zero renders as time passes;
+    - boundary-only notifications;
+    - T1 at entering to visible;
+    - batched pause and resume;
+    - hidden and global pauses;
+    - overlapping reasons;
+    - custom toasts excluded;
+    - `data-paused`;
+    - P-18 and P-19 isolation;
+    - reduced motion;
+    - RTL;
+    - the token and guard contract.
+
+    The overlap between the S2 and S4 tests is deliberate: they cover different paths, the store commands and the real P-15 events.
+
+  - **Mutations:** S5 changed only the demo and this record. `src/`, the tests and the scripts are byte-identical to S4 (`022408a`), so the S1 to S4 mutation evidence stands: 12 at S1, 14 at S2, 18 at S3 and 14 at S4. The tests that killed them are all still in the tree.
+  - **Validation (after cleanup):** all pass:
+    - `format:check`;
+    - `lint` with the stylesheet contract;
+    - `typecheck`, `typecheck:demo`;
+    - the full suite (36 files, 1,321 tests);
+    - `build:demo`;
+    - `validate:package` (attw, exactly `Toaster` and `toast`, with `dist/styles.css` identical to the source);
+    - `git diff --check`.
+  - **Browser evidence:** production is byte-identical to S4, so the S3 and S4 Chromium evidence applies unchanged, and no new campaign was run.
+  - **Carry-forwards:** P-22 (WebKit and Firefox direction, pause synchronisation, hidden-document resynchronisation and corners; Windows High Contrast), P-26 (the public surface, behaviour and caveats listed in its entry) and P-29 (screen readers and the operating system's reduced-motion setting). Each is recorded in its own entry.
+  - **Then:** a focused publication review, then the PR into `v2`, CI and a merge commit.
 
 **P-21 Swipe to dismiss**
 
@@ -2581,6 +3221,15 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - the root's computed `offsetParent` being its list.
   - **Reduced motion (AC-MO-3).** Under emulated `prefers-reduced-motion: reduce`, repositioning is instant, with no reposition transition, fade or scale, and the lifecycle still completes.
   - **Scale overlap.** A visual evaluation of the accepted P-18 `scale` × P-19 `transform` composition during an overlapping enter or exit and move: up to about 1.79px, machine-observed in Chromium. P-19 deliberately does not compensate. Only browser evidence of a material, human-visible problem reopens the ownership boundary.
+
+- Carried over from P-20. P-20's browser evidence is Chromium only: headless Chrome 154, plus headful Chrome for genuine hiding, with emulated colour schemes, forced colours and reduced motion. P-22 verifies these in real browsers (§26: "progress direction and pause sync"). They are checks, not requirements added to P-20:
+  - **Direction (AC-RTL-1, D-11).** In Chromium, WebKit and Firefox, the remaining fill is anchored at the inline start: the physical left in LTR and the right in RTL. It depletes toward that edge, and the vacated space opens at the inline end.
+  - **Pause synchronisation (AC-PR-1, D-10).** In WebKit and Firefox:
+    - the bar runs only while the toast is `visible` and not `data-paused`, and holds otherwise;
+    - hover, focus and window blur freeze it, and resume continues from the held fraction without a reset.
+  - **Hidden-document resynchronisation (P-20 decision 3, T1).** As far as the matrix allows, a genuinely hidden tab or minimised window shows the bar at the store's held value on return, without the literal model's run-ahead. Intensive throttling (hidden for more than about 5 minutes), occlusion-only hiding and mobile backgrounding were never tested.
+  - **Safe corners.** The strip's `clip-path` corner follows the card's inner curve at every fraction, and the moving edge is straight.
+  - **Forced colours.** Windows High Contrast for the `CanvasText` fill, with no track.
 
 **P-23 Compatibility and SSR verification**
 
@@ -2638,6 +3287,23 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Duration and reduced motion.** A consumer `transition-duration` or `transition-timing-function` on the root that wins the cascade changes the move's timing. The library's rules have zero specificity, so such a rule also overrides the reduced-motion zero duration, and the move animates even under `prefers-reduced-motion: reduce`.
   - **Browser support.** Repositioning uses `transform`, CSS transitions and ResizeObserver, all within the floor recorded in P-18 D0, decision 6. P-19 does not raise it.
 
+- Notes from P-20 (S1 to S5) for the theming, customisation and accessibility documentation:
+  - **Progress.**
+    - `progress` on a toast and on `<Toaster />` is off by default; the toast's own option wins.
+    - It shows only on a normal toast with a finite duration: never on a custom, loading or persistent toast.
+    - It depletes with the auto-close countdown, holds whenever that countdown is paused, and continues from where it held.
+  - **Public surface (P-20 adds exactly these):**
+    - the documented class `.ret-toast__progress`: the strip at the card's bottom edge;
+    - the attribute `data-paused`: "the finite auto-close countdown for this toast is currently held". It is on finite normal and custom toasts, never on persistent, loading or exiting ones, and does not say why;
+    - the tokens `--ret-progress-height` (3px) and `--ret-progress` (`#52525b` light, `#a1a1aa` dark), which bring the set to 30.
+
+    Do not document `.ret-toast__progress-fill` or the `ret-progress` keyframe: both are implementation details. Describe the behaviour and the tokens.
+
+  - **Direction.** The remaining bar is anchored at the inline start: the left in LTR and the right in RTL. It shrinks toward that edge.
+  - **Reduced motion.** Progress keeps depleting under `prefers-reduced-motion: reduce`, because it shows the remaining time rather than decorating. Enter, exit, the spinner and repositioning stay without motion.
+  - **Accessibility.** The bar is `aria-hidden`, not focusable and not announced. Timing stays adjustable through the pauses (§10).
+  - **Customisation caveat.** A normal toast's card is now `position: relative`, to anchor the strip. Absolutely positioned elements inside its content (`description` or a custom icon) now position against the card.
+
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
 - Note from P-16: in 0.x a toast's text was in the DOM once. In 2.0 its announcement copy is there too, for about 7000 ms, so a test that finds a toast by its text can match twice after upgrading. The guide mentions this and points to the testing note in the P-26 docs rather than repeating it.
@@ -2664,6 +3330,9 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Carried over from P-16: check with the screen-reader matrix (§17.6) that an announcement node is kept long enough to be announced reliably. The retention is 7000 ms (`ANNOUNCEMENT_RETENTION_MS` in `src/react/announcer.ts`). If it is not long enough, change it based on real browser and assistive-technology evidence, not jsdom timing.
 - Carried over from P-18. In the manual cross-browser audit, check reduced motion with the operating system's own setting, not only emulation: toasts appear and disappear without motion and the spinner is static. P-18's evidence is Chromium DevTools emulation (S4).
 - Carried over from P-19. In the same audit, check that stack repositioning is instant under the operating system's reduced-motion setting: remaining toasts take their new places at once. P-19's evidence is Chromium emulation (S4, S5).
+- Carried over from P-20:
+  - With the screen-reader matrix (§17.6), check that the progress strip is never announced or reached by a virtual cursor, and that announcements are unchanged with progress on.
+  - In the same audit, check that progress keeps depleting under the operating system's own reduced-motion setting. P-20's evidence is Chromium emulation (S3, S4).
 - Carried over from P-18. Provide the assistive-technology evidence for the pointer-triggered close question recorded under P-22 (click without focus): how focus restored after a mouse close is experienced with screen readers, before the §10 and §18 contract is changed or confirmed.
 - Carried over from P-17. With the screen-reader matrix (§17.6), check that polite and assertive announcements still work now that the live regions are hidden by the `ret-toaster__live-region` class as well as inline styles (S5), including with the stylesheet loaded and an inline `style` blocked by CSP. Also check touch exploration with screen readers around the region's focus ring (decision 3).
 

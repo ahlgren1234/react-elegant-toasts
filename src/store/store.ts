@@ -156,11 +156,18 @@ const VIEW_KEYS = [
   'phase',
   'options',
   'persistent',
+  'duration',
+  'remaining',
+  'held',
 ] as const satisfies readonly (keyof ToastView)[];
 
 /**
  * The view of a rendered record. The previous view is kept while every render-visible field is
- * unchanged, so record changes that rendering cannot see (timer and pause state) notify nobody.
+ * unchanged, so record changes that rendering cannot see notify nobody. Of the timer and pause
+ * state, rendering sees only run boundaries (P-20 decision 2): the folded `remaining` and whether a
+ * pause reason holds a finite countdown. A running timer's record does not change as time passes,
+ * and a pause reason added or removed while another still holds the toast changes neither field,
+ * so neither notifies.
  */
 function viewOf(
   record: ToastRecord & { phase: ToastView['phase'] },
@@ -178,6 +185,11 @@ function viewOf(
     phase: record.phase,
     options: record.options,
     persistent: record.timer.duration === Infinity,
+    duration: record.timer.duration,
+    remaining: record.timer.remaining,
+    // An exiting toast's countdown is over: it is stopped (or expired) and a revival starts a new
+    // one, so a pause reason no longer holds anything and changes nothing rendered (P-20 S1).
+    held: record.timer.duration !== Infinity && record.phase !== 'exiting' && isPaused(record),
   };
   if (previous && VIEW_KEYS.every(key => previous[key] === next[key])) return previous;
   return Object.freeze(next);
@@ -659,7 +671,9 @@ export function claimAnnouncement(id: ToastId, revision: number): boolean {
 }
 
 // Pause reasons combine as sets (§10, D-07, D-09): setting a reason twice and clearing it once
-// clears it. The active Toaster reports them; pausing and resuming change nothing rendered.
+// clears it. The active Toaster reports them. Rendering sees only the boundaries (P-20 decision
+// 2): a finite toast whose held state changes gets a new view with its folded `remaining`, and a
+// reason that changes no toast's held state notifies nobody.
 
 /** Window focus loss or document visibility loss, which pause every toast. */
 export function setGlobalPause(reason: GlobalPauseReason, on: boolean): void {
