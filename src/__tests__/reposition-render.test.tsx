@@ -659,6 +659,30 @@ describe('pause boundaries (P-20 S1)', () => {
     expectAtRest();
     expect(titlesAt('top-right')).toEqual(['c', 'b', 'a']);
   });
+  it('a hidden round trip recreates the progress fills and seeds nothing (P-20 S4)', () => {
+    render(<Toaster progress />);
+    for (const id of ['a', 'b']) showFinite(id);
+    const roots = [...listAt('top-right').children];
+    const fills = roots.map(root => root.querySelector('.ret-toast__progress-fill'));
+    log = [];
+    const hidden = vi.spyOn(document, 'hidden', 'get');
+    hidden.mockReturnValue(true);
+    act(() => {
+      fireEvent(document, new Event('visibilitychange'));
+    });
+    hidden.mockReturnValue(false);
+    act(() => {
+      fireEvent(document, new Event('visibilitychange'));
+    });
+    hidden.mockRestore();
+    expect([...listAt('top-right').children]).toEqual(roots);
+    roots.forEach((root, index) => {
+      expect(root.querySelector('.ret-toast__progress-fill')).not.toBe(fills[index]);
+    });
+    expect(seeds()).toEqual([]);
+    expect(log.filter(entry => !entry.startsWith('read layout'))).toEqual([]);
+    expectAtRest();
+  });
 });
 
 /** A local ResizeObserver: jsdom has none. */

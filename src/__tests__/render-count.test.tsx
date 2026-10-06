@@ -163,6 +163,35 @@ describe('render counts (§32, D-16)', () => {
     step(() => setGlobalPause('document-hidden', false), { a: 1, b: 1, c: 1, x: 1 }, 1);
   });
 
+  // P-20 S4: a real hidden round trip (P-15's `visibilitychange`) renders each finite toast
+  // exactly twice, once to hold and once to resume, and no persistent toast at all.
+  it('renders each finite toast twice, and no persistent toast, for a hidden round trip', () => {
+    render(<Toaster progress />);
+    act(() => {
+      toast('finite', { id: 'finite' });
+      toast('other', { id: 'other', position: 'bottom-left' });
+      toast('persistent', { id: 'persistent', duration: Infinity });
+    });
+    act(() => {
+      for (const id of ['finite', 'other', 'persistent']) entered(id);
+    });
+    rendersSince();
+    const hidden = vi.spyOn(document, 'hidden', 'get');
+    hidden.mockReturnValue(true);
+    act(() => {
+      fireEvent(document, new Event('visibilitychange'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    hidden.mockReturnValue(false);
+    act(() => {
+      fireEvent(document, new Event('visibilitychange'));
+    });
+    hidden.mockRestore();
+    expect(rendersSince()).toEqual({ finite: 2, other: 2 });
+  });
+
   it('re-renders no persistent or loading toast at a pause boundary (P-20)', () => {
     render(<Toaster />);
     act(() => {
