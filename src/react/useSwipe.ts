@@ -333,8 +333,9 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
   return {
     // A lifecycle change from elsewhere (D0 decision 11). A pending candidate is dropped. An
     // active drag gives up ownership, its pause and capture; an exit then releases from the
-    // current offset with no direction and no snap-back first, and its own reason stands. Any
-    // other phase, revival included, clears every swipe trace, a release's too.
+    // current offset with no direction and no snap-back first, and its own reason stands. A
+    // settle already under way carries on through an exit. Any other phase, revival included,
+    // clears every swipe trace at once, a release's or an unfinished settle's too (S4).
     phaseChanged(phase) {
       const current = gesture;
       if (current && phase !== 'visible') {
@@ -347,7 +348,7 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
         }
         return;
       }
-      if (releasing && phase !== 'exiting') clearVisual();
+      if ((releasing || settle) && phase !== 'exiting') clearVisual();
     },
     dispose() {
       const current = gesture;

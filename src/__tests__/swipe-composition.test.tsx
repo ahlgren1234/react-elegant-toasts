@@ -212,11 +212,11 @@ function remove(id: string) {
   advance();
 }
 
-function pointer(target: Element, kind: string, x: number, time = 0) {
+function pointer(target: Element, kind: string, x: number, time = 0, pointerId = 1) {
   const event = new PointerEvent(kind, {
     bubbles: true,
     cancelable: true,
-    pointerId: 1,
+    pointerId,
     pointerType: 'touch',
     clientX: x,
     clientY: 0,
@@ -228,10 +228,10 @@ function pointer(target: Element, kind: string, x: number, time = 0) {
 }
 
 /** Activates a drag on `item` and moves it to `x` (the offset is x − 10 past activation). */
-function drag(item: Element, x: number) {
-  pointer(item, 'pointerdown', 0);
-  pointer(item, 'pointermove', Math.sign(x) * 10);
-  pointer(item, 'pointermove', x, 1000);
+function drag(item: Element, x: number, pointerId = 1) {
+  pointer(item, 'pointerdown', 0, 0, pointerId);
+  pointer(item, 'pointermove', Math.sign(x) * 10, 0, pointerId);
+  pointer(item, 'pointermove', x, 1000, pointerId);
 }
 
 /** Where a root is on screen: its layout position plus its computed translation. */
@@ -508,5 +508,113 @@ describe('ownership', () => {
     const normal = scenario(false);
     expect(normal).toContain('seed b --ret-swipe-y: -60px');
     expect(scenario(true)).toEqual(normal);
+  });
+});
+
+describe('edge coverage (S4)', () => {
+  const titlesIn = (position: ToastPosition) =>
+    toastsOf(
+      document.querySelector(`.ret-toaster__list[data-position='${position}']`) as Element
+    ).map(titleOf);
+  const flushes = () => log.filter(entry => entry === 'flush').length;
+
+  /** Every seed of a root other than `except` is P-19's plain vertical one. */
+  function expectOrdinarySeeds(except: string) {
+    for (const entry of log.filter(
+      e => / transform: /.test(e) && !e.startsWith(`seed ${except} `)
+    )) {
+      expect(entry).toMatch(/transform: translateY\(-?[\d.]+px\)$/);
+    }
+  }
+
+  const cases = (['top-right', 'bottom-left'] as const).flatMap(position =>
+    (['first', 'middle', 'last'] as const).flatMap(place =>
+      (['insertion', 'removal'] as const).map(change => [position, place, change] as const)
+    )
+  );
+
+  it.each(cases)(
+    '%s, the %s toast dragged, an %s: X kept, Y frozen, one flush',
+    (position, place, change) => {
+      const toward = position.endsWith('left') ? -1 : 1;
+      render(<Toaster />);
+      for (const id of ['a', 'b', 'c']) show(id, position);
+      const order = titlesIn(position);
+      const name = order[{ first: 0, middle: 1, last: 2 }[place]]!;
+      const item = itemOf(name);
+      drag(item, toward * 60);
+      const other = order.find(title => title !== name)!;
+      continuous(item, () => (change === 'insertion' ? show('d', position) : remove(other)));
+      expect(flushes()).toBeLessThanOrEqual(1);
+      expect(log.some(entry => entry.startsWith(`seed ${name} transform`))).toBe(false);
+      expectOrdinarySeeds(name);
+      expect(item.style.getPropertyValue(SWIPE_X)).toBe(`${toward * 50}px`);
+      expect(item.getAttribute(SWIPING)).toBe('drag');
+      expect(itemOf(name)).toBe(item);
+    }
+  );
+
+  it.each(['top-right', 'bottom-left'] as const)(
+    'at %s, a settling, releasing and foreign-releasing middle toast keeps its X',
+    position => {
+      const toward = position.endsWith('left') ? -1 : 1;
+      for (const state of ['settle', 'release', 'foreign'] as const) {
+        render(<Toaster />);
+        for (const id of ['a', 'b', 'c']) show(id, position);
+        const name = titlesIn(position)[1]!;
+        const item = itemOf(name);
+        transition = '0.2s, 0.2s';
+        drag(item, toward * (state === 'release' ? 130 : 60));
+        if (state === 'foreign') act(() => dismiss(name));
+        else pointer(item, 'pointerup', toward * (state === 'release' ? 130 : 60), 2000);
+        expect(item.getAttribute(SWIPING), state).toBe(state === 'settle' ? 'settle' : 'release');
+        inFlight.set(item, { x: toward * 37.5, y: 4 });
+        // No timer runs, so P-18's exit (a 0 ms fallback in jsdom) has not removed it yet.
+        const seed = continuous(item, () =>
+          act(() => {
+            toast('d', { id: 'd', position, duration: Infinity });
+          })
+        );
+        expect(seed?.x, state).toBe(toward * 37.5);
+        expect(flushes()).toBe(1);
+        expectOrdinarySeeds(name);
+        cleanup();
+        act(() => resetStore());
+        inFlight.clear();
+        transition = '0s';
+      }
+    }
+  );
+
+  it('freezes two toasts dragged at once, each under its own pointer', () => {
+    render(<Toaster />);
+    for (const id of ['a', 'b', 'c']) show(id);
+    const [first, last] = [itemOf('c'), itemOf('a')];
+    drag(first, 60, 1);
+    drag(last, 80, 2);
+    log = [];
+    const before = [screenOf(first), screenOf(last)];
+    show('d');
+    expect([screenOf(first), screenOf(last)]).toEqual(before);
+    expect(log.filter(entry => / transform: /.test(entry))).toEqual([
+      'seed b transform: translateY(-60px)',
+    ]);
+    expect(flushes()).toBe(1);
+  });
+
+  it('keeps a dragged toast frozen through a promotion: a removal and an insertion at once', () => {
+    render(<Toaster maxVisible={3} />);
+    for (const id of ['a', 'b', 'c']) show(id);
+    act(() => {
+      toast('q', { id: 'q', duration: Infinity });
+    });
+    expect(recordOf('q')?.phase).toBe('queued');
+    const b = itemOf('b');
+    drag(b, 60);
+    continuous(b, () => remove('c'));
+    expect(recordOf('q')?.phase).not.toBe('queued');
+    expect(b.style.getPropertyValue(SWIPE_X)).toBe('50px');
+    expect(flushes()).toBeLessThanOrEqual(1);
+    expectOrdinarySeeds('b');
   });
 });
