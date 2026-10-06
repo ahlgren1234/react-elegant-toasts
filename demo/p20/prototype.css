@@ -1,0 +1,233 @@
+/*
+ * P-20 D1: demo-only visual prototype of the progress indicator (decision 6). Not the production
+ * stylesheet, not the P-25 demo, and removed by S5 at the latest. It compares placement, corner
+ * treatment, height and neutral colour only; the timer architecture (T1) is locked in D0.
+ *
+ * Every candidate uses the locked technique: one keyframe animating the bar's own
+ * `transform: scaleX(1 → 0)`, linear, held with `animation-play-state: paused` and placed by a
+ * negative `animation-delay`, exactly as production will position a paused bar from `remaining`.
+ * The origin is the inline start, switched under `:dir(rtl)`. Nothing clips the card: no overflow
+ * rule on the toast, and nothing touches the toast root's `transform` or `transition`.
+ */
+
+.p20-page {
+  display: grid;
+  gap: 16px;
+}
+
+.p20-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.p20-controls fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+}
+
+.p20-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 360px));
+  gap: 24px;
+  align-items: start;
+}
+
+.p20-board-surface {
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.p20-board-surface[data-surface='light'] {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.p20-board-surface[data-surface='dark'] {
+  background: #09090b;
+  color: #fafafa;
+}
+
+.p20-column h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.p20-column p.p20-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* A stand-in column for a stack: the production card styles the toasts, not this list. */
+.p20-stack {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.p20-label {
+  margin: 4px 0 -4px;
+  font:
+    600 11px/14px system-ui,
+    sans-serif;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* What production would add to the normal card so the bar can anchor to it: no overflow. */
+.p20-card {
+  position: relative;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Demo-local stand-ins for the two locked public tokens, varied by the controls.
+ */
+.p20-tokens[data-height='2'] {
+  --p20-progress-height: 2px;
+}
+
+.p20-tokens[data-height='3'] {
+  --p20-progress-height: 3px;
+}
+
+.p20-tokens[data-height='4'] {
+  --p20-progress-height: 4px;
+}
+
+.p20-tokens[data-colour='muted'] {
+  --p20-progress: var(--ret-text-muted);
+}
+
+.p20-tokens[data-colour='text'] {
+  --p20-progress: var(--ret-text);
+}
+
+.p20-tokens[data-colour='soft'] {
+  --p20-progress: #71717a;
+}
+
+.p20-tokens[data-colour='soft'][data-theme='dark'] {
+  --p20-progress: #8e8e98;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The keyframe and the paused, delay-positioned animation every candidate's moving part uses.
+ */
+@keyframes p20-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.p20-moving {
+  transform-origin: left;
+  animation-name: p20-progress;
+  animation-duration: 10000ms;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+  animation-iteration-count: 1;
+  animation-play-state: paused;
+}
+
+.p20-moving:dir(rtl) {
+  transform-origin: right;
+}
+
+.p20-animate .p20-moving {
+  animation-play-state: running;
+}
+
+/* The progress element: a direct, decorative child of the card, never hit-tested. */
+.p20-progress {
+  position: absolute;
+  block-size: var(--p20-progress-height);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Candidate A: one inset bar inside the card's bottom padding, clear of the rounded corners.
+ * The element itself scales.
+ */
+.p20-a {
+  inset-block-end: 5px;
+  inset-inline: 12px;
+  background: var(--p20-progress);
+}
+
+.p20-round-ends .p20-a {
+  border-radius: 999px;
+}
+
+/*
+ * Candidates B and C: a static clipping strip on the card's bottom edge, full width, whose
+ * clip-path follows the card's inner corner curve (radius − border). The strip never scales, so
+ * its curve never distorts; only the fill inside it scales. A negative top inset makes the
+ * reference box taller than the strip, so the corner radii are not clamped by the bar's height.
+ */
+.p20-strip {
+  inset-block-end: 0;
+  inset-inline: 0;
+  clip-path: inset(
+    calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 calc(var(--ret-radius) - 1px)
+      calc(var(--ret-radius) - 1px)
+  );
+}
+
+.p20-fill {
+  display: block;
+  block-size: 100%;
+  background: var(--p20-progress);
+}
+
+/* Candidate B: the strip is invisible; the fill alone shows. */
+
+/* Candidate C: the strip shows a neutral track behind the fill. */
+.p20-c {
+  background: var(--ret-border);
+}
+
+/* Rejected B′ (shown only to explain): one full-width element clipped by the same curve, which
+   then scales with it, so the start corner's curve narrows and paints over the card's corner. */
+.p20-b-single {
+  inset-block-end: 0;
+  inset-inline: 0;
+  background: var(--p20-progress);
+  clip-path: inset(
+    calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 calc(var(--ret-radius) - 1px)
+      calc(var(--ret-radius) - 1px)
+  );
+}
+
+/* What a later forced-colours rule could do: draw in a system colour (D0 decision 9). Demo only. */
+@media (forced-colors: active) {
+  .p20-a,
+  .p20-fill,
+  .p20-b-single {
+    background: CanvasText;
+  }
+
+  .p20-c {
+    background: GrayText;
+  }
+}
+
+.p20-contrast {
+  font:
+    11px/14px ui-monospace,
+    monospace;
+  opacity: 0.8;
+}

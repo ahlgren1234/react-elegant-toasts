@@ -2526,7 +2526,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
-- **Status: in progress.** D0 is done. D1 (the visual prototype) is next.
+- **Status: in progress.** D0 is done. D1 (the visual prototype) is built and awaits the maintainer's selection.
 - **Already decided, not reopened here:**
   - `ToastOptions.progress` and `ToasterProps.progress`, off by default, resolved toast, then Toaster, then `false` (§6.3, §6.5, P-14);
   - custom toasts reject progress, in the types and at runtime (§6.4, P-12, AC-API-10);
@@ -2652,6 +2652,30 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
         - the final public documentation (P-26);
         - the final accessibility audit (P-29).
 - **Open until D1:** the placement, the radius and clipping treatment, the two token defaults and the light and dark appearance. Nothing else is open.
+- **D1, visual prototype (built; the maintainer's selection is pending):**
+  - **Where:** `demo/p20/` (`prototype.tsx`, `prototype.css`), opened with `?p20`. The demo skips the P-17 D1 stylesheet there, so the cards are styled by the production stylesheet alone.
+  - **What it shows:**
+    - static cards in the production toast markup, held at 100, 65, 30 and 5%;
+    - short, wrapped, action, close, and action-and-close content;
+    - a loading card, labelled as a visual stress case only;
+    - an RTL pair per candidate;
+    - light and dark side by side.
+  - **How each bar is placed:** a paused animation of a demo keyframe (`scaleX(1 → 0)`, linear), positioned by a negative `animation-delay`, as production will place a held bar. The origin is the inline start, switched under `:dir(rtl)`. No timer runs. An optional CSS-only animate toggle is labelled as not production timing.
+  - **Controls:** height (2, 3 and 4px) and neutral colour (`--ret-text-muted`'s values; a softer #71717a / #8e8e98; `--ret-text`'s values) as demo-local stand-ins for the two tokens. Nothing reaches `src/`, and no candidate is pre-selected.
+  - **Candidates:**
+    - **A, inset:** one bar inside the bottom padding, inset 12px, clear of the corners. The element itself scales. Its ends are square: rounded ends were tried, and `scaleX` flattens them as the bar shortens, so at 5% they look square anyway.
+    - **B, full-width safe corners:** a static, full-width strip on the card's bottom edge. Its `clip-path: inset(… round …)` follows the card's inner corner curve, with a negative top inset so the radii are not clamped by the bar's height. Only the fill inside the strip scales, so the curve never distorts. The strip is the direct child; it is not a wrapper under P-17 decision 3.
+    - **C, track and fill:** B's strip with a visible `--ret-border` track.
+    - **B′, rejected:** the same full-width clip on a single scaled element. The clip scales with the bar, so near empty its start corner narrows and paints over the card's corner. It is shown only on request, as the reason B needs its static strip.
+  - **Constraints, checked in Chromium on all 72 cards:**
+    - no card overflow, clip-path, transform or new transition;
+    - the shadow is intact;
+    - the progress element is a direct, `aria-hidden` child with no focusable descendant;
+    - `pointer-events: none`;
+    - all 90 controls hit-testable, with no bar ever the hit target;
+    - no overlap with content or controls;
+    - card heights identical in every state and with the bar removed.
+  - **The selection** is recorded in this entry once the maintainer chooses, before S1 starts.
 
 **P-21 Swipe to dismiss**
 

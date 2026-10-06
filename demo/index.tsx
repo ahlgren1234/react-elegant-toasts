@@ -3,13 +3,17 @@ import { createRoot } from 'react-dom/client';
 import { Toaster, toast, type ToastOptions, type ToastPosition, type ToastTheme } from '../src';
 import '../src/styles.css';
 import './styles.css';
+import { P20Prototype } from './p20/prototype';
 
 // P-17 D1: the interim visual prototype for the OQ-24 sign-off. Demo only, not the production
 // stylesheet, and not the P-25 demo rebuild. It loads after the production stylesheet and masks
 // it, so `?production-css` skips it and shows the production stylesheet alone (P-17 review).
 const PRODUCTION_CSS_ONLY = new URLSearchParams(window.location.search).has('production-css');
+// P-20 D1: `?p20` shows the progress prototype on the production stylesheet alone. Demo only;
+// removed by S5 at the latest.
+const P20 = new URLSearchParams(window.location.search).has('p20');
 if (PRODUCTION_CSS_ONLY) document.documentElement.classList.add('demo-production-css');
-else void import('./p17-prototype.css');
+else if (!P20) void import('./p17-prototype.css');
 
 const POSITIONS: readonly ToastPosition[] = [
   'top-left',
@@ -363,9 +367,7 @@ const Demo = () => (
       </div>
     </header>
 
-    <main className="demo-content">
-      <Prototype />
-    </main>
+    <main className="demo-content">{P20 ? <P20Prototype /> : <Prototype />}</main>
   </div>
 );
 
