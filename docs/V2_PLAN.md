@@ -3326,7 +3326,42 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **D0, decision record:** this entry. Documentation only.
   - **D1, prototype:** demo-only, under `demo/p21/`, with the real-device checkpoint above. No `src/`, stylesheet, script, test or package change.
   - **D2, lock:** records the D1 evidence, the constants and the composition mechanics in this entry. Documentation only.
-  - **S1, gesture decisions:** pure, internal helpers with their unit tests: direction, clamping, activation, distance and velocity commit, interactive descendants and selection. No DOM wiring, stylesheet or store change.
+  - **S1, gesture decisions (done):** pure, internal helpers with their unit tests: direction, clamping, activation, distance and velocity commit, interactive descendants and selection. No DOM wiring, stylesheet or store change.
+    - **Module:** `src/react/swipe.ts`, internal and not on the package entry (the built entry contains none of it).
+      - It encodes D2 decisions 1 to 4 as the named constants `SWIPE_ACTIVATION_SLOP_PX`, `SWIPE_DOMINANCE_RATIO`, `SWIPE_DISTANCE_WIDTH_FRACTION`, `SWIPE_DISTANCE_MAX_PX`, `SWIPE_VELOCITY_WINDOW_MS`, `SWIPE_VELOCITY_THRESHOLD`, `SWIPE_FADE_WIDTH_FRACTION` and `SWIPE_MIN_OPACITY`.
+      - Directions are a physical sign (`SwipeDirection`, −1 left and 1 right). No function takes a document direction, and the arithmetic reads no global.
+      - Functions:
+        - `allowedDirections`, `isDirectionAllowed`, `directionOf` and `isSwipePointer` (touch and pen);
+        - `activationOf`: `pending`, `activate` with a direction, `forbidden`, or `drop` (below);
+        - `allowedOffset` (forbidden or non-finite gives 0);
+        - `distanceThreshold` and `distanceCommits`;
+        - `releaseVelocity`: the first and last finite samples in [release − 100 ms, release], both inclusive, in event order, with no smoothing, and 0 without two samples or positive elapsed time;
+        - `velocityCommits`;
+        - `releaseDecision`: commit, which rule passed, direction, offset, threshold and velocity;
+        - `swipeOpacity`.
+      - Two small DOM reads cover D0 decision 9:
+        - `protectedTarget` walks from the target to the root, never classing the root, with native controls, editable content, ARIA widget roles and any `[tabindex]` descendant;
+        - `selectionIntersects` uses `Range.intersectsNode`, not `Selection.containsNode`. Under the specification's partial containment, `containsNode` reports a selection wholly inside the toast as not intersecting, and jsdom follows it. The D1 prototype's `containsNode` worked only because of Chromium's behaviour.
+    - **Unusable input:**
+      - a width that is not positive gives the 100 px threshold, never 0, and no fade;
+      - a non-finite offset gives 0 offset and opacity 1;
+      - non-finite activation input stays pending.
+    - **Activation, as encoded:**
+      - `activate` needs |dx| ≥ 10 and |dx| ≥ 1.5 × |dy| (both inclusive) in an allowed direction;
+      - the same in a forbidden direction is `forbidden` and never activates. Whether the candidate then keeps waiting or is dropped is left to S2 (review item);
+      - `drop` is total travel ≥ 10 px without dominance, so a vertical move lets the browser scroll.
+    - **Tests:** `swipe.test.ts`, 111 tests, table-driven, with no fake timers or pointer stubs. They cover all six positions, the pointer types, every activation, clamp, distance, window, velocity-sign and opacity boundary, the release decision, protected targets in normal and custom-like content, the root exclusion, and selection inside, across and outside the toast.
+    - **Mutations:** 24, each detected and restored:
+      - mouse accepted; pen rejected;
+      - left and right swapped; centre one-way; an RTL-style sign inversion;
+      - slop `>` instead of `>=`; dominance `>` instead of `>=`; dominance weakened to 1.2;
+      - no clamp; `max` instead of `min`; distance `>`;
+      - velocity threshold ignored; velocity sign ignored; sign agreement ignored;
+      - window ignored; a stale sample included; a division by zero elapsed time;
+      - OR made AND; no opacity clamp; a 0 threshold for an unusable width;
+      - the root classed as interactive; `containsNode` used;
+      - `drop` never returned; a forbidden direction activating.
+    - **Validation:** `format:check`, `lint`, `typecheck`, `typecheck:demo`, the full suite (37 files, 1,432 tests) and `validate:package` all pass. Nothing else in `src/`, no stylesheet, script, package file or the prototype changed. S2 is next.
   - **S2, drag and cancel:** the toast's native listeners, activation, capture, the `swipe` reason, the CSSOM writes, `data-swiping`, the stylesheet's swipe rule and `touch-action`, and the targeted guard narrowing (decision 6). No dismissal yet, and no P-19 change. Render-count, StrictMode, pause-overlap and cancel tests. Manual checkpoint.
   - **S3, commit, exit and P-19 composition:** the commit, the fly-out, revival clearing the offset, decision 11, and the authorised P-19 changes (decision 8), with P-18 completion untouched and P-19's suites still passing. Manual checkpoint.
   - **S4, hardening:** reduced motion, RTL, custom toasts and the race matrix, with mutations. Manual checkpoint.
