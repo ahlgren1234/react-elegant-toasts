@@ -1,8 +1,8 @@
 // Swipe gesture decisions (§19, P-21 D0 and D2). Internal: nothing here is exported from the
 // package entry, and the constants are implementation details, not options or tokens.
 //
-// Pure and deterministic: no listeners, state, styles or store. The arithmetic touches no global
-// at all; the two DOM helpers at the end only read the nodes they are given. Directions are
+// Pure and deterministic: no listeners, state, style writes or store. The arithmetic touches no
+// global at all; the DOM helpers at the end only read the nodes they are given. Directions are
 // physical, the sign of a horizontal CSS-px displacement, so document direction can never enter
 // (§20, D0 decision 2).
 import type { ToastPosition } from '../types';
@@ -23,6 +23,21 @@ export const SWIPE_VELOCITY_THRESHOLD = 0.4;
 export const SWIPE_FADE_WIDTH_FRACTION = 0.8;
 /** ... and stays at this minimum beyond it. */
 export const SWIPE_MIN_OPACITY = 0.3;
+/** A committed swipe flies this fraction of the toast's width beyond its release offset (D2-7). */
+export const SWIPE_RELEASE_WIDTH_FRACTION = 0.6;
+
+/**
+ * The root's internal swipe state and custom properties (D0 decisions 5 and 6), read by the
+ * stylesheet's swipe rules and by stack repositioning. Implementation details, not tokens or hooks.
+ * `data-swiping` is `drag` (direct manipulation), `settle` (a cancel returning to rest) or
+ * `release` (exiting from the swipe offset), and absent at rest.
+ */
+export const SWIPING = 'data-swiping';
+export const SWIPE_X = '--ret-swipe-x';
+export const SWIPE_Y = '--ret-swipe-y';
+export const SWIPE_OPACITY = '--ret-swipe-opacity';
+/** The fly-out's travel beyond `--ret-swipe-x` while releasing: absent for a foreign exit. */
+export const SWIPE_TRAVEL = '--ret-swipe-travel';
 
 /** A physical horizontal direction: -1 is the physical left, 1 the physical right. */
 export type SwipeDirection = -1 | 1;
@@ -216,6 +231,14 @@ export function releaseDecision(
 }
 
 /**
+ * How far a committed swipe travels beyond its release offset: 0.6 × width in the committed
+ * physical direction (D2 decision 7). A width that is not a positive number travels nowhere.
+ */
+export function releaseTravel(direction: SwipeDirection, width: number): number {
+  return width > 0 ? direction * SWIPE_RELEASE_WIDTH_FRACTION * width : 0;
+}
+
+/**
  * The toast's opacity at a physical offset (D2 decision 4): 1 at rest, falling linearly to 0.3
  * at 0.8 × width and staying there. A width that is not a positive number, or a NaN offset, gives
  * 1: an unusable input never fades the toast.
@@ -245,6 +268,17 @@ export function translationOf(transform: string): { readonly x: number; readonly
     x: Number(values[match[1] ? 12 : 4]),
     y: Number(values[match[1] ? 13 : 5]),
   };
+}
+
+/**
+ * The internal swipe Y of a root under an active drag, whose `transform` the drag owns; undefined
+ * for any other root, at rest, settling or releasing. A style read only, never layout: stack
+ * repositioning reads it to keep a dragged toast frozen under the finger (D2 decisions 11 and 12).
+ */
+export function draggedYOf(root: HTMLElement): number | undefined {
+  if (root.getAttribute(SWIPING) !== 'drag') return undefined;
+  const y = parseFloat(root.style.getPropertyValue(SWIPE_Y));
+  return Number.isFinite(y) ? y : 0;
 }
 
 // D0 decision 9: what a swipe never starts from. Native controls, editable content, ARIA widget

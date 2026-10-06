@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { setToastPause } from '../store/store';
+import { dismiss, setToastPause } from '../store/store';
 import type { ToastView } from '../store/types';
 import type { ToastId, ToastPosition } from '../types';
 import { parseTime } from './motion';
@@ -8,28 +8,32 @@ import {
   allowedOffset,
   isSwipePointer,
   protectedTarget,
+  releaseDecision,
+  releaseTravel,
   selectionIntersects,
   swipeOpacity,
+  SWIPE_OPACITY,
+  SWIPE_TRAVEL,
   SWIPE_VELOCITY_WINDOW_MS,
+  SWIPE_X,
+  SWIPE_Y,
+  SWIPING,
   translationOf,
+  type SwipeDirection,
   type SwipeSample,
 } from './swipe';
 import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect';
 
-// Swipe on a toast root (§19, P-21 S2): touch and pen drag a visible toast toward its edge, and a
-// release springs it back. Committing a swipe is S3's. The decisions are `swipe.ts`'s; this owns
-// the gesture on one root: native Pointer Events on the root only, so containment follows the
-// DOM (P-15), and no window or document listener (§32). Gesture state lives in a closure, never in
-// React state or the store. A move writes only the root's internal custom properties, so it
-// renders nothing and notifies nobody; the store hears only the `swipe` pause reason, set when a
-// gesture activates and cleared when it ends (D0 decisions 4 and 5, D2 decision 12).
+// Swipe on a toast root (§19, P-21 S2 and S3): touch and pen drag a visible toast toward its edge.
+// A release past the distance or velocity threshold dismisses it with reason `swipe` and flies it
+// on; any other release springs it back. The decisions are `swipe.ts`'s; this owns the gesture on
+// one root: native Pointer Events on the root only, so containment follows the DOM (P-15), and no
+// window or document listener (§32). Gesture state lives in a closure, never in React state or the
+// store. A move writes only the root's internal custom properties, so it renders nothing and
+// notifies nobody; the store hears only boundaries: the `swipe` pause reason, set when a gesture
+// activates and cleared when it ends, and one `dismiss(id, "swipe")` on a commit (D0 decisions 4
+// and 5, D2 decision 12). The fly-out is cosmetic: P-18's exit alone completes the lifecycle.
 
-/** Internal custom properties on the root, read by the stylesheet's swipe rules. Not tokens. */
-export const SWIPE_X = '--ret-swipe-x';
-export const SWIPE_Y = '--ret-swipe-y';
-export const SWIPE_OPACITY = '--ret-swipe-opacity';
-/** The internal state hook on the root (D0 decision 6): `drag` or `settle`, absent at rest. */
-export const SWIPING = 'data-swiping';
 /** Added to the snap-back's computed time before its cosmetic cleanup runs regardless. */
 export const SETTLE_MARGIN_MS = 50;
 
@@ -50,7 +54,9 @@ interface Active {
   /** The root's visual X at activation, so activating causes no jump. */
   readonly baseX: number;
   readonly width: number;
-  /** Pointer samples within the velocity window, for the release decision (S3). */
+  /** The allowed offset last written, the toast's current visual X. */
+  offset: number;
+  /** Pointer samples within the velocity window, for the release decision. */
   readonly samples: SwipeSample[];
   captured: boolean;
 }
@@ -82,8 +88,8 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
   let gesture: Pending | Active | null = null;
   /** Whether this gesture set the `swipe` reason, so only its own reason is ever cleared. */
   let paused = false;
-  /** An active drag's offset kept as the start of an exit that began elsewhere (D0-11). */
-  let held = false;
+  /** The root is in the release state, exiting from its swipe offset, until the toast goes. */
+  let releasing = false;
   let settle: { readonly timer: ReturnType<typeof setTimeout>; readonly onEnd: () => void } | null =
     null;
 
@@ -102,7 +108,7 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
 
   /** Removes the internal properties it wrote, touching nothing at rest. */
   const clearProperties = () => {
-    for (const property of [SWIPE_X, SWIPE_Y, SWIPE_OPACITY]) {
+    for (const property of [SWIPE_X, SWIPE_Y, SWIPE_OPACITY, SWIPE_TRAVEL]) {
       if (root.style.getPropertyValue(property) !== '') root.style.removeProperty(property);
     }
   };
@@ -110,7 +116,7 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
   /** Removes every trace of the swipe from the root; a root at rest is left untouched. */
   const clearVisual = () => {
     stopSettle();
-    held = false;
+    releasing = false;
     if (root.hasAttribute(SWIPING)) root.removeAttribute(SWIPING);
     clearProperties();
     if (root.getAttribute('style') === '') root.removeAttribute('style');
@@ -124,7 +130,7 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
    */
   const startSettle = () => {
     stopSettle();
-    held = false;
+    releasing = false;
     clearProperties();
     root.setAttribute(SWIPING, 'settle');
     const delay = settleDelay(root);
@@ -143,6 +149,22 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
     };
     root.addEventListener('transitionend', onEnd);
     settle = { timer: setTimeout(onEnd, delay), onEnd };
+  };
+
+  /**
+   * Exits from the drag's offset, with no snap-back (D2 decisions 6 to 9 and 12). X starts where
+   * the toast is and, for a commit, travels on in its direction; Y goes to 0, so it finishes any
+   * interrupted reposition toward the layout. The stylesheet carries `transform` on the exit timing
+   * and never transitions opacity, so P-18's exit fades from the swipe opacity. A foreign exit
+   * travels nowhere. Cosmetic only: nothing waits for it, and the toast's removal clears it.
+   */
+  const startRelease = (offset: number, travel: number) => {
+    stopSettle();
+    releasing = true;
+    root.style.setProperty(SWIPE_X, `${offset}px`);
+    root.style.setProperty(SWIPE_Y, '0px');
+    if (travel !== 0) root.style.setProperty(SWIPE_TRAVEL, `${travel}px`);
+    root.setAttribute(SWIPING, 'release');
   };
 
   const releaseCapture = (active: Active) => {
@@ -165,7 +187,22 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
     if (restore) startSettle();
   };
 
+  /**
+   * A successful release (D0 decision 4): ownership ends first, then the dismissal, while `swipe`
+   * still holds the timer, then the reason clears, so the exiting toast is never held. Then
+   * capture goes and the fly-out starts. If another dismissal won first, the store keeps its
+   * reason.
+   */
+  const commit = (active: Active, direction: SwipeDirection) => {
+    gesture = null;
+    dismiss(id, 'swipe');
+    setPause(false);
+    releaseCapture(active);
+    startRelease(active.offset, releaseTravel(direction, active.width));
+  };
+
   const write = (active: Active, offset: number, y?: number) => {
+    active.offset = offset;
     root.style.setProperty(SWIPE_X, `${offset}px`);
     if (y !== undefined) root.style.setProperty(SWIPE_Y, `${y}px`);
     root.style.setProperty(SWIPE_OPACITY, String(swipeOpacity(offset, active.width)));
@@ -195,6 +232,7 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
       activationX: event.clientX,
       baseX: visual.x,
       width: root.offsetWidth,
+      offset: 0,
       samples: [{ x: event.clientX, time: event.timeStamp }],
       captured,
     };
@@ -237,10 +275,17 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
     ) {
       current.samples.shift();
     }
-    write(current, allowedOffset(position, current.baseX + (event.clientX - current.activationX)));
+    track(current, event);
   };
 
-  /** A release or a cancel. S2 has no commit: every active release springs back (S3 commits). */
+  const track = (active: Active, event: PointerEvent) => {
+    write(active, allowedOffset(position, active.baseX + (event.clientX - active.activationX)));
+  };
+
+  /**
+   * A release or a cancel. A `pointerup` is the gesture's last move, then the release decision:
+   * the distance or a valid velocity commits; anything else, and every cancel, springs back.
+   */
   const onPointerEnd = (event: PointerEvent) => {
     const current = gesture;
     if (!current || event.pointerId !== current.pointerId) return;
@@ -248,8 +293,22 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
       gesture = null;
       return;
     }
-    if (event.type === 'pointerup')
+    if (event.type === 'pointerup') {
       current.samples.push({ x: event.clientX, time: event.timeStamp });
+      track(current, event);
+      const decision = releaseDecision(
+        position,
+        current.offset,
+        current.width,
+        current.samples,
+        event.timeStamp
+      );
+      // A direction is set exactly when the release commits.
+      if (decision.direction !== null) {
+        commit(current, decision.direction);
+        return;
+      }
+    }
     endActive(current, true);
   };
 
@@ -273,8 +332,9 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
 
   return {
     // A lifecycle change from elsewhere (D0 decision 11). A pending candidate is dropped. An
-    // active drag gives up ownership and its pause; an exit keeps the offset as its start, with
-    // no snap-back first (S3 continues it). Any other phase, revival included, clears it.
+    // active drag gives up ownership, its pause and capture; an exit then releases from the
+    // current offset with no direction and no snap-back first, and its own reason stands. Any
+    // other phase, revival included, clears every swipe trace, a release's too.
     phaseChanged(phase) {
       const current = gesture;
       if (current && phase !== 'visible') {
@@ -282,12 +342,12 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
         if (current.kind === 'active') {
           setPause(false);
           releaseCapture(current);
-          if (phase === 'exiting') held = true;
+          if (phase === 'exiting') startRelease(current.offset, 0);
           else clearVisual();
         }
         return;
       }
-      if (held && phase !== 'exiting') clearVisual();
+      if (releasing && phase !== 'exiting') clearVisual();
     },
     dispose() {
       const current = gesture;

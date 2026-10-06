@@ -1,20 +1,23 @@
 // Swipe gesture decisions (§19, P-21 D0 and D2): the pure rules S2 and S3 build on. Physical
 // directions, activation, clamping, the distance and velocity commits, the release decision and
-// the opacity curve, plus the two small DOM reads for protected targets and selection.
+// the opacity curve and the release travel, plus the small DOM reads for protected targets,
+// selection and a dragged root's swipe Y.
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   activationOf,
   allowedDirections,
   allowedOffset,
   directionOf,
   distanceCommits,
+  draggedYOf,
   distanceThreshold,
   isDirectionAllowed,
   isSwipePointer,
   protectedTarget,
   releaseDecision,
+  releaseTravel,
   releaseVelocity,
   selectionIntersects,
   SWIPE_ACTIVATION_SLOP_PX,
@@ -23,6 +26,7 @@ import {
   SWIPE_DOMINANCE_RATIO,
   SWIPE_FADE_WIDTH_FRACTION,
   SWIPE_MIN_OPACITY,
+  SWIPE_RELEASE_WIDTH_FRACTION,
   SWIPE_VELOCITY_THRESHOLD,
   SWIPE_VELOCITY_WINDOW_MS,
   swipeOpacity,
@@ -48,6 +52,7 @@ describe('the locked constants (D2)', () => {
       velocity: SWIPE_VELOCITY_THRESHOLD,
       fade: SWIPE_FADE_WIDTH_FRACTION,
       minOpacity: SWIPE_MIN_OPACITY,
+      release: SWIPE_RELEASE_WIDTH_FRACTION,
     }).toEqual({
       slop: 10,
       dominance: 1.5,
@@ -57,6 +62,7 @@ describe('the locked constants (D2)', () => {
       velocity: 0.4,
       fade: 0.8,
       minOpacity: 0.3,
+      release: 0.6,
     });
   });
 });
@@ -624,6 +630,45 @@ describe('translationOf (S2, D2 decision 12)', () => {
       'matrix3d(1, 0, 0, 1, 12, 30)',
     ]) {
       expect(translationOf(transform)).toEqual({ x: 0, y: 0 });
+    }
+  });
+});
+
+describe('releaseTravel (S3, D2 decision 7)', () => {
+  it.each<[-1 | 1, number, number]>([
+    [1, 300, 180],
+    [-1, 300, -180],
+    [1, 250, 150],
+    [-1, 200, -120],
+    [1, 0, 0],
+    [-1, -40, 0],
+    [1, Number.NaN, 0],
+  ])('direction %d at width %d travels %d', (direction, width, travel) => {
+    expect(releaseTravel(direction, width)).toBe(travel);
+  });
+});
+
+describe('draggedYOf (S3, D2 decisions 11 and 12)', () => {
+  const root = (swiping: string | null, y?: string) => {
+    const item = document.createElement('li');
+    if (swiping) item.setAttribute('data-swiping', swiping);
+    if (y !== undefined) item.style.setProperty('--ret-swipe-y', y);
+    return item;
+  };
+
+  it('reads the internal swipe Y of a dragged root, with no computed style or layout', () => {
+    const read = vi.spyOn(window, 'getComputedStyle');
+    expect(draggedYOf(root('drag', '-19.94px'))).toBe(-19.94);
+    expect(draggedYOf(root('drag', '74px'))).toBe(74);
+    expect(draggedYOf(root('drag'))).toBe(0);
+    expect(draggedYOf(root('drag', 'junk'))).toBe(0);
+    expect(read).not.toHaveBeenCalled();
+    read.mockRestore();
+  });
+
+  it('is undefined for every root a drag does not own: at rest, settling or releasing', () => {
+    for (const state of [null, 'settle', 'release']) {
+      expect(draggedYOf(root(state, '12px'))).toBeUndefined();
     }
   });
 });

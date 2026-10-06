@@ -468,10 +468,16 @@
  * Swipe (§19, P-21). Touch and pen drag a toast toward its edge. The renderer writes the offset and
  * opacity to internal custom properties on the root, and these rules use them only while the
  * root's internal `data-swiping` says so; neither the attribute nor the properties are public
- * hooks or tokens. At rest neither rule applies, so the root keeps no transform. `pan-y` leaves
+ * hooks or tokens. At rest no rule applies, so the root keeps no transform. `pan-y` leaves
  * vertical scrolling to the browser. During a drag nothing transitions, so the toast follows the
  * pointer. A cancel settles: the offset is gone, and the reposition timing above carries
  * `transform` and `opacity` back to rest, or at once under reduced motion (below).
+ *
+ * A release exits from the swipe offset while P-18's exit runs: `transform` travels on by the
+ * renderer's internal travel, on the exit's own duration and easing, so a token override times
+ * both. Opacity holds the swipe value and never transitions, since a running transition would
+ * override P-18's exit fade, which starts from it. Under reduced motion there is no travel (below).
+ * The lifecycle never waits for the release.
  */
 :where(.ret-toast) {
   touch-action: pan-y;
@@ -485,6 +491,17 @@
 
 :where(.ret-toast[data-swiping='settle']) {
   transition-property: transform, opacity;
+}
+
+:where(.ret-toast[data-swiping='release']) {
+  transform: translate(
+    calc(var(--ret-swipe-x, 0px) + var(--ret-swipe-travel, 0px)),
+    var(--ret-swipe-y, 0px)
+  );
+  opacity: var(--ret-swipe-opacity, 1);
+  transition-property: transform;
+  transition-duration: var(--ret-exit-duration);
+  transition-timing-function: var(--ret-exit-easing);
 }
 
 /*
@@ -555,9 +572,11 @@
  * the lifecycle finds no library animation and completes at once (§9 rule 3). The tokens stay as
  * they are. Stack repositioning (P-19) is instant: its transition takes no time, so a moved
  * toast is at its new place at once, with no fade or translation instead; the renderer still
- * seeds and releases it as usual. It comes after every motion rule, so it wins at the same zero
- * specificity. CSS only: nothing in JavaScript reads the preference. The progress fill (above) is
- * deliberately absent: it shows the remaining time, so it keeps depleting (§22, OQ-22).
+ * seeds and releases it as usual. A swipe's snap-back and release take no time, and a release
+ * travels nowhere: the toast leaves from where it was dragged (P-21). It comes after every motion
+ * rule, so it wins at the same zero specificity. CSS only: nothing in JavaScript reads the
+ * preference. The progress fill (above) is deliberately absent: it shows the remaining time, so
+ * it keeps depleting (§22, OQ-22).
  */
 @media (prefers-reduced-motion: reduce) {
   :where(.ret-toast[data-phase='entering'], .ret-toast[data-phase='exiting']) {
@@ -570,6 +589,10 @@
 
   :where(.ret-toast) {
     transition-duration: 0s;
+  }
+
+  :where(.ret-toast[data-swiping='release']) {
+    transform: translate(var(--ret-swipe-x, 0px), var(--ret-swipe-y, 0px));
   }
 }
 

@@ -1,13 +1,14 @@
-// Swipe drag and cancel on the real toast root (§19, P-21 S2). jsdom has Pointer Events but no
-// pointer capture, layout or CSS transitions, so capture is stubbed on each root, and the computed
-// style is stubbed where a test needs a snap-back time or a visual offset. Successful dismissal is
-// S3's: here every release springs back.
+// Swipe on the real toast root (§19, P-21 S2 and S3): drag, cancel, commit and release. jsdom has
+// Pointer Events but no pointer capture, layout, CSS transitions or animations, so capture is
+// stubbed on each root, and the computed style is stubbed where a test needs a snap-back time, a
+// visual offset or an exit animation. Event times are explicit, so velocities are exact. The
+// composition with stack repositioning (P-19) is `swipe-composition.test.tsx`'s.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Profiler, StrictMode, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster, toast, type ToastOptions } from '../index';
 import { dismiss, inspectRecords, resetStore, setStackPause, subscribe } from '../store/store';
-import { SWIPE_OPACITY, SWIPE_X, SWIPE_Y, SWIPING } from '../react/useSwipe';
+import { SWIPE_OPACITY, SWIPE_TRAVEL, SWIPE_X, SWIPE_Y, SWIPING } from '../react/swipe';
 
 const inToasts = { ignore: 'script, style, [aria-live] *' };
 const itemOf = (text: string) => screen.getByText(text, inToasts).closest('li') as HTMLLIElement;
@@ -23,25 +24,26 @@ interface PointerInit {
   readonly x?: number;
   readonly y?: number;
   readonly type?: string;
+  /** The event's `timeStamp`, in ms. */
+  readonly time?: number;
 }
 
 function pointer(
   target: Element,
   kind: string,
-  { id = 1, x = 0, y = 0, type = 'touch' }: PointerInit = {}
+  { id = 1, x = 0, y = 0, type = 'touch', time = 0 }: PointerInit = {}
 ) {
+  const event = new PointerEvent(kind, {
+    bubbles: true,
+    cancelable: true,
+    pointerId: id,
+    pointerType: type,
+    clientX: x,
+    clientY: y,
+  });
+  Object.defineProperty(event, 'timeStamp', { value: time });
   act(() => {
-    fireEvent(
-      target,
-      new PointerEvent(kind, {
-        bubbles: true,
-        cancelable: true,
-        pointerId: id,
-        pointerType: type,
-        clientX: x,
-        clientY: y,
-      })
-    );
+    fireEvent(target, event);
   });
 }
 
@@ -62,19 +64,28 @@ function stubCapture(root: HTMLElement) {
   return { held, set, release };
 }
 
-/** A computed style for the root: a visual offset and a snap-back time jsdom cannot resolve. */
-function stubStyle(root: HTMLElement, { transform = 'none', transition = '0s' } = {}) {
+/**
+ * A computed style for the root: a visual offset, a snap-back time and an exit animation jsdom
+ * cannot resolve.
+ */
+function stubStyle(
+  root: HTMLElement,
+  { transform = 'none', transition = '0s', animation = 'none', animationDuration = '0s' } = {}
+) {
   const real = window.getComputedStyle.bind(window);
   return vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
     if (element !== root) return real(element, pseudo);
-    return {
+    const values: Record<string, string> = {
       transform,
       transitionDuration: transition,
       transitionDelay: '0s',
-      animationName: 'none',
-      animationDuration: '0s',
+      animationName: animation,
+      animationDuration,
       animationDelay: '0s',
-    } as CSSStyleDeclaration;
+    };
+    const getPropertyValue = (property: string) =>
+      values[property.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())] ?? '';
+    return { ...values, getPropertyValue } as unknown as CSSStyleDeclaration;
   });
 }
 
@@ -83,8 +94,9 @@ const swipeState = (root: HTMLElement) => ({
   x: root.style.getPropertyValue(SWIPE_X),
   y: root.style.getPropertyValue(SWIPE_Y),
   opacity: root.style.getPropertyValue(SWIPE_OPACITY),
+  travel: root.style.getPropertyValue(SWIPE_TRAVEL),
 });
-const REST = { swiping: null, x: '', y: '', opacity: '' };
+const REST = { swiping: null, x: '', y: '', opacity: '', travel: '' };
 
 function show(
   options: ToastOptions = {},
@@ -349,7 +361,13 @@ describe('activation and drag', () => {
     const { root } = show();
     pointer(root, 'pointerdown');
     pointer(root, 'pointermove', { x: 10 });
-    expect(swipeState(root)).toEqual({ swiping: 'drag', x: '0px', y: '0px', opacity: '1' });
+    expect(swipeState(root)).toEqual({
+      swiping: 'drag',
+      x: '0px',
+      y: '0px',
+      opacity: '1',
+      travel: '',
+    });
   });
 
   it('freezes a visual offset part-way through a transition at activation (D2 decision 12)', () => {
@@ -370,6 +388,7 @@ describe('activation and drag', () => {
       x: '60px',
       y: '0px',
       opacity: String(1 - 0.7 * (60 / 240)),
+      travel: '',
     });
     pointer(root, 'pointermove', { x: 400 });
     expect(swipeState(root).x).toBe('390px');
@@ -427,20 +446,36 @@ describe('activation and drag', () => {
   });
 });
 
-describe('release and cancel (S2: every release springs back)', () => {
-  it('springs back even past both thresholds, and never dismisses', () => {
+describe('release and cancel below both thresholds', () => {
+  it('springs back from a slow release short of the distance, and never dismisses', () => {
     const onDismiss = vi.fn();
     const onAutoClose = vi.fn();
     const { root } = show({ onDismiss, onAutoClose });
     pointer(root, 'pointerdown');
     pointer(root, 'pointermove', { x: 10 });
-    pointer(root, 'pointermove', { x: 600 });
-    pointer(root, 'pointerup', { x: 600 });
+    pointer(root, 'pointermove', { x: 109, time: 1000 }); // 99 px of a 100 px threshold
+    pointer(root, 'pointerup', { x: 109, time: 2000 });
     advance(10_000);
     expect(recordOf()?.phase).toBe('visible');
     expect(onDismiss).not.toHaveBeenCalled();
     expect(onAutoClose).not.toHaveBeenCalled();
     expect(swipeState(root)).toEqual(REST);
+  });
+
+  it('never commits from a pointercancel or a lost capture, however far the drag went', () => {
+    for (const end of ['pointercancel', 'lostpointercapture']) {
+      const { root } = show();
+      dragTo(root, 300);
+      if (end === 'pointercancel') pointer(root, 'pointercancel', { x: 300 });
+      else
+        act(() => {
+          root.dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1 }));
+        });
+      expect(recordOf()?.phase).toBe('visible');
+      expect(swipeState(root)).toEqual(REST);
+      cleanup();
+      resetStore();
+    }
   });
 
   it('clears the pause at release, before the cosmetic snap-back finishes', () => {
@@ -450,7 +485,7 @@ describe('release and cancel (S2: every release springs back)', () => {
     pointer(root, 'pointerup', { x: 60 });
     expect(pausedBy()).toEqual([]);
     expect(capture.held.size).toBe(0);
-    expect(swipeState(root)).toEqual({ swiping: 'settle', x: '', y: '', opacity: '' });
+    expect(swipeState(root)).toEqual({ ...REST, swiping: 'settle' });
     advance(249);
     expect(swipeState(root).swiping).toBe('settle');
     advance(1);
@@ -511,6 +546,333 @@ describe('release and cancel (S2: every release springs back)', () => {
     pointer(root, 'pointerup', { x: 60 });
     dragTo(root, 30, { id: 2 });
     expect(swipeState(root)).toMatchObject({ swiping: 'drag', x: '20px' });
+  });
+});
+
+/** Drags from the origin to `x` at `slowMs` after activation, then lifts there `liftMs` later. */
+function swipe(root: Element, x: number, { slowMs = 1000, liftMs = 1000 } = {}) {
+  const start = Math.sign(x) * 10;
+  pointer(root, 'pointerdown', { x: 0 });
+  pointer(root, 'pointermove', { x: start, time: 0 });
+  pointer(root, 'pointermove', { x, time: slowMs });
+  pointer(root, 'pointerup', { x, time: slowMs + liftMs });
+}
+
+/** A flick: activation at x ±10 at 0 ms, then a lift at `x` after `ms`, with no move between. */
+function flick(root: Element, x: number, ms: number) {
+  const start = Math.sign(x) * 10;
+  pointer(root, 'pointerdown', { x: 0 });
+  pointer(root, 'pointermove', { x: start, time: 0 });
+  pointer(root, 'pointerup', { x, time: ms });
+}
+
+describe('commit (S3, D2 decisions 2, 3 and 6 to 9)', () => {
+  describe('the release decision', () => {
+    it('commits by distance once the offset reaches min(0.4 × width, 100 px), inclusively', () => {
+      for (const [width, offset, commits] of [
+        [300, 100, true], // capped at 100
+        [300, 99.5, false],
+        [200, 80, true], // 0.4 × 200
+        [200, 79.5, false],
+        [400, 160, true],
+      ] as const) {
+        const { root } = show();
+        Object.defineProperty(root, 'offsetWidth', { configurable: true, value: width });
+        swipe(root, 10 + offset); // slow: 0.1 px/ms at most
+        expect(recordOf()?.phase, `${width}: ${offset}`).toBe(commits ? 'exiting' : 'visible');
+        cleanup();
+        resetStore();
+      }
+    });
+
+    it('commits a short, fast flick by velocity, at exactly 0.4 px/ms and not below', () => {
+      for (const [distance, ms, commits] of [
+        [30, 40, true], // 0.75 px/ms over 30 px
+        [40, 100, true], // exactly 0.4 px/ms, the window's first sample included
+        [39.9, 100, false], // 0.399 px/ms
+        [40, 101, false], // the activation sample has left the window: one sample, no velocity
+      ] as const) {
+        const { root } = show();
+        flick(root, 10 + distance, ms);
+        expect(recordOf()?.phase, `${distance} in ${ms}`).toBe(commits ? 'exiting' : 'visible');
+        cleanup();
+        resetStore();
+      }
+    });
+
+    it('ignores a fast velocity in the direction the position forbids', () => {
+      const { root } = show(); // top-right: right only
+      pointer(root, 'pointerdown');
+      pointer(root, 'pointermove', { x: 10, time: 0 });
+      pointer(root, 'pointermove', { x: 90, time: 500 });
+      pointer(root, 'pointerup', { x: 50, time: 580 }); // -0.5 px/ms, 40 px still out to the right
+      expect(recordOf()?.phase).toBe('visible');
+      expect(swipeState(root)).toEqual(REST);
+    });
+
+    it('ignores a fast velocity that disagrees with the offset, even where both are allowed', () => {
+      const { root } = show({ position: 'bottom-center' });
+      pointer(root, 'pointerdown');
+      pointer(root, 'pointermove', { x: 10, time: 0 });
+      pointer(root, 'pointermove', { x: 90, time: 500 });
+      pointer(root, 'pointerup', { x: 50, time: 580 }); // left at 0.5 px/ms, offset +40
+      expect(recordOf()?.phase).toBe('visible');
+    });
+
+    it('commits either way at a centre position, flying on in the committed direction', () => {
+      for (const position of ['top-center', 'bottom-center'] as const) {
+        for (const direction of [-1, 1]) {
+          const { root } = show({ position });
+          swipe(root, direction * 130);
+          expect(recordOf()?.exit?.reason).toBe('swipe');
+          expect(swipeState(root)).toMatchObject({
+            swiping: 'release',
+            x: `${direction * 120}px`,
+            travel: `${direction * 180}px`,
+          });
+          cleanup();
+          resetStore();
+        }
+      }
+    });
+
+    it('commits only toward the edge: left positions left, right positions right', () => {
+      for (const [position, toward] of [
+        ['top-left', -1],
+        ['bottom-left', -1],
+        ['top-right', 1],
+        ['bottom-right', 1],
+      ] as const) {
+        const away = show({ position });
+        // Activated toward the edge, then dragged far past zero the other way: clamped, no commit.
+        pointer(away.root, 'pointerdown');
+        pointer(away.root, 'pointermove', { x: toward * 10, time: 0 });
+        pointer(away.root, 'pointermove', { x: -toward * 300, time: 100 });
+        pointer(away.root, 'pointerup', { x: -toward * 400, time: 120 });
+        expect(recordOf()?.phase, position).toBe('visible');
+        cleanup();
+        resetStore();
+        const { root } = show({ position });
+        swipe(root, toward * 130);
+        expect(recordOf()?.exit?.reason, position).toBe('swipe');
+        expect(swipeState(root).travel).toBe(`${toward * 180}px`);
+        cleanup();
+        resetStore();
+      }
+    });
+  });
+
+  describe('the dismissal', () => {
+    it('dismisses with reason swipe exactly once, and onDismiss runs once with it', () => {
+      const onDismiss = vi.fn();
+      const onAutoClose = vi.fn();
+      const { root } = show({ onDismiss, onAutoClose, duration: 5000 });
+      swipe(root, 130);
+      expect(recordOf()).toMatchObject({ phase: 'exiting', exit: { reason: 'swipe' } });
+      // Later pointer events on the exiting root change nothing.
+      pointer(root, 'pointerup', { x: 130 });
+      pointer(root, 'pointercancel', { x: 130 });
+      swipe(root, 300);
+      expect(recordOf()?.exit?.reason).toBe('swipe');
+      advance(0);
+      expect(recordOf()).toBeUndefined();
+      expect(onDismiss.mock.calls).toEqual([[expect.anything(), 'swipe']]);
+      expect(onAutoClose).not.toHaveBeenCalled();
+    });
+
+    it('dismisses while swipe still holds the timer, then clears only swipe: never held exiting', () => {
+      const { root } = show({ duration: 5000 });
+      act(() => setStackPause('top-right', true)); // hover, as touch sets it (P-15)
+      dragTo(root, 130);
+      const seen: { phase: string | undefined; pausedBy: readonly string[] }[] = [];
+      const unsubscribe = subscribe(() => {
+        const record = recordOf();
+        seen.push({ phase: record?.phase, pausedBy: [...(record?.pausedBy ?? [])] });
+      });
+      pointer(root, 'pointerup', { x: 130 });
+      unsubscribe();
+      // dismiss(id, "swipe") first, while swipe still holds the timer. Clearing the reason then
+      // changes no view, since an exiting toast is never held, so it notifies nobody.
+      expect(seen).toEqual([{ phase: 'exiting', pausedBy: ['swipe'] }]);
+      expect(pausedBy()).toEqual([]);
+      expect(root).toHaveAttribute('data-phase', 'exiting');
+      expect(root).not.toHaveAttribute('data-paused');
+      act(() => setStackPause('top-right', false));
+    });
+
+    it('releases capture, after which the loss of capture undoes nothing', () => {
+      const { root, capture } = show();
+      swipe(root, 130);
+      expect(capture.release).toHaveBeenCalledWith(1);
+      expect(capture.held.size).toBe(0);
+      const state = swipeState(root);
+      act(() => {
+        root.dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1 }));
+      });
+      expect(swipeState(root)).toEqual(state);
+      expect(recordOf()?.exit?.reason).toBe('swipe');
+    });
+
+    it('sends the store only the boundaries: 100 moves, then one commit', () => {
+      const { root, commits } = show({ duration: 5000 });
+      const notify = vi.fn();
+      const unsubscribe = subscribe(notify);
+      dragTo(root, 20);
+      expect(notify).toHaveBeenCalledTimes(1); // swipe set at activation
+      const before = commits();
+      for (let x = 21; x <= 120; x += 1) pointer(root, 'pointermove', { x, time: x * 10 });
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(commits()).toBe(before);
+      pointer(root, 'pointerup', { x: 120, time: 1300 });
+      // The dismissal; the swipe reason then clears on an exiting toast, which no view shows.
+      expect(notify).toHaveBeenCalledTimes(2);
+      expect(pausedBy()).toEqual([]);
+      unsubscribe();
+    });
+  });
+
+  describe('the release (no snap-back)', () => {
+    it('starts at the current offset and opacity and travels 0.6 × width further', () => {
+      const { root } = show();
+      dragTo(root, 130);
+      const dragged = swipeState(root);
+      pointer(root, 'pointerup', { x: 130 });
+      expect(swipeState(root)).toEqual({
+        swiping: 'release',
+        x: '120px',
+        y: '0px',
+        opacity: dragged.opacity, // the partly faded swipe value, held for P-18's exit
+        travel: '180px',
+      });
+      expect(Number(dragged.opacity)).toBeLessThan(1);
+      expect(root).not.toHaveAttribute('style', expect.stringContaining('transition'));
+    });
+
+    it('releases from the lift point when the pointer moved on before lifting', () => {
+      const { root } = show({ position: 'bottom-left' });
+      dragTo(root, -100);
+      pointer(root, 'pointerup', { x: -140, time: 2000 });
+      expect(swipeState(root)).toMatchObject({ x: '-130px', travel: '-180px' });
+    });
+
+    it('scales the travel with the width the gesture measured', () => {
+      const { root } = show();
+      Object.defineProperty(root, 'offsetWidth', { configurable: true, value: 250 });
+      swipe(root, 110);
+      expect(swipeState(root).travel).toBe('150px');
+    });
+
+    it('never settles on a commit, even with a snap-back time to wait for', () => {
+      const { root } = show();
+      stubStyle(root, {
+        transition: '0.2s, 0.2s',
+        animation: 'ret-exit-top',
+        animationDuration: '120ms',
+      });
+      swipe(root, 130);
+      expect(swipeState(root).swiping).toBe('release');
+      advance(219); // until P-18's fallback removes it
+      expect(swipeState(root).swiping).toBe('release');
+    });
+
+    it('finishes any frozen vertical offset toward the layout: Y goes to 0', () => {
+      const { root } = show();
+      stubStyle(root, { transform: 'matrix(1, 0, 0, 1, 0, -30)' });
+      dragTo(root, 130);
+      expect(swipeState(root).y).toBe('-30px');
+      pointer(root, 'pointerup', { x: 130 });
+      expect(swipeState(root)).toMatchObject({ swiping: 'release', y: '0px' });
+    });
+  });
+
+  describe('the lifecycle stays P-18’s (D2 decision 6)', () => {
+    const transitionEnd = (target: Element, propertyName: string) =>
+      act(() => {
+        const event = new Event('transitionend', { bubbles: true });
+        Object.assign(event, { propertyName });
+        target.dispatchEvent(event);
+      });
+    const animationEnd = (target: Element, animationName: string) =>
+      act(() => {
+        const event = new Event('animationend', { bubbles: true });
+        Object.defineProperty(event, 'animationName', { value: animationName });
+        target.dispatchEvent(event);
+      });
+
+    it('ignores transitionend: the fly-out ending removes nothing and clears nothing', () => {
+      const onDismiss = vi.fn();
+      const { root } = show({ onDismiss });
+      stubStyle(root, { animation: 'ret-exit-top', animationDuration: '120ms' });
+      swipe(root, 130);
+      const state = swipeState(root);
+      transitionEnd(root, 'transform');
+      transitionEnd(root, 'opacity');
+      expect(recordOf()?.phase).toBe('exiting');
+      expect(root.isConnected).toBe(true);
+      expect(swipeState(root)).toEqual(state);
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it("completes on the root's own exit animationend, once", () => {
+      const onDismiss = vi.fn();
+      const { root } = show({ onDismiss });
+      stubStyle(root, { animation: 'ret-exit-top', animationDuration: '120ms' });
+      swipe(root, 130);
+      animationEnd(root, 'ret-exit-top');
+      expect(recordOf()).toBeUndefined();
+      expect(root.isConnected).toBe(false);
+      advance(1000);
+      expect(onDismiss.mock.calls).toEqual([[expect.anything(), 'swipe']]);
+    });
+
+    it('completes on the computed fallback when no animationend comes', () => {
+      const onDismiss = vi.fn();
+      const { root } = show({ onDismiss });
+      stubStyle(root, { animation: 'ret-exit-top', animationDuration: '120ms' });
+      swipe(root, 130);
+      advance(219);
+      expect(recordOf()?.phase).toBe('exiting');
+      advance(1);
+      expect(recordOf()).toBeUndefined();
+      expect(onDismiss).toHaveBeenCalledOnce();
+    });
+
+    it('under reduced motion (no animation, no transition) dismisses at once from the drag, never settling', () => {
+      const onDismiss = vi.fn();
+      const { root } = show({ onDismiss });
+      stubStyle(root, { transition: '0s', animation: 'none' });
+      dragTo(root, 130);
+      expect(swipeState(root)).toMatchObject({ swiping: 'drag', x: '120px' });
+      const states: (string | null)[] = [];
+      const observer = new MutationObserver(() => states.push(root.getAttribute(SWIPING)));
+      observer.observe(root, { attributes: true, attributeFilter: [SWIPING] });
+      pointer(root, 'pointerup', { x: 130 });
+      expect(swipeState(root)).toMatchObject({ swiping: 'release', x: '120px' });
+      advance(0); // P-18's 0 ms path
+      observer.disconnect();
+      expect(states).not.toContain('settle');
+      expect(recordOf()).toBeUndefined();
+      expect(onDismiss.mock.calls).toEqual([[expect.anything(), 'swipe']]);
+    });
+  });
+
+  it('clears a release when the exiting toast is revived', () => {
+    const { root } = show();
+    swipe(root, 130);
+    expect(swipeState(root).swiping).toBe('release');
+    act(() => {
+      toast('Saved', { id: 't', duration: Infinity });
+    });
+    expect(recordOf()?.phase).toBe('entering');
+    expect(swipeState(root)).toEqual(REST);
+    expect(root).not.toHaveAttribute('style');
+  });
+
+  it('works the same for a custom toast', () => {
+    const { root } = show({}, { custom: true, content: <p>Custom text</p> });
+    swipe(screen.getByText('Custom text', inToasts), 130);
+    expect(recordOf()?.exit?.reason).toBe('swipe');
+    expect(swipeState(root)).toMatchObject({ swiping: 'release', travel: '180px' });
   });
 });
 
@@ -598,20 +960,55 @@ describe('a lifecycle change from elsewhere (D0 decision 11)', () => {
     expect(pausedBy()).toEqual([]);
   });
 
-  it('gives up an active drag but keeps its offset as the start of the exit, with its own reason', () => {
+  it('gives up an active drag and releases from its offset, with no direction and its own reason', () => {
     const onDismiss = vi.fn();
-    const { root, capture } = show({ onDismiss });
+    const { root, capture } = show({ onDismiss, duration: 5000 });
     dragTo(root, 60);
+    const opacity = swipeState(root).opacity;
     act(() => dismiss('t'));
     expect(recordOf()?.phase).toBe('exiting');
+    expect(recordOf()?.exit?.reason).toBe('programmatic');
     expect(pausedBy()).toEqual([]);
     expect(capture.held.size).toBe(0);
-    expect(swipeState(root)).toMatchObject({ swiping: 'drag', x: '50px' }); // no snap-back
+    expect(capture.release).toHaveBeenCalledWith(1);
+    expect(root).not.toHaveAttribute('data-paused');
+    // No snap-back: the release starts at the current offset and opacity, and travels nowhere.
+    expect(swipeState(root)).toEqual({
+      swiping: 'release',
+      x: '50px',
+      y: '0px',
+      opacity,
+      travel: '',
+    });
     pointer(root, 'pointermove', { x: 200 });
+    pointer(root, 'pointerup', { x: 200 });
     expect(swipeState(root).x).toBe('50px'); // no longer owned
+    expect(recordOf()?.exit?.reason).toBe('programmatic');
     advance(0);
     expect(onDismiss).toHaveBeenCalledOnce();
     expect(onDismiss).toHaveBeenCalledWith(expect.anything(), 'programmatic');
+  });
+
+  it('releases with the reason of every other exit: close, action and dismiss-all', () => {
+    const cases: [string, (root: HTMLElement) => void][] = [
+      [
+        'close-button',
+        () => fireEvent.click(screen.getByRole('button', { name: 'Close notification' })),
+      ],
+      ['action', () => fireEvent.click(screen.getByRole('button', { name: 'Undo' }))],
+      ['programmatic', () => dismiss()],
+    ];
+    for (const [reason, end] of cases) {
+      const onDismiss = vi.fn();
+      const { root } = show({ onDismiss, action: { label: 'Undo', onClick: () => undefined } });
+      dragTo(root, 80);
+      act(() => end(root));
+      expect(swipeState(root)).toMatchObject({ swiping: 'release', x: '70px', travel: '' });
+      advance(0);
+      expect(onDismiss.mock.calls).toEqual([[expect.anything(), reason]]);
+      cleanup();
+      resetStore();
+    }
   });
 
   it('clears a kept offset when the exiting toast is revived', () => {
