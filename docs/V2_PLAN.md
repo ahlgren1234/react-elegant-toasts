@@ -2526,7 +2526,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
-- **Status: in progress.** D0 is done. D1 (the visual prototype) is built and awaits the maintainer's selection.
+- **Status: in progress.** D0 and D1 are done, and the D1 visual direction is approved (see the D1 sign-off below). S1 is next. Production implementation has not started.
 - **Already decided, not reopened here:**
   - `ToastOptions.progress` and `ToasterProps.progress`, off by default, resolved toast, then Toaster, then `false` (§6.3, §6.5, P-14);
   - custom toasts reject progress, in the types and at runtime (§6.4, P-12, AC-API-10);
@@ -2651,8 +2651,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
         - the demo redesign (P-25);
         - the final public documentation (P-26);
         - the final accessibility audit (P-29).
-- **Open until D1:** the placement, the radius and clipping treatment, the two token defaults and the light and dark appearance. Nothing else is open.
-- **D1, visual prototype (built; the maintainer's selection is pending):**
+- **Open until D1 (all resolved by the D1 sign-off below):** the placement, the radius and clipping treatment, the two token defaults and the light and dark appearance. Nothing else is open.
+- **D1, visual prototype (done):**
   - **Where:** `demo/p20/` (`prototype.tsx`, `prototype.css`), opened with `?p20`. The demo skips the P-17 D1 stylesheet there, so the cards are styled by the production stylesheet alone.
   - **What it shows:**
     - static cards in the production toast markup, held at 100, 65, 30 and 5%;
@@ -2675,7 +2675,31 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - all 90 controls hit-testable, with no bar ever the hit target;
     - no overlap with content or controls;
     - card heights identical in every state and with the bar removed.
-  - **The selection** is recorded in this entry once the maintainer chooses, before S1 starts.
+  - **Limits:** Chromium evidence only (headless Chrome 154 over CDP, with screenshots and DOM checks). It is not cross-browser, Windows High Contrast or assistive-technology evidence, which stay with P-22 and P-29.
+- **D1 sign-off (done).** The maintainer reviewed the prototype and approved this production visual direction. It resolves decisions 6 and 8 and is locked for S1 to S5:
+  1. **Treatment, candidate B (full-width safe corners):**
+     - A static progress strip sits at the toast's block-end edge, full width, and owns the safe corner treatment: it follows the card's inner corner curve.
+     - The fill sits inside the strip. Only the fill runs the `scaleX(1 → 0)` animation of decision 3; the strip never scales, so its corner geometry never distorts.
+     - **The toast root is not clipped:** no `overflow: hidden`, `overflow: clip`, `clip-path` or equivalent on the root. The root's `transform` and `transition` ownership is unchanged (P-18 decision 6, P-19 D2 decisions 5 and 9).
+  2. **Structure is not a P-17 wrapper:**
+     - The progress visual may contain a fill child.
+     - That fill is the progress visual's own internal structure. It is not a wrapper inserted into the section → list → toast → content or control architecture that P-17 decision 3 protects.
+     - The strip is the toast root's one added direct child (decision 6). It holds no text and takes no focus. Focus restoration reads only the registered library controls, announcements read only `.ret-toast__content`, and repositioning measures only the list's `<li>` roots, so all three ignore it.
+     - Later reviews must not reject the strip and fill structure as a forbidden wrapper.
+  3. **Moving edge:** a clean, straight depletion edge, never rounded. The card's radius is carried only by the static strip's card-side corners, so the edge stays stable as the fill nears zero.
+  4. **Tokens (decision 8 resolved):**
+     - `--ret-progress-height: 3px`: 2px was too close to a hairline and the card border, and 4px was too heavy.
+     - `--ret-progress: #52525b` in light (the default) and `#a1a1aa` in dark. These match `--ret-text-muted` on purpose. They follow the P-17 theme architecture: the light value on the default block, the dark value in the dark block, and the same value in the system-dark block.
+     - The public set becomes exactly **30** in S3. There is no track, radius, duration, easing or semantic progress token, and no type-coloured progress.
+  5. **No track:** there is no visible track behind the fill. B already shows the remaining time clearly, a track adds weight, and in forced-colours emulation C's track was more prominent than its fill.
+  6. **RTL:** the same markup in RTL. Only the fill's `transform-origin` changes, under the `:dir(rtl)` rule (§20), and positioning and insets stay logical.
+  7. **Forced colours:** decision 9 stands. The fill takes a system-colour override, and no track exists to restyle. D1 is not Windows High Contrast evidence.
+  8. **Accessibility and pointer input:** decisions 7 and 11 stand. The progress visual is `aria-hidden="true"`, not focusable and `pointer-events: none`, with no progressbar role and no `aria-value*`. The internal fill adds no accessibility or pointer semantics.
+  9. **The other candidates:**
+     - **A** was viable but not selected. Its inset bar avoids the corners, but it reads as a line inside the card rather than as part of the card's edge, and it would need square ends, because scaled rounded ends distort near empty.
+     - **B′** is rejected. Scaling a single element scales its clip and corner geometry too, which gives wrong corners near empty. B avoids this by separating the static strip from the scaled fill.
+     - **C** was viable but not selected, for the reasons in item 5.
+  10. **Prototype status:** `demo/p20/` stays as a visual reference while S1 to S4 are implemented. S5 removes it at the latest (decision 12).
 
 **P-21 Swipe to dismiss**
 
