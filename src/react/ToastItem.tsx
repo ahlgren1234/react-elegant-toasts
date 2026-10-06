@@ -8,6 +8,7 @@ import { CLOSE_ICON, typeIcon } from './icons';
 import { fallbackDelayOf, libraryAnimationName } from './motion';
 import { useFocusWithinPause } from './useFocusWithinPause';
 import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect';
+import { useSwipe } from './useSwipe';
 
 interface ToastItemProps {
   readonly view: ToastView;
@@ -63,6 +64,10 @@ export const ToastItem = memo(function ToastItem({
     }
     item.toggleAttribute('inert', phase === 'exiting');
   }, [phase]);
+
+  // Touch and pen swipe (§19, P-21), after the effect above, so a gesture learns of an exit once
+  // focus has been restored and `inert` set. Nothing it does renders.
+  useSwipe(ref, id, position, phase);
 
   // Reports the end of an enter or exit (§9 rule 3): the toast root's own `animationend` for the
   // library animation of this phase and edge, or the fallback, whichever comes first. The listener

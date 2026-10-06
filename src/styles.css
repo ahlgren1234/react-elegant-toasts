@@ -465,6 +465,29 @@
 }
 
 /*
+ * Swipe (§19, P-21). Touch and pen drag a toast toward its edge. The renderer writes the offset and
+ * opacity to internal custom properties on the root, and these rules use them only while the
+ * root's internal `data-swiping` says so; neither the attribute nor the properties are public
+ * hooks or tokens. At rest neither rule applies, so the root keeps no transform. `pan-y` leaves
+ * vertical scrolling to the browser. During a drag nothing transitions, so the toast follows the
+ * pointer. A cancel settles: the offset is gone, and the reposition timing above carries
+ * `transform` and `opacity` back to rest, or at once under reduced motion (below).
+ */
+:where(.ret-toast) {
+  touch-action: pan-y;
+}
+
+:where(.ret-toast[data-swiping='drag']) {
+  transform: translate(var(--ret-swipe-x, 0px), var(--ret-swipe-y, 0px));
+  opacity: var(--ret-swipe-opacity, 1);
+  transition-property: none;
+}
+
+:where(.ret-toast[data-swiping='settle']) {
+  transition-property: transform, opacity;
+}
+
+/*
  * Progress (§20, §22, P-20). The strip is the toast's last child, laid over its block-end edge,
  * out of flow, so it changes no layout. It is full width and follows the card's inner corner curve
  * (the card radius less its 1px border) by clipping itself: a negative top inset gives the clip a

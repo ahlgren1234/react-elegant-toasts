@@ -226,6 +226,27 @@ export function swipeOpacity(offsetX: number, width: number): number {
   return Math.max(SWIPE_MIN_OPACITY, 1 - progress * (1 - SWIPE_MIN_OPACITY));
 }
 
+const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
+
+/**
+ * The physical translation of a resolved `transform`: `none`, or the `matrix()` or `matrix3d()`
+ * that computed styles serialise every other transform to (X and Y at indices 4 and 5, or 12 and
+ * 13). Anything else, malformed or not a matrix, reads as no translation. Activation reads the
+ * root's current visual offset with it, part-way through any transition (D2 decision 12).
+ */
+export function translationOf(transform: string): { readonly x: number; readonly y: number } {
+  const match = /^matrix(3d)?\((.*)\)$/.exec(transform.trim());
+  if (!match) return { x: 0, y: 0 };
+  const values = (match[2] ?? '').split(',').map(value => value.trim());
+  if (values.length !== (match[1] ? 16 : 6) || !values.every(value => NUMBER.test(value))) {
+    return { x: 0, y: 0 };
+  }
+  return {
+    x: Number(values[match[1] ? 12 : 4]),
+    y: Number(values[match[1] ? 13 : 5]),
+  };
+}
+
 // D0 decision 9: what a swipe never starts from. Native controls, editable content, ARIA widget
 // roles and anything a consumer made explicitly focusable.
 const INTERACTIVE = [

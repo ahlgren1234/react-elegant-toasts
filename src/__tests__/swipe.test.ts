@@ -26,6 +26,7 @@ import {
   SWIPE_VELOCITY_THRESHOLD,
   SWIPE_VELOCITY_WINDOW_MS,
   swipeOpacity,
+  translationOf,
   type SwipeSample,
   velocityCommits,
 } from '../react/swipe';
@@ -600,5 +601,29 @@ describe('selection (D0 decision 9)', () => {
     const { toast } = setup();
     document.getSelection()?.removeAllRanges();
     expect(selectionIntersects(toast)).toBe(false);
+  });
+});
+
+describe('translationOf (S2, D2 decision 12)', () => {
+  it.each([
+    ['none', { x: 0, y: 0 }],
+    ['matrix(1, 0, 0, 1, 12, -30)', { x: 12, y: -30 }],
+    ['matrix(0.98, 0, 0, 0.98, -4.5, 7.25)', { x: -4.5, y: 7.25 }],
+    ['matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 40, -8, 0, 1)', { x: 40, y: -8 }],
+    ['  matrix(1, 0, 0, 1, 1e2, -2e-1)  ', { x: 100, y: -0.2 }],
+  ])('%s → %j', (transform, expected) => {
+    expect(translationOf(transform)).toEqual(expected);
+  });
+
+  it('reads anything else as no translation', () => {
+    for (const transform of [
+      '',
+      'translateX(10px)',
+      'matrix(1, 0, 0, 1, 12)',
+      'matrix(1, 0, 0, 1, 12, abc)',
+      'matrix3d(1, 0, 0, 1, 12, 30)',
+    ]) {
+      expect(translationOf(transform)).toEqual({ x: 0, y: 0 });
+    }
   });
 });
