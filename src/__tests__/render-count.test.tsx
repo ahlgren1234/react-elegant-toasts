@@ -120,22 +120,73 @@ describe('render counts (§32, D-16)', () => {
     expect(rendersSince()).toEqual({ x: 1 });
   });
 
-  it('renders nothing for timer and pause changes, which the snapshot does not carry', () => {
+  // P-20 S1 (decision 2): time passing renders nothing. The view holds the timer's folded
+  // `remaining`, which changes only at run boundaries, never as a running timer counts down.
+  it('renders and commits nothing while running timers count down (P-20)', () => {
     const { commits } = mountWithToasts();
     const snapshot = getSnapshot();
     const before = commits();
     act(() => {
-      setGlobalPause('window-blur', true);
-      setStackPause('top-right', true);
-      setToastPause('a', 'focus-within', true);
-      setGlobalPause('window-blur', false);
+      vi.advanceTimersByTime(4999);
     });
+    expect(inspectRecords().every(record => record.phase === 'visible')).toBe(true);
     expect(getSnapshot()).toBe(snapshot);
     expect(commits()).toBe(before);
     expect(rendersSince()).toEqual({});
   });
 
-  it('renders nothing more when the dismissed toast held focus, wherever focus moves (P-16)', () => {
+  // Narrowed by P-20 S1 from "renders nothing for timer and pause changes" (P-15): a pause boundary
+  // re-renders exactly the toasts whose held state changes (decision 1), once each, and a reason
+  // that changes no toast's held state renders nothing.
+  it('re-renders, at a pause boundary, only the toasts whose held state changes (P-20)', () => {
+    const { commits } = mountWithToasts();
+    let before = commits();
+    const step = (run: () => void, expected: Record<string, number>, committed: number) => {
+      act(run);
+      expect(rendersSince()).toEqual(expected);
+      expect(commits()).toBe(before + committed);
+      before = commits();
+    };
+    // Focus within one toast: that toast only.
+    step(() => setToastPause('a', 'focus-within', true), { a: 1 }, 1);
+    // Hover on its stack: the rest of that stack only; `a` is already held, `x` is elsewhere.
+    step(() => setStackPause('top-right', true), { b: 1, c: 1 }, 1);
+    // A global reason: only `x` changes; the top-right stack is already held.
+    step(() => setGlobalPause('window-blur', true), { x: 1 }, 1);
+    // Clearing reasons while another still holds each toast renders nothing.
+    step(() => setToastPause('a', 'focus-within', false), {}, 0);
+    step(() => setStackPause('top-right', false), {}, 0);
+    step(() => setGlobalPause('document-hidden', true), {}, 0);
+    step(() => setGlobalPause('window-blur', false), {}, 0);
+    // The last reason clears: every toast resumes, once each.
+    step(() => setGlobalPause('document-hidden', false), { a: 1, b: 1, c: 1, x: 1 }, 1);
+  });
+
+  it('re-renders no persistent or loading toast at a pause boundary (P-20)', () => {
+    render(<Toaster />);
+    act(() => {
+      toast('finite', { id: 'finite' });
+      toast('persistent', { id: 'persistent', duration: Infinity });
+      toast.loading('loading', { id: 'loading' });
+    });
+    act(() => {
+      for (const id of ['finite', 'persistent', 'loading']) entered(id);
+    });
+    rendersSince();
+    act(() => setGlobalPause('window-blur', true));
+    expect(rendersSince()).toEqual({ finite: 1 });
+    act(() => setStackPause('top-right', false));
+    act(() => setToastPause('persistent', 'focus-within', true));
+    act(() => setToastPause('loading', 'focus-within', true));
+    expect(rendersSince()).toEqual({});
+    act(() => setGlobalPause('window-blur', false));
+    expect(rendersSince()).toEqual({ finite: 1 });
+  });
+
+  // Narrowed by P-20 S1: focus within a finite toast now holds it (decision 1), so the toast that
+  // receives restored focus re-renders once. Restoration renders nothing else, and the exiting toast
+  // renders only for its phase change: its countdown is over, so losing focus changes no view.
+  it('renders, when the dismissed toast held focus, only the toast that receives it (P-16, P-20)', () => {
     const { commits } = mountWithToasts();
     const item = (id: string) =>
       [...document.querySelectorAll('li')].find(li => li.textContent?.includes(id)) as HTMLElement;
@@ -147,18 +198,19 @@ describe('render counts (§32, D-16)', () => {
     expect(rendersSince()).toEqual({ c: 1 });
     expect(commits()).toBe(before + 1);
 
-    // Focused: restoration moves focus to a's close button, rendering nothing itself.
+    // Focused: the dismissal renders b; restoration moves focus to a's close button, holding a.
     act(() => close('b').focus());
+    expect(rendersSince()).toEqual({ b: 1 });
     before = commits();
     act(() => dismiss('b'));
     expect(document.activeElement).toBe(close('a'));
-    expect(rendersSince()).toEqual({ b: 1 });
-    expect(commits()).toBe(before + 1);
+    expect(rendersSince()).toEqual({ a: 1, b: 1 });
+    expect(commits()).toBe(before + 2);
 
-    // To the region: the last toast at bottom-left, with every other toast exiting.
+    // To the region: no toast receives focus, so only the dismissal renders.
     act(() => dismiss('a'));
-    rendersSince();
     act(() => close('x').focus());
+    rendersSince();
     before = commits();
     act(() => dismiss('x'));
     expect(document.activeElement).toBe(document.querySelector('section'));
@@ -166,37 +218,47 @@ describe('render counts (§32, D-16)', () => {
     expect(commits()).toBe(before + 1);
   });
 
-  it('renders nothing for the DOM events that pause toasts (P-15)', () => {
+  // Narrowed by P-20 S1 from "renders nothing for the DOM events that pause toasts" (P-15): each
+  // real pause event re-renders exactly the toasts whose held state it changes, once each.
+  it('re-renders, for the DOM events that pause toasts, only the toasts they hold or release', () => {
     const { commits } = mountWithToasts();
-    const snapshot = getSnapshot();
-    const before = commits();
     const list = document.querySelector('ol[data-position="top-right"]') as HTMLOListElement;
     const close = (id: string) =>
       [...list.querySelectorAll('li')]
         .find(item => item.textContent?.includes(id))
         ?.querySelector('button') as HTMLButtonElement;
     const hidden = vi.spyOn(document, 'hidden', 'get');
-    act(() => {
-      fireEvent.pointerEnter(list);
-      close('a').focus();
-      close('b').focus();
-      fireEvent.blur(window);
-      fireEvent.focus(window);
-      hidden.mockReturnValue(true);
-      fireEvent(document, new Event('visibilitychange'));
-      hidden.mockReturnValue(false);
-      fireEvent(document, new Event('visibilitychange'));
-    });
-    // The events reached the store: focus is inside b.
+    let before = commits();
+    const step = (run: () => void, expected: Record<string, number>) => {
+      act(run);
+      expect(rendersSince()).toEqual(expected);
+      expect(commits()).toBe(before + (Object.keys(expected).length > 0 ? 1 : 0));
+      before = commits();
+    };
+    step(() => fireEvent.pointerEnter(list), { a: 1, b: 1, c: 1 });
+    step(() => close('a').focus(), {});
+    step(() => close('b').focus(), {});
+    step(() => fireEvent.blur(window), { x: 1 });
+    step(() => fireEvent.focus(window), { x: 1 });
+    step(
+      () => {
+        hidden.mockReturnValue(true);
+        fireEvent(document, new Event('visibilitychange'));
+      },
+      { x: 1 }
+    );
+    step(
+      () => {
+        hidden.mockReturnValue(false);
+        fireEvent(document, new Event('visibilitychange'));
+      },
+      { x: 1 }
+    );
+    // The events reached the store: focus is inside b, which the hover still holds.
     expect(inspectRecords().find(record => record.id === 'b')?.pausedBy).toEqual(['focus-within']);
-    act(() => {
-      close('b').blur();
-      fireEvent.pointerLeave(list);
-    });
+    step(() => close('b').blur(), {});
+    step(() => fireEvent.pointerLeave(list), { a: 1, b: 1, c: 1 });
     hidden.mockRestore();
-    expect(getSnapshot()).toBe(snapshot);
-    expect(commits()).toBe(before);
-    expect(rendersSince()).toEqual({});
   });
 
   it('re-renders, on a Toaster closeButton change, only the toasts whose close button changes', () => {
@@ -298,7 +360,9 @@ describe('render counts (§32, D-16)', () => {
     expect(commits()).toBe(before + 1);
   });
 
-  it('renders and commits nothing for a hotkey press (P-16)', () => {
+  // Narrowed by P-20 S1: the hotkey itself renders nothing, but the toast it focuses is now held
+  // by focus within it (decision 1) and re-renders once. No other toast renders.
+  it('renders only the toast a hotkey press focuses, which focus now holds (P-16, P-20)', () => {
     const { commits } = mountWithToasts();
     const before = commits();
     act(() => {
@@ -307,11 +371,12 @@ describe('render counts (§32, D-16)', () => {
     // The newest toast at the first position in DOM order (top-right) takes focus.
     expect(document.activeElement?.tagName).toBe('LI');
     expect(document.activeElement).toHaveTextContent(/^c$/);
-    expect(commits()).toBe(before);
-    expect(rendersSince()).toEqual({});
+    expect(commits()).toBe(before + 1);
+    expect(rendersSince()).toEqual({ c: 1 });
   });
 
-  it('renders and commits nothing when Escape returns focus to the recorded element (P-16)', () => {
+  // Narrowed by P-20 S1: Escape renders only the toast it releases, which is no longer held.
+  it('renders only the released toast when Escape returns focus to the recorded element', () => {
     const outside = document.createElement('button');
     document.body.append(outside);
     const { commits } = mountWithToasts();
@@ -325,12 +390,13 @@ describe('render counts (§32, D-16)', () => {
       fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
     });
     expect(document.activeElement).toBe(outside);
-    expect(commits()).toBe(before);
-    expect(rendersSince()).toEqual({});
+    expect(commits()).toBe(before + 1);
+    expect(rendersSince()).toEqual({ c: 1 });
     outside.remove();
   });
 
-  it('renders and commits nothing when Escape releases focus to the document (P-16)', () => {
+  // Narrowed by P-20 S1: as above, only the released toast renders.
+  it('renders only the released toast when Escape releases focus to the document (P-16, P-20)', () => {
     const { commits } = mountWithToasts();
     const item = document.querySelector('li') as HTMLLIElement;
     act(() => item.focus());
@@ -340,8 +406,8 @@ describe('render counts (§32, D-16)', () => {
       fireEvent.keyDown(item, { key: 'Escape' });
     });
     expect(document.activeElement).toBe(document.body);
-    expect(commits()).toBe(before);
-    expect(rendersSince()).toEqual({});
+    expect(commits()).toBe(before + 1);
+    expect(rendersSince()).toEqual({ c: 1 });
   });
 
   it('re-renders no toast when the hotkey changes, or is given again as a new array (P-16)', () => {

@@ -374,27 +374,31 @@ describe('pause state across the lifecycle', () => {
 });
 
 describe('pause commands', () => {
-  it('notify nobody and keep the snapshot and its views by identity', () => {
+  // Narrowed by P-20 S1 from "notify nobody": a pause boundary now reaches the views of the toasts
+  // whose held state changes (P-20 decisions 1 and 2). A reason that changes no toast's held state
+  // still notifies nobody and keeps the snapshot and every view by identity.
+  it('notify only at held boundaries, and keep the snapshot while the held state stays', () => {
     activateToaster();
     showRunning('t');
     showRunning('other', { position: 'bottom-left' });
-    const before = getSnapshot();
     const listener = vi.fn();
     subscribe(listener);
 
     vi.advanceTimersByTime(1000);
+    expect(listener).not.toHaveBeenCalled();
     setGlobalPause('window-blur', true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    const held = getSnapshot();
     setStackPause('top-right', true);
     setToastPause('t', 'focus-within', true);
     setToastPause('t', 'swipe', true);
     setToastPause('t', 'swipe', false);
     setToastPause('t', 'focus-within', false);
     setStackPause('top-right', false);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(getSnapshot()).toBe(held);
     setGlobalPause('window-blur', false);
-
-    expect(listener).not.toHaveBeenCalled();
-    expect(getSnapshot()).toBe(before);
-    expect(getSnapshot().byPosition['top-right'][0]).toBe(before.byPosition['top-right'][0]);
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 
   it('ignores hover and toast reasons while no Toaster is active, and unknown IDs', () => {

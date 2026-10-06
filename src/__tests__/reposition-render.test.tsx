@@ -6,11 +6,11 @@
 // seed in flight, so the computed `transform` reports it, and tests advance or settle it at will.
 import fs from 'node:fs';
 import path from 'node:path';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Profiler, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster, toast } from '../index';
-import { dismiss, inspectRecords, resetStore } from '../store/store';
+import { dismiss, inspectRecords, resetStore, setGlobalPause } from '../store/store';
 import type { ToastPosition } from '../types';
 
 const root = path.resolve(__dirname, '../..');
@@ -621,6 +621,43 @@ describe('commits that keep the sequence', () => {
       'seed b2 transform: translateY(-60px)',
       'seed a transform: translateY(-60px)',
     ]);
+  });
+});
+
+// P-20 S1: a pause boundary now commits the toasts whose held state changes (decision 1). The list's
+// per-commit measurement may run, as for any commit that keeps the sequence, but nothing moves: no
+// seed, flush or release, and every toast stays at rest.
+describe('pause boundaries (P-20 S1)', () => {
+  function showFinite(id: string, position: ToastPosition = 'top-right') {
+    act(() => {
+      toast(id, { id, position, duration: 10_000 });
+    });
+    advance();
+  }
+
+  it('measure at most, and seed, flush or release nothing', () => {
+    render(<Toaster />);
+    for (const id of ['a', 'b', 'c']) showFinite(id);
+    showFinite('x', 'bottom-left');
+    expect(phaseOf('a')).toBe('visible');
+    log = [];
+    reads = true;
+    const list = listAt('top-right');
+    act(() => {
+      fireEvent.pointerEnter(list);
+    });
+    act(() => setGlobalPause('window-blur', true));
+    act(() => {
+      fireEvent.pointerLeave(list);
+    });
+    act(() => setGlobalPause('window-blur', false));
+    // The held-state commits did run the list's measurement (layout reads only)…
+    expect(log.some(entry => entry.startsWith('read layout'))).toBe(true);
+    // …and nothing else: no seed, no flush, no release.
+    expect(log.filter(entry => !entry.startsWith('read layout'))).toEqual([]);
+    expect(seeds()).toEqual([]);
+    expectAtRest();
+    expect(titlesAt('top-right')).toEqual(['c', 'b', 'a']);
   });
 });
 

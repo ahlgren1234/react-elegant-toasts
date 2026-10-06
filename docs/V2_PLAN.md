@@ -2526,7 +2526,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
-- **Status: in progress.** D0 and D1 are done, and the D1 visual direction is approved (see the D1 sign-off below). S1 is next. Production implementation has not started.
+- **Status: in progress.** D0, D1 and S1 are done. The D1 visual direction is approved (see the D1 sign-off below). S1 awaits its architecture and render-count review, and S2 has not started.
 - **Already decided, not reopened here:**
   - `ToastOptions.progress` and `ToasterProps.progress`, off by default, resolved toast, then Toaster, then `false` (§6.3, §6.5, P-14);
   - custom toasts reject progress, in the types and at runtime (§6.4, P-12, AC-API-10);
@@ -2700,6 +2700,76 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
      - **B′** is rejected. Scaling a single element scales its clip and corner geometry too, which gives wrong corners near empty. B avoids this by separating the static strip from the scaled fill.
      - **C** was viable but not selected, for the reasons in item 5.
   10. **Prototype status:** `demo/p20/` stays as a visual reference while S1 to S4 are implemented. S5 removes it at the latest (decision 12).
+- **S1, timer and view plumbing (done; awaiting review):**
+  - **Change:** `src/store/types.ts` and `src/store/store.ts` only. `ToastView` gains three internal fields, and they join `VIEW_KEYS`, so the existing equality and subscription alone decide who is notified. There is no new subscription, clock, timer, public API, DOM, CSS or token. The public set stays at 28 until S3.
+  - **`duration`:** the effective duration, `Infinity` when persistent, which S2 needs for `animation-duration`. It changes only with a new definition.
+  - **`remaining`:** the timer's stored, folded `remaining` (§7, P-11), `Infinity` when persistent. It is a boundary snapshot, never recomputed from the clock: a start leaves it as the value its segment runs from, and a stop folds the elapsed time into it.
+  - **`held`:** true when the effective duration is finite, the toast is not `exiting`, and the store's combined pause state (§10) applies to it. This is the fact `data-paused` will render (decision 1).
+    - A lifecycle phase alone never sets it. An entering, re-queued or promoted toast is held only by a reason, and an inactive or detached Toaster is a lifecycle state, not a pause.
+    - Persistent and loading toasts are never held.
+    - **Exiting toasts are excluded (an S1 interpretation, for review).** An exiting toast's countdown is over: it is stopped or expired, and a revival starts a new one. With it included, focus restoration away from a dismissed toast re-rendered that toast only to flip its held state.
+  - **Notification semantics:**
+    - **Time passing:** a running timer's record does not change, so it notifies nobody and renders nothing (49 steps of 100 ms; 4999 ms on mounted toasts).
+    - **Expiry:** still notifies once, as a phase change, with `remaining` 0.
+    - **Pause and resume:** each boundary notifies once, and re-renders exactly the toasts whose held state changes, each with its folded `remaining`. Resume exposes the value the next segment runs from, which T1 recreates from in S2.
+    - **Overlapping reasons:** a reason added or removed while another still holds the toast changes no view and notifies nobody.
+  - **Measured scope, in render counts:**
+    - focus within a toast: that toast;
+    - hover: the finite toasts of that stack whose state changes, and no other position's list;
+    - a global reason: every finite toast whose state changes, and no persistent or loading toast;
+    - the hotkey, Escape and focus restoration: only the toast that gains or loses focus, once.
+  - **P-19:** a pause-only commit runs the list's existing per-commit measurement (layout reads), and nothing more: no seed, flush or release, and every toast stays at rest (`reposition-render.test.tsx`).
+  - **Tests:**
+    - A new `progress-view.test.ts` (22 tests) covers:
+      - the view facts;
+      - time passing;
+      - expiry;
+      - pause, resume and repeated cycles;
+      - overlapping reasons;
+      - focus, stack and global scope;
+      - persistent and loading toasts;
+      - entering;
+      - timeout and non-timeout exits;
+      - revival;
+      - replacement, including finite to persistent;
+      - promise settlement from loading to finite;
+      - detach and re-queue;
+      - promotion.
+
+      Its store-side regression test is named `D-10 (store side)`.
+
+    - These guards were narrowed deliberately (decision 10). Each keeps its invariant and adds only the P-20 exception:
+      - P-15's "renders nothing for timer and pause changes" and "renders nothing for the DOM events that pause toasts" are now exact per-step scopes, with zero renders for time passing;
+      - P-16's hotkey, Escape and focus-restoration render tests now expect only the toast whose focus changes;
+      - `pause.test.ts` "notify nobody" became "notify only at held boundaries";
+      - `defaults.test.ts` lists the three new view fields, and still excludes pause reasons, the clock and pending state.
+    - The `<Toaster progress>` toggle test is unchanged: progress is not wired until S2.
+  - **Mutations:** 12, of which 10 were detected:
+    - held inverted;
+    - persistent held;
+    - exiting held;
+    - held left out of equality;
+    - `remaining` recomputed from the clock;
+    - hover widened to any stack;
+    - global reasons ignored;
+    - held sticky, so resume never notifies;
+    - held as "not running";
+    - `remaining` reported as the duration.
+
+    Two are equivalent by construction:
+    - leaving `remaining` out of equality: every stop that folds it coincides with a held flip or a phase change, and detach removes the view;
+    - leaving `duration` out: it changes only with a new revision.
+
+    Both keys stay, as guards of the invariant.
+
+  - **Validation:** all pass:
+    - `format:check`;
+    - `lint` with the stylesheet contract;
+    - `typecheck`, `typecheck:demo`;
+    - the full suite (34 files, 1,263 tests);
+    - `validate:package`;
+    - `build:demo`.
+  - **For S2:** derive the running state as `visible` and not held, which matches the stylesheet's `[data-phase='visible']:not([data-paused])`. Recreate the bar whenever `revision`, `remaining`, the phase's running state or `held` changes; under React batching, `remaining` alone still marks a boundary. The S4 hidden-tab Chromium check still applies.
 
 **P-21 Swipe to dismiss**
 

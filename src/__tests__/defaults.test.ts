@@ -750,18 +750,23 @@ describe('the persistent view field', () => {
     expect(view('t')?.persistent).toBe(true);
   });
 
-  it('is the only addition to the view: no timer, pause or pending state', () => {
+  // Narrowed by P-20 S1 from "the only addition": the view also carries the timer's boundary facts
+  // (P-20 decision 2), and still no pause reasons, clock reading or pending state.
+  it('is joined only by the P-20 timer boundary facts: no pause reasons, clock or pending state', () => {
     mountToaster();
     create('t');
     expect(Object.keys(view('t') ?? {}).sort()).toEqual([
       'content',
       'custom',
       'description',
+      'duration',
+      'held',
       'id',
       'options',
       'persistent',
       'phase',
       'position',
+      'remaining',
       'revision',
       'seq',
       'type',
