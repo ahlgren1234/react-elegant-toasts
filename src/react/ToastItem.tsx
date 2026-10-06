@@ -15,23 +15,29 @@ interface ToastItemProps {
   readonly closeButton: boolean;
   /** The close button's name, from the Toaster's labels, while the close button shows. */
   readonly closeLabel: string | undefined;
+  /**
+   * Whether the progress indicator shows: already resolved against the Toaster default, and only
+   * for a normal toast with a finite duration (§6.3, P-20).
+   */
+  readonly progress: boolean;
   /** The announcement prefix of a warning or error toast, from the Toaster's labels (§17.1). */
   readonly announcePrefix: string | undefined;
 }
 
 // One rendered toast (§12, §17.2, §21). Memoised on its view, which the store keeps while nothing
-// render-visible changes, and on its resolved close button and its name, so a change to one toast,
-// or to a Toaster default or label it does not use, re-renders no other toast (§32, D-16). The
-// content is keyed by `revision`: a replacement re-keys the content without remounting the toast
-// or its controls (§7, §14). Clicking the toast body never dismisses it (D-17). An exiting toast is
+// render-visible changes, and on its resolved close button, its name and its progress, so a change
+// to one toast, or to a Toaster default or label it does not use, re-renders no other toast (§32,
+// D-16). The content is keyed by `revision`: a replacement re-keys the content without remounting
+// the toast or its controls (§7, §14). Clicking the toast body never dismisses it (D-17). An exiting toast is
 // inert, and its controls also do nothing where `inert` is not enforced (§9 rule 4).
 export const ToastItem = memo(function ToastItem({
   view,
   closeButton,
   closeLabel,
+  progress,
   announcePrefix,
 }: ToastItemProps) {
-  const { id, phase, position, custom, persistent, options } = view;
+  const { id, phase, position, custom, persistent, options, held } = view;
   const { action } = options;
   const ref = useRef<HTMLLIElement>(null);
   useFocusWithinPause(ref, id);
@@ -107,6 +113,10 @@ export const ToastItem = memo(function ToastItem({
     if (!event.defaultPrevented) dismiss(id, 'action');
   };
 
+  // The finite countdown is held by a pause reason (P-20 decision 1). Never on an exiting or
+  // persistent toast, whose view is never held. Custom toasts carry it too.
+  const paused = held ? '' : undefined;
+
   const className = `ret-toast ret-toast--${view.type}${
     options.className ? ` ${options.className}` : ''
   }`;
@@ -132,6 +142,7 @@ export const ToastItem = memo(function ToastItem({
         className={className}
         data-phase={phase}
         data-position={view.position}
+        data-paused={paused}
         tabIndex={-1}
       >
         <Fragment key={view.revision}>{view.content}</Fragment>
@@ -145,6 +156,7 @@ export const ToastItem = memo(function ToastItem({
       className={className}
       data-phase={phase}
       data-position={view.position}
+      data-paused={paused}
       tabIndex={-1}
     >
       {icon != null && (
@@ -164,6 +176,36 @@ export const ToastItem = memo(function ToastItem({
         </button>
       )}
       {close}
+      {progress && <Progress view={view} />}
     </li>
   );
 });
+
+/**
+ * The progress indicator (P-20, D1 sign-off): a static strip with a fill inside it, decorative and
+ * outside the content, so it is never announced, focused or hit. Only the fill animates, and the
+ * stylesheet runs it only while the timer runs (`visible`, not `data-paused`); otherwise it holds.
+ *
+ * T1 (decision 3): the fill is placed by the timer's folded `remaining` and recreated at every run
+ * boundary, so a new animation always starts from the store's truth, never from where an earlier
+ * one drifted. Its key changes exactly when the timer starts or stops, or the definition changes:
+ * a phase into or out of `visible`, the held state, the folded `remaining` and the `revision`.
+ * Overlapping pause reasons and time passing change none of them. Only the fill remounts.
+ */
+function Progress({ view }: { readonly view: ToastView }) {
+  const { duration, remaining, revision, phase, held } = view;
+  const running = phase === 'visible' && !held;
+  return (
+    <div className="ret-toast__progress" aria-hidden="true">
+      <div
+        key={`${revision}|${remaining}|${running}`}
+        className="ret-toast__progress-fill"
+        style={{
+          animationDuration: `${duration}ms`,
+          // `-0` formats as `0`, so a full bar's delay is `0ms`.
+          animationDelay: `${-(duration - remaining)}ms`,
+        }}
+      />
+    </div>
+  );
+}

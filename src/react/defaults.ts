@@ -53,7 +53,8 @@ export function resolveCloseButton(toast: Toast, toasterDefault: unknown): boole
 
 /**
  * Whether the toast shows a progress indicator. Normal toasts: their own option, then the
- * Toaster's, then off. Custom toasts never show the standard one. Rendering it is P-20's.
+ * Toaster's, then off. Custom toasts never show the standard one. The renderer also requires a
+ * finite duration (P-20).
  */
 export function resolveProgress(toast: Toast, toasterDefault: unknown): boolean {
   if (toast.custom) return false;

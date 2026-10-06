@@ -2526,7 +2526,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
-- **Status: in progress.** D0, D1 and S1 are done. The D1 visual direction is approved (see the D1 sign-off below). S1 awaits its architecture and render-count review, and S2 has not started.
+- **Status: in progress.** D0, D1, S1 and S2 are done. The D1 visual direction and S1 are approved. S2 awaits its DOM and T1 review, and S3 has not started.
 - **Already decided, not reopened here:**
   - `ToastOptions.progress` and `ToasterProps.progress`, off by default, resolved toast, then Toaster, then `false` (§6.3, §6.5, P-14);
   - custom toasts reject progress, in the types and at runtime (§6.4, P-12, AC-API-10);
@@ -2769,7 +2769,97 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - the full suite (34 files, 1,263 tests);
     - `validate:package`;
     - `build:demo`.
+  - **Review (approved):** the maintainer approved S1 as implemented, including that an exiting toast is never held. `held` means a finite countdown that is paused and can continue. Once a toast exits, its countdown has ended: a non-timeout exit has folded its `remaining`, and a timeout has none left. Its bar is frozen by the lifecycle, not by a pause, and a revival gets a fresh timer. Lifecycle freeze and pause stay distinct.
   - **For S2:** derive the running state as `visible` and not held, which matches the stylesheet's `[data-phase='visible']:not([data-paused])`. Recreate the bar whenever `revision`, `remaining`, the phase's running state or `held` changes; under React batching, `remaining` alone still marks a boundary. The S4 hidden-tab Chromium check still applies.
+- **S2, progress DOM and state (done; awaiting review):**
+  - **Change:**
+    - `src/react/ToastItem.tsx`: the strip, the fill and `data-paused`.
+    - `src/react/Toaster.tsx`: the `progress` prop is wired.
+    - `src/react/defaults.ts`: a comment only.
+    - `scripts/check-styles.js`: `data-paused` joins the allowlist.
+
+    The store, the S1 view facts, `styles.css`, the tokens (still 28), the public types and the exports are unchanged. There is no new effect, listener, timer or React state.
+
+  - **DOM:**
+    - A normal toast that shows progress gains a last direct child: `<div class="ret-toast__progress" aria-hidden="true">`, the D1 strip.
+    - The strip holds one `<div class="ret-toast__progress-fill">` with inline `animation-duration` and `animation-delay`, and nothing else: no text, role, `aria-value*`, `tabindex` or other attribute.
+    - `.ret-toast__progress` is the documented BEM hook (§21).
+    - **The fill's class is internal**, like `ret-toast__spinner`: S3 styles it, but it is not documented contract, so the public CSS surface does not grow.
+  - **Presence:** the strip renders only on a normal toast whose resolved progress is on and whose duration is finite.
+    - Resolution keeps P-14's `resolveProgress`: the toast's own option, then the Toaster's prop, then off.
+    - `PositionList` resolves it per item as `!persistent && resolveProgress(...)`, so persistent and loading toasts never receive it.
+    - Custom toasts never render it, even from the Toaster or with the option smuggled past the types.
+    - A loading toast that settles finite gains the strip, and a replacement that becomes persistent loses it.
+  - **`data-paused`:** on the toast root exactly while the S1 view is `held`, normal and custom alike, as an empty attribute.
+    - Never on a persistent, loading or exiting toast.
+    - On an entering toast only for a real pause reason.
+    - It carries no reason.
+  - **Timing:** `animation-duration: {duration}ms` and `animation-delay: -{duration − remaining}ms`, from the S1 facts, rendered only for a finite duration.
+    - A full bar's `-0` formats as `0ms`.
+    - Zero and fractional durations format exactly. There is no `NaN` or `Infinity`, and no clamping.
+  - **Running and frozen state:** no new hook. The stylesheet (S3) runs the fill only under `[data-phase='visible']:not([data-paused])`, which for a rendered finite toast is exactly when the store's timer runs.
+  - **T1 identity:**
+    - The fill's key is `revision | remaining | running`, with `running = phase === 'visible' && !held`, derived from existing state with no new store identity.
+    - Every timer start or stop changes it:
+      - **Entering to visible:** `running` flips while `remaining` and `held` stay.
+      - **Pause and resume:** `held` flips and `remaining` folds.
+      - **Exits:** `running` drops.
+      - **Replacement, revival and settlement:** `revision` changes.
+      - **Detach:** the item unmounts.
+    - A pause and resume that reach React in one batched render change only `remaining`, which still recreates the fill.
+    - Time passing, an overlapping reason and another toast's or stack's pause change none of them, and S1 renders nothing for them anyway.
+    - Only the fill remounts. The strip, the root, the content and the controls keep their nodes.
+  - **Behaviour (5000 ms):**
+    - Entering shows a frozen full bar, and `entered()` creates a new fill: the running segment.
+    - A toast held while entering creates no segment at `entered()`, and its last release does.
+    - A pause at about 2000 ms recreates the fill at `-2000ms` and holds it. Resume recreates it at the same `-2000ms`.
+    - Overlapping reasons recreate it only at the first hold and the final release.
+    - A non-timeout exit freezes the folded value, without `data-paused`. A timeout freezes `-5000ms`, which is empty.
+    - A revival or replacement starts again at `0ms` with the new duration.
+    - A detached toast returns frozen at its kept `-2000ms`, then runs from it.
+  - **Isolation:**
+    - **P-18:** an `animationend` from the fill, named `ret-progress` or even a library name, completes nothing, because of the existing target filter, which is unchanged.
+    - **Announcements:** the strip adds no text and replays nothing.
+    - **Focus:** recreation keeps focus and the action and close nodes, and adds no focusable element.
+    - **P-19:** the root stays the same node, the order is unchanged, and the root has no inline style.
+    - **StrictMode:** one fill and one announcement, with recreation only at boundaries.
+  - **Render scope:**
+    - S1's zero-render time passing still holds.
+    - A `<Toaster progress>` change re-renders exactly the finite normal toasts that leave the option out. Toasts with their own option, persistent, loading and custom toasts never re-render, and the root and content keep their nodes.
+  - **Tests:**
+    - A new `progress-render.test.tsx` (31 tests) covers resolution and presence, structure, `data-paused`, T1, lifecycle and isolation. Its defect-named test is `D-10: …`.
+    - These guards were narrowed (decision 10):
+      - `toast-item.test.tsx` "renders no progress indicator yet" now checks the strip;
+      - `render-count.test.tsx` "a progress change re-renders no toast" is now an exact progress-toggle scope;
+      - `styles.test.ts` accepts `data-paused` in the lint's passing sample.
+  - **Mutations:** 14, all detected:
+    - progress on custom toasts;
+    - progress on persistent or loading toasts;
+    - the toast's `false` losing to the Toaster's `true`;
+    - `data-paused` on exiting toasts;
+    - `data-paused` missing from custom toasts;
+    - a revision-only key;
+    - a key without `running`;
+    - a key using `held` in place of `running`;
+    - a key without `remaining`, killed by the batched pause-and-resume test;
+    - a delay that ignores `remaining`;
+    - a duration from `remaining`;
+    - the key on the toast root;
+    - the P-18 target filter removed;
+    - the strip not `aria-hidden`.
+
+    Recreation on an overlapping reason cannot be mutated into existence: S1 renders nothing for it.
+
+  - **Validation:** all pass:
+    - `format:check`;
+    - `lint` with the stylesheet contract;
+    - `typecheck`, `typecheck:demo`;
+    - the full suite (35 files, 1,295 tests);
+    - `validate:package`;
+    - `build:demo`.
+  - **For S3 and S4:**
+    - **S3:** the D1-selected CSS: the `ret-progress` keyframe, the strip and fill placement and the corners, `pointer-events: none`, the two tokens (30), the run and hold selectors, the `:dir(rtl)` origin and forced colours, with its guard narrowing.
+    - **S4:** the hidden-tab and minimised-window Chromium resynchronisation check against production code.
 
 **P-21 Swipe to dismiss**
 

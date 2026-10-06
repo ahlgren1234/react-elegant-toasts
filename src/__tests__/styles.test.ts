@@ -141,6 +141,8 @@ const PASSING = [
   '@supports (inset: 0) { .ret-toaster__list[data-position^="top-"] {} }',
   ':where(.ret-toast):focus-visible::after { color: var(--ret-focus); }',
   '.ret-toast[data-phase="exiting"] > .ret-toast__close svg {}',
+  // P-20 S2: `data-paused` is documented (decision 1); S3 styles it.
+  '.ret-toast[data-phase="visible"]:not([data-paused]) > .ret-toast__progress {}',
   '@keyframes ret-example { to { opacity: 1; } }',
 ].join('\n');
 

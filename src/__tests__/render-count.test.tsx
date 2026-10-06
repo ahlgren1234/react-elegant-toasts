@@ -26,6 +26,7 @@ vi.mock('../react/ToastItem', async importOriginal => {
     view: ToastView;
     closeButton: boolean;
     closeLabel: string | undefined;
+    progress: boolean;
     announcePrefix: string | undefined;
   }) => ReactElement;
   const item = actual.ToastItem as unknown as { $$typeof?: symbol; type?: Render };
@@ -273,8 +274,35 @@ describe('render counts (§32, D-16)', () => {
 
     rerender(<Toaster closeButton={false} />);
     expect(rendersSince()).toEqual({ implicit: 1 });
-    rerender(<Toaster closeButton={false} progress />);
+  });
+
+  // Narrowed by P-20 S2 from "a progress change re-renders no toast": the Toaster's `progress`
+  // re-renders exactly the toasts whose resolved progress changes, which are the finite normal
+  // toasts that leave the option out. Custom, persistent, loading and opted toasts never render.
+  it('re-renders, on a Toaster progress change, only the toasts whose progress changes', () => {
+    const { rerender } = render(<Toaster />);
+    act(() => {
+      toast('implicit', { id: 'implicit' });
+      toast('own on', { id: 'own-on', progress: true });
+      toast('own off', { id: 'own-off', progress: false });
+      toast('persistent', { id: 'persistent', duration: Infinity });
+      toast.loading('loading', { id: 'loading' });
+      toast.custom('custom', { id: 'custom' });
+    });
+    rendersSince();
+    const item = [...document.querySelectorAll('li')].find(li => li.textContent === 'implicit');
+    const content = item?.querySelector('.ret-toast__content');
+
+    rerender(<Toaster progress />);
+    expect(rendersSince()).toEqual({ implicit: 1 });
+    expect(item?.querySelector('.ret-toast__progress')).not.toBeNull();
+    rerender(<Toaster progress={false} />);
+    expect(rendersSince()).toEqual({ implicit: 1 });
+    expect(item?.querySelector('.ret-toast__progress')).toBeNull();
+    rerender(<Toaster progress={false} closeButton />);
     expect(rendersSince()).toEqual({});
+    expect([...document.querySelectorAll('li')].includes(item as HTMLLIElement)).toBe(true);
+    expect(item?.querySelector('.ret-toast__content')).toBe(content);
   });
 
   it('re-renders no toast when the theme changes, which only the region attribute shows (P-17)', () => {
