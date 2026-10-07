@@ -714,3 +714,89 @@ describe('the focus-within pause (§10)', () => {
     for (const record of inspectRecords()) expect(record.pausedBy).toEqual([]);
   });
 });
+
+// Restoration never scrolls the page (P-22 H1). The region is a static element wherever
+// `<Toaster />` sits, and in real browsers a plain `focus()` scrolled the page to it (P-22 D1, the
+// D0-16 report). jsdom has no layout or scrolling, so these tests check the request restoration
+// makes, `preventScroll`, on every step it tries; D1's browser runs are the evidence that it stops
+// the scroll. The hotkey and Escape are not restoration and keep their plain `focus()`.
+describe('no scrolling (P-22 H1)', () => {
+  /** Records every `focus()` call with its options from now on, refusing it on `refused`. */
+  function focusCalls(...refused: Element[]) {
+    const focus = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus')?.value as (
+      this: HTMLElement,
+      options?: FocusOptions
+    ) => void;
+    const calls: [HTMLElement, FocusOptions | undefined][] = [];
+    vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
+      this: HTMLElement,
+      options?: FocusOptions
+    ) {
+      calls.push([this, options]);
+      if (!refused.includes(this)) focus.call(this, options);
+    });
+    return calls;
+  }
+
+  const NO_SCROLL = { preventScroll: true };
+
+  it('focuses the region without scrolling', () => {
+    mount();
+    showVisible(['a']);
+    focusOn(closeOf('a'));
+    const calls = focusCalls();
+    act(() => dismiss('a'));
+    expect(calls).toEqual([[regionOf(), NO_SCROLL]]);
+    expect(document.activeElement).toBe(regionOf());
+  });
+
+  it('focuses the next toast’s equivalent control without scrolling', () => {
+    mount();
+    showVisible(['a', 'b']);
+    focusOn(closeOf('b'));
+    const calls = focusCalls();
+    act(() => dismiss('b'));
+    expect(calls).toEqual([[closeOf('a'), NO_SCROLL]]);
+    expect(document.activeElement).toBe(closeOf('a'));
+  });
+
+  it('asks every step not to scroll, in the unchanged order: next, previous, region', () => {
+    mount();
+    showVisible(['a', 'b', 'c']);
+    // DOM order is c, b, a (§12): from b, the next toast is a and the previous is c.
+    focusOn(itemOf('b'));
+    const calls = focusCalls(itemOf('a'), itemOf('c'));
+    act(() => dismiss('b'));
+    expect(calls).toEqual([
+      [itemOf('a'), NO_SCROLL],
+      [itemOf('c'), NO_SCROLL],
+      [regionOf(), NO_SCROLL],
+    ]);
+    expect(document.activeElement).toBe(regionOf());
+  });
+
+  it('restores from a clicked close button without scrolling', () => {
+    mount();
+    showVisible(['a']);
+    focusOn(closeOf('a'));
+    const calls = focusCalls();
+    act(() => {
+      fireEvent.click(closeOf('a'));
+    });
+    expect(calls).toEqual([[regionOf(), NO_SCROLL]]);
+  });
+
+  it('leaves the hotkey and Escape as they were: a plain focus(), with no options', () => {
+    mount();
+    showVisible(['a']);
+    const origin = externalButton('origin');
+    focusOn(origin);
+    const calls = focusCalls();
+    press(ALT_T);
+    expect(calls).toEqual([[itemOf('a'), undefined]]);
+    calls.length = 0;
+    press(ESCAPE);
+    expect(calls).toEqual([[origin, undefined]]);
+    expect(document.activeElement).toBe(origin);
+  });
+});

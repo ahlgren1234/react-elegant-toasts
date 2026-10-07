@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report, which awaits the maintainer. D2 is next.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D2 is next.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -3891,7 +3891,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **MINOR-1 reproduced (D0-3, CF-38).** In a custom toast, a trusted Chromium touch drag that starts on a button inside an open shadow root commits a swipe with reason `swipe`, and the button gets no `click`. The same drag from a light-DOM button never starts one. Synthetic composed events show the same retargeting in Firefox and WebKit. Whether this is material is a D2 decision; no production change was made.
     - **A dismissal during the snap-back (CF-36, CF-40), synthetic, exit slowed to 900 ms.** P-18's exit animation runs in all three engines and fades to low opacity. In Firefox and WebKit the opacity briefly rises at the start (about 0.92 → 0.97, and 0.93 → 0.94) before falling, while the `settle` transition is still listed. In Chromium it falls from 1. This is evidence for D2, not a finding of an override.
     - **`inert` with capture (CF-32), Chromium, trusted.** A programmatic dismissal mid-drag: the root loses capture, becomes `inert`, and the next `pointerup` goes to the list.
-  - **D0-16 report: removal restoration scrolls the page (open; awaiting the maintainer's decision; no production change).**
+  - **D0-16 report: removal restoration scrolls the page.** Disposition: the maintainer approved a fix as P-22 H1, recorded below. The report stands as written at D1.
     - **Engines:** Chromium 153, Firefox 155, WebKit 26.6 (Playwright, headless).
     - **Reproduction:**
       - a page with 4000 px of content, then the `<Toaster />` (`top-right`);
@@ -3906,6 +3906,26 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Likely cause:** `restoreFocusFrom` calls `focus()` without `preventScroll` (`src/react/focus.ts`, `tryFocus`) on the region `<section>`, which is `position: static` with zero height. Isolated: a plain `focus()` on the section scrolls in Chromium and Firefox (0 → 3400); `focus({ preventScroll: true })` does not, in any engine. WebKit did not scroll for the isolated plain call, though it did through restoration: an engine detail still to characterise. The neighbouring toasts are `position: fixed`, so focusing them does not scroll.
     - **Smallest plausible fix:** `preventScroll` on restoration's focus calls, and possibly the hotkey's and Escape's (`useHotkey.ts`). It needs its own regression tests and a check that real browsers still scroll nothing else.
     - **Regression risk:** low; focus targets are unchanged. Any fix waits for the maintainer and a separately authorised hardening slice (D0-16).
+  - **H1, focus restoration without scrolling (done).** This is the hardening slice authorised by the maintainer after the D1 review, for the D0-16 report above only. It is not D2 and not S1.
+    - **Invariant:** focus restoration caused by a toast's removal or dismissal (§18) never scrolls the surrounding document. This is not a general rule for every programmatic focus in the library.
+    - **Root cause:** `restoreFocusFrom` focused each candidate through `tryFocus`, a plain `focus()`. On the region, a static `<section>` with zero height that sits wherever `<Toaster />` is placed, browsers scroll the page to it.
+    - **Implementation:** one change in `src/react/focus.ts`. `tryFocus` now calls `focus({ preventScroll: true })`. `tryFocus` is module-private, and its only callers are the three steps of `restoreFocusFrom` (the next toast's equivalent control or the next toast, then the previous toast, then the region), which `ToastItem` calls only as a toast starts to exit. So every restoration step is covered, and no other path changes.
+    - **Scope:** restoration only. The hotkey (`useHotkey.ts`, focus entry into the region) and Escape (the return to the recorded element) call `focus()` themselves, not through `tryFocus`. They keep their plain `focus()`. The neighbouring toasts are `position: fixed`, so the change matters in practice for the region; it applies to every step because the invariant concerns restoration as a whole.
+    - **Unchanged:** the §18 target order and its verification, `inert` (still set after restoration in the same layout effect), the lifecycle, the pause reasons (§10), swipe, motion, the public API, and the 30 tokens. CF-12, CF-36 and CF-38 were not touched.
+    - **Regression tests:** `focus-restoration.test.tsx` gains five tests (46 in the file), under `no scrolling (P-22 H1)`. They record each `focus()` call with its element and options:
+      - the region is focused with `{ preventScroll: true }`;
+      - so is the next toast's equivalent control;
+      - with the next and previous toasts refusing focus, the calls are exactly next, previous, region, in that order and each with `preventScroll`;
+      - a clicked close button restores the same way;
+      - Alt+T and Escape still call `focus()` with no options.
+
+      jsdom has no layout or scrolling, so the tests check the request, not a scroll. D1's runs in Chromium, Firefox and WebKit are the browser-level reproduction and the evidence that `preventScroll` stops the scroll. P-22's browser suite reruns that check in S1 or later, as D2 decides.
+
+    - **Mutations:** 2, each detected and restored. With the fix reverted, the four restoration tests fail. With `preventScroll` added to the hotkey, the hotkey test fails. The 41 earlier restoration tests pass unchanged.
+    - **Validation:**
+      - the focused focus and accessibility suites pass (8 files, 426 tests);
+      - the full suite passes (40 files, 1,689 tests);
+      - `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, `validate:package`, `build:demo` and `git diff --check` all pass.
   - **Provisional classification of CF-1 to CF-43 (D0-1).** Classes: **1** blocking automated, **2** automated evidence, **3** manual checkpoint, **4** evidence-only observation. "Synthetic" marks logic-only automation that is never reported as trusted input. **D2 locks this; it is not final.**
 
     | ID    | Provisional class                                                                                                                                       |
@@ -3963,7 +3983,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     Each needs its manual checkpoint, named at D2. Whether three-engine coverage of AC-SW-1 can rest on trusted Chromium plus synthetic Firefox and WebKit plus real devices is for D2 to decide, not D1.
 
   - **D2 decisions required:**
-    1. The D0-16 report above: whether it is a defect, and whether to authorise a hardening slice.
+    1. The D0-16 report above: whether it is a defect, and whether to authorise a hardening slice. Resolved before D2: approved and fixed by H1.
     2. MINOR-1's materiality (D0-3).
     3. What counts as three-engine coverage for AC-SW-1, and for the scroll-arbitration part of CF-29 and CF-30, given the touch-drag gap.
     4. Whether Chromium's CDP-minimise blur is blocking or evidence (CF-5, CF-25), and that visibility and hidden documents are manual.
