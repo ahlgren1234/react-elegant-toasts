@@ -26,12 +26,17 @@ interface PointerInit {
   readonly type?: string;
   /** The event's `timeStamp`, in ms. */
   readonly time?: number;
+  /** Pressed buttons: by default 1 for `pointerdown` and `pointermove` (in contact), else 0. */
+  readonly buttons?: number;
 }
+
+// A contact's events, as browsers report them: a button held while down and moving, none at the end.
+const inContact = (kind: string) => (kind === 'pointerdown' || kind === 'pointermove' ? 1 : 0);
 
 function pointer(
   target: Element,
   kind: string,
-  { id = 1, x = 0, y = 0, type = 'touch', time = 0 }: PointerInit = {}
+  { id = 1, x = 0, y = 0, type = 'touch', time = 0, buttons = inContact(kind) }: PointerInit = {}
 ) {
   const event = new PointerEvent(kind, {
     bubbles: true,
@@ -40,6 +45,7 @@ function pointer(
     pointerType: type,
     clientX: x,
     clientY: y,
+    buttons,
   });
   Object.defineProperty(event, 'timeStamp', { value: time });
   act(() => {

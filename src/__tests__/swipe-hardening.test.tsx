@@ -48,13 +48,19 @@ interface PointerInit {
   readonly x?: number;
   readonly y?: number;
   readonly type?: string;
+  /** The event's `timeStamp`, in ms. */
   readonly time?: number;
+  /** Pressed buttons: by default 1 for `pointerdown` and `pointermove` (in contact), else 0. */
+  readonly buttons?: number;
 }
+
+// A contact's events, as browsers report them: a button held while down and moving, none at the end.
+const inContact = (kind: string) => (kind === 'pointerdown' || kind === 'pointermove' ? 1 : 0);
 
 function pointer(
   target: Element,
   kind: string,
-  { id = 1, x = 0, y = 0, type = 'touch', time = 0 }: PointerInit = {}
+  { id = 1, x = 0, y = 0, type = 'touch', time = 0, buttons = inContact(kind) }: PointerInit = {}
 ) {
   const event = new PointerEvent(kind, {
     bubbles: true,
@@ -63,6 +69,7 @@ function pointer(
     pointerType: type,
     clientX: x,
     clientY: y,
+    buttons,
   });
   Object.defineProperty(event, 'timeStamp', { value: time });
   act(() => {
@@ -933,5 +940,134 @@ describe('a candidate dropped by a lifecycle change stays dropped (D0 decision 1
     pointer(root, 'pointerup', { x: 160, time: 2000 });
     expect(recordOf()?.phase).toBe('visible');
     expect(capture.set).not.toHaveBeenCalled();
+  });
+});
+
+// Pre-publication correction (IMPORTANT-1). A pending candidate holds no capture, so when its
+// contact ends off the root (a pen has no implicit capture) the root never hears the `pointerup`.
+// A `pointermove` from the owning pointer with no buttons pressed proves the contact has ended:
+// it drops a pending candidate, and cancels an active gesture as `pointercancel` does. It never
+// activates, continues or commits a swipe.
+describe('contact loss: a move with no buttons ends the owning pointer’s gesture', () => {
+  /** A pen's contact that ends off the root: down on the toast, up over the page. */
+  function liftOffRoot(root: HTMLElement, id = 1) {
+    pointer(root, 'pointerdown', { id, type: 'pen' });
+    pointer(document.body, 'pointerup', { id, type: 'pen' });
+  }
+  const hover = (root: HTMLElement, x: number, id = 1, time = 0) =>
+    pointer(root, 'pointermove', { id, type: 'pen', x, time, buttons: 0 });
+
+  it('a pen hovering after a lift off the root never activates, captures, pauses or dismisses', () => {
+    const onDismiss = vi.fn();
+    const { root, capture } = show({ duration: 5000, onDismiss });
+    liftOffRoot(root);
+    for (const x of [20, 60, 160, 260]) hover(root, x, 1, x * 10);
+    expect(capture.set).not.toHaveBeenCalled();
+    expect(swipeCalls()).toEqual([]);
+    expect(swipeState(root)).toEqual(REST);
+    pointer(root, 'pointerup', { type: 'pen', x: 260, time: 3000 });
+    expect(recordOf()?.phase).toBe('visible');
+    advance(0);
+    expect(onDismiss).not.toHaveBeenCalled();
+    // A fresh contact, from the same pen or another pointer, swipes normally.
+    swipe(root, 130, { type: 'pen' });
+    expect(recordOf()?.exit?.reason).toBe('swipe');
+  });
+
+  it('lets a finite toast time out normally: the countdown is never held', () => {
+    const onDismiss = vi.fn();
+    const { root } = show({ duration: 1000, onDismiss });
+    liftOffRoot(root);
+    hover(root, 40);
+    hover(root, 160, 1, 500);
+    expect(recordOf()?.pausedBy).toEqual([]);
+    advance(1000);
+    expect(recordOf()?.exit?.reason).toBe('timeout');
+    advance(0);
+    expect(onDismiss.mock.calls).toEqual([[expect.anything(), 'timeout']]);
+    expect(swipeCalls()).toEqual([]);
+  });
+
+  it('drops a pending candidate at once, leaving nothing to settle, and the next contact starts normally', () => {
+    for (const type of ['touch', 'pen']) {
+      const { root, capture } = show();
+      pointer(root, 'pointerdown', { type });
+      pointer(root, 'pointermove', { type, x: 5, buttons: 0 });
+      pointer(root, 'pointermove', { type, x: 160, time: 1000 }); // same pointer, contact claimed
+      pointer(root, 'pointerup', { type, x: 160, time: 2000 });
+      expect(capture.set, type).not.toHaveBeenCalled();
+      expect(recordOf()?.phase, type).toBe('visible');
+      expectClean(root, capture);
+      swipe(root, 130, { id: 2, type });
+      expect(recordOf()?.exit?.reason, type).toBe('swipe');
+      cleanup();
+      act(() => resetStore());
+    }
+  });
+
+  it.each([
+    ['normal motion', MOTION, 'settle'],
+    ['reduced motion', { transition: '0s', animation: 'none' }, null],
+  ] as const)(
+    'cancels an active drag under %s, past the distance, never committing',
+    (_name, style, settling) => {
+      const onDismiss = vi.fn();
+      const { root, capture } = show({ duration: 5000, onDismiss });
+      stubStyle(style);
+      act(() => setStackPause('top-right', true));
+      dragTo(root, 200, { type: 'pen' });
+      expect(swipeState(root).swiping).toBe('drag');
+      pointer(root, 'pointermove', { type: 'pen', x: 400, time: 1050, buttons: 0 });
+      expect(recordOf()?.phase).toBe('visible');
+      expect(swipeState(root).swiping).toBe(settling);
+      expect(swipeState(root).x).toBe(''); // the offset is gone: it springs back
+      expect(capture.release).toHaveBeenCalledTimes(1);
+      expect(capture.held.size).toBe(0);
+      expect(root).toHaveAttribute('data-paused'); // hover still holds it
+      // The loss of capture, a lift and further moves that follow change nothing.
+      lost(root);
+      pointer(root, 'pointerup', { type: 'pen', x: 400, time: 1100 });
+      pointer(root, 'pointermove', { type: 'pen', x: 500, time: 1200 });
+      pointer(root, 'pointercancel', { type: 'pen' });
+      advance(1000);
+      expect(recordOf()?.phase).toBe('visible');
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(swipeCalls()).toEqual(['t on', 't off']);
+      expect(capture.release).toHaveBeenCalledTimes(1);
+      expectClean(root, capture);
+      act(() => setStackPause('top-right', false));
+    }
+  );
+
+  it('ignores a move with no buttons from any other pointer, pending or active', () => {
+    const { root, capture } = show();
+    pointer(root, 'pointerdown');
+    pointer(root, 'pointermove', { id: 2, x: 30, buttons: 0 });
+    pointer(root, 'pointermove', { id: 2, type: 'mouse', x: 30, buttons: 0 });
+    pointer(root, 'pointermove', { x: 10 });
+    expect(swipeState(root).swiping).toBe('drag');
+    pointer(root, 'pointermove', { id: 2, x: 300, buttons: 0 });
+    pointer(root, 'pointermove', { x: 60, time: 1000 });
+    expect(swipeState(root)).toMatchObject({ swiping: 'drag', x: '50px' });
+    expect(capture.held).toEqual(new Set([1]));
+    // A second contact still cannot take either kind of ownership.
+    pointer(root, 'pointerdown', { id: 3 });
+    pointer(root, 'pointermove', { id: 3, x: 300 });
+    pointer(root, 'pointerup', { id: 3, x: 300 });
+    expect(swipeState(root)).toMatchObject({ swiping: 'drag', x: '50px' });
+    expect(pausedBy()).toEqual(['swipe']);
+  });
+
+  it('ignores stale moves from a pointer whose gesture has already ended', () => {
+    const { root, capture } = show();
+    dragTo(root, 60);
+    pointer(root, 'pointermove', { x: 60, time: 1050, buttons: 0 }); // contact lost: cancelled
+    for (const buttons of [0, 1]) pointer(root, 'pointermove', { x: 200, time: 1100, buttons });
+    expect(swipeState(root)).toEqual(REST);
+    expect(swipeCalls()).toEqual(['t on', 't off']);
+    // After the cleanup a new pointer starts normally.
+    swipe(root, 130, { id: 5 });
+    expect(recordOf()?.exit?.reason).toBe('swipe');
+    expect(capture.set.mock.calls).toEqual([[1], [5]]);
   });
 });

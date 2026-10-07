@@ -257,6 +257,15 @@ function createSwipe(root: HTMLElement, id: ToastId, position: ToastPosition): S
   const onPointerMove = (event: PointerEvent) => {
     const current = gesture;
     if (!current || event.pointerId !== current.pointerId) return;
+    // No button pressed: the owning pointer's contact has ended, though the root never heard its
+    // `pointerup` (a pending candidate holds no capture, and a pen has no implicit capture, so a
+    // lift off the root goes elsewhere; a pen then hovers). It never activates, continues or
+    // commits a swipe: a candidate is dropped, and an active gesture cancels as on `pointercancel`.
+    if (event.buttons === 0) {
+      if (current.kind === 'pending') gesture = null;
+      else endActive(current, true);
+      return;
+    }
     if (current.kind === 'pending') {
       // From the original origin, never re-based: a forbidden start can still reverse (S2).
       const decision = activationOf(

@@ -220,6 +220,8 @@ function pointer(target: Element, kind: string, x: number, time = 0, pointerId =
     pointerType: 'touch',
     clientX: x,
     clientY: 0,
+    // A contact: a button held while down and moving, none at the end.
+    buttons: kind === 'pointerdown' || kind === 'pointermove' ? 1 : 0,
   });
   Object.defineProperty(event, 'timeStamp', { value: time });
   act(() => {
