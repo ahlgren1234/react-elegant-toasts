@@ -50,6 +50,27 @@ export interface ToastState {
   readonly offsetParentIsList: boolean;
 }
 
+/** A rectangle from `getBoundingClientRect()`. */
+export interface Box {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** A toast's progress indicator in one frame, read from the DOM and computed styles. */
+export interface ProgressState {
+  /** Whether the toast renders a `.ret-toast__progress` strip. */
+  readonly present: boolean;
+  /** The fill's horizontal scale from its computed `transform`: 1 is full, 0 is empty. */
+  readonly scale: number;
+  readonly playState: string;
+  readonly strip: Box | null;
+  readonly fill: Box | null;
+}
+
 export interface FrameSample<T> {
   /**
    * 0 is the synchronous read when sampling starts; n is the n-th `requestAnimationFrame`. A
@@ -104,6 +125,8 @@ export interface RetHarness {
   toastRoot(label: string): HTMLElement | null;
   /** The visual state of the toast labelled `label` (`connected: false` once it is gone). */
   toastState(label: string): ToastState;
+  /** The progress indicator of the toast labelled `label`. */
+  progressState(label: string): ProgressState;
   /**
    * Samples `read` now (frame 0) and then in each `requestAnimationFrame` callback, never mocking
    * it. To observe a change from its first frame (D2-12), call this and make the change in the same

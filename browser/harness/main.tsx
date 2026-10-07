@@ -3,8 +3,10 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { Toaster, toast } from '../../src';
 import type {
+  Box,
   FrameSample,
   HarnessEvent,
+  ProgressState,
   RetHarness,
   SampleOptions,
   ToastEventDetail,
@@ -173,6 +175,27 @@ function toastState(label: string): ToastState {
   };
 }
 
+const boxOf = (element: Element | null | undefined): Box | null => {
+  if (!element) return null;
+  const { left, right, top, bottom, width, height } = element.getBoundingClientRect();
+  return { left, right, top, bottom, width, height };
+};
+
+function progressState(label: string): ProgressState {
+  const strip = toastRoot(label)?.querySelector('.ret-toast__progress');
+  const fill = strip?.querySelector('.ret-toast__progress-fill');
+  if (!strip || !fill)
+    return { present: false, scale: Number.NaN, playState: '', strip: null, fill: null };
+  const style = getComputedStyle(fill);
+  return {
+    present: true,
+    scale: style.transform === 'none' ? 1 : new DOMMatrixReadOnly(style.transform).a,
+    playState: style.animationPlayState,
+    strip: boxOf(strip),
+    fill: boxOf(fill),
+  };
+}
+
 function sampleFrames<T>(read: () => T, options: SampleOptions<T>): Promise<FrameSample<T>[]> {
   const samples: FrameSample<T>[] = [{ frame: 0, time: performance.now(), value: read() }];
   let frame = 0;
@@ -236,6 +259,7 @@ const harness: RetHarness = {
   },
   toastRoot,
   toastState,
+  progressState,
   sampleFrames,
 };
 

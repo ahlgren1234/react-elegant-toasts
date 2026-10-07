@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3 is next.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is next.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -4421,6 +4421,70 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Carried forward:**
     - **S3:** `dir` on the harness when the RTL specs need it; the evidence specs' pattern for CF-15's and CF-25's Chromium layers and CF-27.
     - **S6:** CF-23's human visual evaluation (MC-8); rerunning the `@evidence` specs; the soak of the final suite.
+- **S3 record: layout, RTL, progress and forced colours (done).** CF-14, CF-15, CF-24 and CF-25 at their Class 1 layers, and CF-28's emulated layer, are blocking in Chromium, Firefox and WebKit. CF-15's CDP override, CF-25's CDP blur and CF-27's clip are recorded as evidence. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified.
+  - **Specs added** (`browser/tests/`; 13 blocking tests per engine, so the blocking suite is now 44 per engine and 132 in all; 3 evidence tests):
+    - `layout.spec.ts` (7 per engine):
+      - at each of the six positions, one described toast, read three ways: in LTR at 1280 × 720, in RTL (`dir="rtl"` on the document), and in a 320 × 640 viewport;
+      - the zero-inset test.
+    - `progress.spec.ts` (4 per engine): off by default; the depletion, hover pause and timeout; the focus pause; the direction in LTR and RTL.
+    - `forced-colors.spec.ts` (2 per engine): the card edge, the action border, the fill, the strip and the icons; and the `Highlight` rings.
+    - `layout.evidence.spec.ts` (`@evidence`): CF-15 and CF-25 in Chromium only (skipped elsewhere with a reason naming MC-2 and MC-3, or MC-5 and MC-1), and CF-27 in all three.
+  - **Layout and RTL strategy (CF-15's zero-inset layer; AC-RTL-1 with CF-24).** Expected geometry comes from the public tokens read in the page (`--ret-offset` 16 px, `--ret-width` 360 px), compared within about a pixel. Bounding rectangles and the document's `scrollWidth` are checked; no CSS declaration is inspected for placement.
+    - **Every position:** the stack is `min(--ret-width, viewport − 2 × --ret-offset)` wide and sits `--ret-offset` from its physical edges (centre stacks centred). The toast fills the stack, nothing crosses a gutter, and nothing overflows horizontally.
+    - **RTL:** every stack keeps the left edge it has in LTR, so positions stay physical. Inside the card, the icon moves to the right and the close to the left, with their insets mirrored exactly.
+    - **Narrow (320 px):** the stack is 288 px wide at the same position.
+    - **Zero insets:** with `viewport-fit=cover`, each `env(safe-area-inset-*)` resolves to `0px` (not the fallback), and the gutters stay at `--ret-offset`.
+  - **Progress strategy (AC-PR-1, CF-25; AC-RTL-1, CF-24).** The fill is the production CSS animation. The spec never drives it, and never computes anything from production code.
+    - **What is read:** the harness's `progressState(label)`, which is the fill's horizontal scale from its computed `transform`, its play state, and the fill and strip rectangles. Each is read with the page time of the same frame. The toast's `visible` time comes from the harness recorder.
+    - **The expectation, from the contract:** the fill shows the share of the duration still to run, `1 − running time / duration`, within 0.05 of the duration (200 ms of a 4 s toast).
+    - **Off by default:** a default toast has no strip. A finite normal toast with `progress: true` has one, and so does one inheriting the Toaster's `progress`. A persistent toast, a loading toast and a custom toast have none.
+    - **Hover:** a trusted pointer over the stack sets `data-paused`. The fill's play state is `paused`, and it holds within 0.002 for 600 ms. When the pointer leaves, the fill resumes from the held fraction (never above it, within 0.05) and depletes again. The timeout then comes when the remaining time has run: at the visible time plus the duration plus the pause, not a full duration after the resume (D-08). `onDismiss` reports `timeout`.
+    - **Focus:** DOM focus on the close button (`locator.focus()`, the narrowest mechanism) pauses it by focus-within, with the same hold and resume. How focus arrives is S4's.
+    - **Direction:** the fill's visible width is its scale times the strip's width. In LTR its left edge stays on the strip's left and its right edge comes in; in RTL its right edge stays on the strip's right and its left edge comes in.
+    - **Pause through blur** is Chromium-only Class 2 evidence (below), and genuine blur in Firefox and Safari stays MC-5 and MC-1.
+  - **Forced-colours strategy (CF-14, with CF-28's emulated layer).** Playwright's `forced-colors: active` emulation, with the media query checked as a precondition. System colours (`CanvasText`, `Canvas`, `Highlight`, `ButtonText`) are resolved by a probe in the same page, never hard-coded, since each engine resolves them differently (for example, `Highlight` is `rgba(5, 0, 73, 0.8)` in Chromium, `rgb(51, 153, 255)` in Firefox and `rgb(52, 132, 228)` in WebKit).
+    - **Asserted:** the card's 1 px solid `CanvasText` edge on every side; the action's 1 px solid `ButtonText` border; the fill in `CanvasText`, with a visible box; a transparent strip, so no track; and the type icon present.
+    - **The rings:** `Highlight` outlines on the action, the close and the toast root, and the region's `::after` ring (`Highlight` border, `Canvas` outline), each while `:focus-visible` matches. Those states are reached only by trusted keyboard paths: Tab to the action and the close; then Alt+T for the root; then Tab, Tab and Enter, which closes the only toast and leaves focus on the region by restoration (§18). S3 asserts only the styles; focus behaviour is S4's.
+    - This is emulation, not Windows High Contrast, which stays MC-6 (S6).
+  - **Observations (not product contracts):**
+    - **Emulation differs between engines.** The library's own forced-colours rules apply in all three. The engines differ in what their emulation forces beyond them:
+      - Chromium forces outline colours to `Highlight` and border colours to `CanvasText` by itself, and Firefox forces border colours;
+      - WebKit's emulation matches the media query but forces no author colour at all: the text keeps `rgb(24, 24, 27)` and the success icon stays green.
+
+      So the library's `border-color: CanvasText` rule is proven only by WebKit, and its `Highlight` ring rule only by Firefox and WebKit (see the mutation checks). The blocking suite needs all three engines for exactly that reason. P-26 should distinguish emulated from real forced colours with this in mind (D2-5).
+
+    - **`:focus-visible` after script focus, for S4 (CF-12).** Starting from a keyboard-focused control, Alt+T focused the root and the region took focus by restoration, and both matched `:focus-visible` in all three engines. D1 measured Alt+T with no earlier keyboard focus, and only Firefox matched. This is a new data point for S4's Class 2 record, not a reclassification.
+  - **Class 2 evidence** (`npm run test:browser:evidence`):
+    - **CF-15, Chromium's safe-area override (an approximation, not notched-device evidence).** At 412 × 915 with insets 47/20/34/20 px, the production rule measured top 63 px, left 36 px, bottom 50 px, right 36 px and width 340 px, exactly the expected `--ret-offset` plus inset arithmetic. The override is injected through the browser's own `env()` values, without the device's `viewport-fit` gating. Real notched devices stay MC-2 and MC-3 (S6).
+    - **CF-25, genuine blur in Chromium (CDP minimise).**
+      - **Method:** Playwright emulates focus and re-applies that on navigation, so the spec turns focus emulation off after loading and brings the page to the front. The first attempt, which turned it off before navigation, produced no blur.
+      - **Result:** minimising fired a trusted `blur`, `document.hasFocus()` became false and the toast got `data-paused`. The fill held at 0.897 for 0.5 s. Restoring fired a trusted `focus` and cleared `data-paused`, and the fill resumed from 0.897 with no reset, at 0.832 half a second later.
+    - **CF-27, the strip.** In all three engines the strip's computed clip is `inset(-10px 0px 0px round 0px 0px 9px 9px)`: the card radius (10 px) less its 1 px border, with the negative top inset P-20 uses to keep the radii unclamped. It is the same at fractions 0.9, 0.5 and 0.1, because the strip never moves. The fill is a `matrix(s, 0, 0, 1, 0, 0)` box anchored at the strip's left, so its moving edge is straight. Its appearance stays MC-8 (S6).
+  - **Harness changes:** `progressState(label)`, a read of the fill's computed scale and play state and of the fill and strip rectangles, with its `Box` and `ProgressState` types. No other addition: RTL sets `dir` on the document from the spec, so no harness `dir` API was needed.
+  - **Mutation checks**, each a temporary edit to the production stylesheet or renderer, reverted at once (`git status` clean):
+    - **Physical `left` made logical (`inset-inline-start`), so left stacks mirror in RTL:** 6 layout failures.
+    - **Progress restarting on resume** (the fill's delay forced to `0ms`): 6 progress failures, the hover and focus tests in every engine.
+    - **The `:dir(rtl)` fill-origin rule removed:** the direction test fails in all three.
+    - **The forced-colours fill rule removed:** fails in all three.
+    - **The forced-colours card-edge rule removed:** fails in WebKit only, since Chromium's and Firefox's emulation force border colours themselves.
+    - **The forced-colours `Highlight` ring rule removed:** fails in Firefox and WebKit; Chromium forces it itself.
+    - **The top safe-area inset ignored:** the blocking suite passes, as it must with zero insets. Chromium's override evidence shows it, with top 16 px against the expected 63 px: the D2-9 split at work.
+  - **Commands:** unchanged. `npm run test:browser` (132 tests); `npm run test:browser:evidence` (5 per engine, 4 of them skipped outside Chromium, 15 in all).
+  - **Validation:**
+    - **Focused:** the 13 S3 tests pass in Chromium (about 15 s), Firefox (about 17 s) and WebKit (about 15 s).
+    - **Full blocking suite** under `CI=1` (one worker): 132 of 132 in about 2.6 minutes. The `@evidence` run: 11 passed, 4 skipped (the Chromium-only tests in Firefox and WebKit).
+    - **S3 soak:** the 13 new blocking tests, `--repeat-each=10` under `CI=1` (one worker, zero retries): **390 of 390** passed in 10.3 minutes. S2's suite was not soaked again: nothing it covers changed, and its 930-run soak stands.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects, the browser one included), `typecheck:demo`, the full Vitest suite (40 files, 1,689 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S4:** the `:focus-visible` observation above, for CF-12's Class 2 record.
+    - **S6:**
+      - real notched-device safe areas (MC-2, MC-3);
+      - real Windows High Contrast for CF-14 and CF-28 (MC-6);
+      - genuine blur in Firefox and Safari for CF-25 (MC-5, MC-1);
+      - CF-26's hidden documents (MC-1, MC-2, MC-3, MC-5);
+      - CF-27's appearance (MC-8);
+      - rerunning the evidence specs.
+    - **P-26:** the emulation differences above, when documenting forced colours.
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
