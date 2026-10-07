@@ -15,7 +15,9 @@ export default defineConfig({
   forbidOnly: CI,
   // Zero retries: a flake is fixed at its cause, never retried (D2-11).
   retries: 0,
-  ...(CI && { workers: 1 }),
+  // The specs observe real frames and real timers, so each browser needs CPU headroom: a starved
+  // page can miss the lifecycle fallback's margin. One worker in CI, a few locally.
+  workers: CI ? 1 : 3,
   reporter: CI
     ? [['list'], ['html', { open: 'never', outputFolder: './browser-results/report' }]]
     : 'list',

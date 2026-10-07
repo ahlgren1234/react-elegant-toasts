@@ -26,6 +26,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:browser": "playwright test --grep-invert @evidence",
+    "test:browser:evidence": "playwright test --grep @evidence",
     "browser:serve": "vite build --config browser/vite.config.ts && vite preview --config browser/vite.config.ts",
     "typecheck": "tsc -p tsconfig.lib.json && tsc -p tsconfig.test.json && tsc -p tsconfig.tooling.json && tsc -p tsconfig.browser.json",
     "typecheck:demo": "tsc -p demo/tsconfig.json",

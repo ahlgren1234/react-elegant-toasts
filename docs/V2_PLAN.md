@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2 is next.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3 is next.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -4343,6 +4343,84 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - `test:browser:evidence` with the first `@evidence` spec;
     - the fallback tolerance constants (the D2 timing approach);
     - harness additions as their slices need them: `dir` (S3), token overrides through harness CSS (S2), and the long-page fixture for H1-R (S4).
+- **S2 record: lifecycle, motion and reflow (done).** CF-16 to CF-22 at their Class 1 layers are blocking in Chromium, Firefox and WebKit, and CF-17's and CF-23's Class 2 layers are recorded as evidence. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified.
+  - **React baseline (clarified at S2).** P-22 uses the repository's existing React 18 baseline: the unchanged `^18.2.0` range, currently resolved by the lockfile to **React 18.3.1**. Where D0-9, D2-14 and the S1 record say "React 18.2", they mean this baseline. React is not pinned or downgraded to 18.2.0. P-23 owns React-version compatibility and React 19. This is a clarification, not a dependency change.
+  - **Specs added** (`browser/tests/`; 31 blocking tests per engine, 93 in all with the S1 smoke, and 2 evidence tests per engine):
+    - `motion.spec.ts` (12 per engine):
+      - enter and exit at all six positions with the public motion tokens slowed (enter 600 ms, exit 400 ms, diagnostic). Each checks the edge's trusted `ret-enter-*`/`ret-exit-*` playback, the off-edge start and the frame-by-frame interpolation of `translate`, `scale` and `opacity`, `transform` untouched, completion on the root's own `animationend`, the exit's last frame held at it, removal, and a clean rest at the stack's gutters (left positions at the gutter, D-14);
+      - the same at production timing (180 ms and 120 ms) at `top-right` and `bottom-left`, without frame-count or interpolation checks;
+      - the spinner turning about its own centre, its `rotate` interpolating and its events never completing the toast (the enter held and slowed to 1.5 s, diagnostic);
+      - reduced motion at `top-right` and `bottom-left`: no translation, scale or fade in any frame, no root animation, the lifecycle completing with one `onDismiss`; and a still spinner.
+    - `lifecycle.spec.ts` (6 per engine), with the root's animation held by consumer CSS (`animation-play-state: paused`) or the region hidden:
+      - the enter and the exit completing at the computed fallback;
+      - an overridden `--ret-exit-duration` (600 ms) moving it;
+      - a descendant's trusted `animationend`, a wrong name on the root and the library's name on a descendant (both synthetic) never completing the exit;
+      - completion and timing with the region hidden after the toast is shown;
+      - completion, without timing, with the region hidden before creation (D2-10).
+    - `reflow.spec.ts` (10 per engine):
+      - at all six positions, with mixed heights (a described toast, a 96 px custom toast and a plain one) and `maxVisible: 2`: an insertion, a removal with promotion (the queued toast promoted in the removal's commit), and a removal after the exit, ending at the gutter;
+      - an interrupted move at `top-right` and `bottom-right`;
+      - reduced-motion repositioning at `top-right` and `bottom-left`.
+    - `motion.evidence.spec.ts` (`@evidence`, 2 per engine): CF-17's fallback timings and CF-23's composition offset.
+  - **CF and AC mapping:**
+    - **CF-16, AC-MO-1:** `motion.spec.ts`, enter and exit, at all six positions.
+    - **CF-17, AC-LC-2:** `lifecycle.spec.ts` (Class 1); the hidden-before-creation timing in `motion.evidence.spec.ts` (Class 2).
+    - **CF-18, AC-MO-3:** the reduced-motion tests in `motion.spec.ts`.
+    - **CF-19:** the spinner tests.
+    - **CF-20:** the `translate`, `scale`, `opacity` and `rotate` interpolation checks.
+    - **CF-21, AC-MO-2:** `reflow.spec.ts`, stack repositioning and the interrupted move.
+    - **CF-22, AC-MO-3:** `reflow.spec.ts`, reduced-motion repositioning.
+    - **CF-23:** `motion.evidence.spec.ts` (Class 2). Its human visual evaluation stays MC-8, in S6.
+  - **Harness extensions** (`browser/harness/`; observation only: it never completes, times or moves a toast):
+    - **`sampleFrames(read, options)`:** reads `read()` synchronously as frame 0, then in each `requestAnimationFrame` callback, which is never mocked.
+      - `onFrame(n)` runs in frame n's callback after its read, so a second trigger acts in that frame's task.
+      - `until` stops the sampling.
+      - `atToastMutations` also reads in a MutationObserver callback whenever toast roots are added or removed: after the renderer's commit and layout effects and before the next frame. That read is the seeded position itself.
+    - **The event recorder:** from page load, animation and transition events inside toasts (captured on the document before the library sees them), each toast root's `phase` change, and roots `added` and `removed`, including roots that leave inside their list. Each entry has a label, `root`, the animation or property name and `isTrusted`. Specs label a toast with the class `h-<label>`.
+    - **`toastState(label)`:** the bounding rectangle, the layout box, the computed `transform` (and its Y), the individual `translate` and `scale` (and their Y parts), opacity, `animation-name`, `data-phase`, and whether the offset parent is the list.
+    - **`toastRoot(label)`** and **`setStyle(css)`:** consumer-style CSS in one harness `<style>` after the production stylesheet, for token slowing and test markup only. The production stylesheet is untouched. The S1 smoke still checks that a fresh page has no other stylesheet.
+    - **Shared spec helpers (`browser/tests/harness.ts`):** `openReducedMotionHarness` (Playwright's `prefers-reduced-motion: reduce` emulation, with the media query checked as a precondition only); `expectInterpolatedMove`, which requires a move with no reversal and at least one value strictly between its ends; `timeToken`, `showToast` and `timeDismissal`.
+  - **Sampling (D2-12).** Every first-frame observation starts its sampler and its trigger in one `page.evaluate`. Frame 0 is the pre-trigger state, and for repositioning the commit-time read is the seeded state; later frames are the interpolation, and the last is the rest.
+  - **Timing and tolerances:**
+    - **Fallback timing:** checked against the computed token plus the documented 100 ms margin. The margin is written in the spec, not imported, so a change to the implementation's constant fails. The lower bound is the fallback less one frame (16.7 ms), because early completion is the defect. The upper bound is the fallback plus `LATE_TOLERANCE_MS` (150 ms), because lateness is scheduling noise. Measured lateness was 1 to 3 ms in every engine, once 33 ms (Firefox). Both constants are in `browser/tests/harness.ts` and are not product constants.
+    - **Completion on the animation event:** within 50 ms of the root's `animationend` (the fallback would come 100 ms after the nominal end). The completion is logged in the same task as the event, so load does not widen that gap.
+    - **Positions:** half a pixel. Scale and opacity have their own tolerances (0.001 and 0.005).
+    - **Frame-by-frame interpolation** is checked with slowed tokens, because a 120 ms exit can fall between two frames of a loaded machine. Production timing is used where the contract is about it: completion, the held frame, the fallback and every reflow. No test asserts a frame count or an engine's curve.
+  - **Harness lessons (not product observations):**
+    - **WebKit advances running motion with the clock inside a task.** Chromium and Firefox hold a frame's animation time for the whole task. Measured: two reads 20 ms apart in one task differed by 6 to 8 px of motion in WebKit and by 0 elsewhere. So a read after a commit and a read before it differ by the motion in between: 1.1 px over React's commit, and up to 6.8 px when the next frame read came well after a commit made between frames. The reflow checks therefore read the seed at the commit (`atToastMutations`). The interrupted move compares reads just before and just after the commit, allowing only the motion the elapsed time explains at the sampled speed. Neither loosens the contract: a seed that ignored the toast's current position jumped 30 to 42 px.
+    - **CPU headroom.** Eight parallel workers on the 7 GB WSL host starved a page for longer than the 100 ms margin, and Chromium then completed an exit on its fallback, as designed, before `animationend` arrived. Local runs are capped at three workers; CI uses one.
+  - **Mutation checks**, each a temporary edit reverted at once (`git status` clean):
+    - margin 0: 5 of 6 lifecycle tests fail;
+    - completing on any `animationend`: the unrelated-events test fails;
+    - ignoring the root's own `animationend`: 6 motion tests fail;
+    - a seed that ignores the toast's current translation: both interrupted-move tests fail in every engine;
+    - no seeding: every non-reduced reflow test fails (24), and the reduced-motion ones, which need no seed, pass.
+  - **Class 2 evidence** (`npm run test:browser:evidence`; elapsed from the dismissal to `onDismiss`, against the computed fallback):
+
+    | Scenario                                                                   | Expected | Chromium | Firefox    | WebKit     |
+    | -------------------------------------------------------------------------- | -------- | -------- | ---------- | ---------- |
+    | Held animation, default exit                                               | 220 ms   | 222 ms   | 223 ms     | 222 ms     |
+    | Held animation, exit token 600 ms                                          | 700 ms   | 702 ms   | 703 ms     | 703 ms     |
+    | Hidden after shown                                                         | 220 ms   | 221 ms   | 222 ms     | 222 ms     |
+    | Hidden before creation, dismissed once visible                             | 220 ms   | 221 ms   | 221–222 ms | 221–222 ms |
+    | Hidden before creation, dismissed once visible, exit token 600 ms          | 700 ms   | 701 ms   | 702–733 ms | 701–702 ms |
+    | Hidden before creation, dismissed while entering (a frame after rendering) | 220 ms   | 221 ms   | 222 ms     | **1–2 ms** |
+    | The same, exit token 600 ms                                                | 700 ms   | 701 ms   | 701–702 ms | **1 ms**   |
+    - **The WebKit observation (D2-10), narrowed.** It reproduces only when a toast in a region hidden before creation is dismissed **while still entering**. Once the toast has completed its enter (on its fallback, since nothing renders), WebKit follows the computed timing like the other engines. That fits D1b's stale `entering` style: the change from `entering` to `exiting` happens with nothing rendered. Nothing is visible, and the lifecycle completes with one `onDismiss`. It stays a known WebKit observation (Class 2): no blocking timing assertion and no production change. D0-16 was not invoked.
+    - **CF-23, the `scale` × `transform` composition** (production timing; a toast entering or exiting while a later insertion moves it): the rendered top departs from layout plus `translate`, `transform` and the scale's own centring by at most **0.62 px** in Chromium, **0.92 px** in Firefox and **0.45 px** while entering, and about **0.2 px** while exiting in every engine. That is within the 1.79 px P-19 accepted. No new evidence reopens the boundary. The human visual evaluation stays MC-8 (S6).
+
+  - **Commands:**
+    - `npm run test:browser`: the blocking suite (93 tests);
+    - `npm run test:browser -- --project=<engine>`: one engine;
+    - `npm run test:browser:evidence`: the `@evidence` specs only. Added now that evidence specs exist. Its tests assert only that their scenarios ran and never join the blocking gate (`test:browser` excludes `@evidence`).
+  - **Validation:**
+    - Focused: `npm run test:browser -- --project=<engine>` passes 31 of 31 in Chromium (about 16 s), Firefox (about 21 s) and WebKit (about 18 s).
+    - Full blocking suite under `CI=1` (one worker): 93 of 93 in about 1.6 minutes, including the harness build. The `@evidence` run: 6 of 6.
+    - **Soak:** the blocking suite with `--repeat-each=10` under `CI=1` (one worker, zero retries): **930 of 930** passed in 16 minutes. Before that, `--repeat-each=5` with the local three workers: 465 of 465.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,689 tests, still only `src/`), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S3:** `dir` on the harness when the RTL specs need it; the evidence specs' pattern for CF-15's and CF-25's Chromium layers and CF-27.
+    - **S6:** CF-23's human visual evaluation (MC-8); rerunning the `@evidence` specs; the soak of the final suite.
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
