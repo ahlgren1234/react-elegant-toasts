@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D2 is next.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2 is next.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -3998,6 +3998,82 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     9. The S1 harness, applying the sampling rule.
     10. Who supplies each manual checkpoint's browser, device or hardware.
     11. The probes D1 did not make: the accessibility tree for `aria-keyshortcuts` (CF-11), safe-area insets (CF-15), and fallbacks under `display: none` and overridden tokens (CF-17).
+- **D1b record: evidence completion before D2.** It closes D1's open probes (D2 decision 11), characterises CF-36, and checks H1 in real browsers. Evidence only: no production, test, package or CI change, no D2 classification, and the D1 matrix above is unchanged.
+  - **Infrastructure:** as in D1, and removed before this record was committed.
+    - A disposable spike outside the repository: its own `@playwright/test` 1.63.0, the same engines as D1 (Chromium 153.0.8010.12, Firefox 155.0, WebKit 26.6), locally extracted system libraries, and the WebKit launcher wrapper.
+    - The harness was bundled from the current `src/` (including H1) with a byte-identical copy of `src/styles.css`.
+    - All runs were headless. Where a probe overrode something, it did so in harness CSS only, through the public motion tokens or consumer-style rules, never in production code.
+  - **H1, real-browser check (passed in every engine).** D1's reproduction, re-run against the fixed code: 4000 px of content before `<Toaster />`, the page at the top.
+
+    | Case                                        | Chromium | Firefox | WebKit | Focus afterwards (all three)        |
+    | ------------------------------------------- | -------- | ------- | ------ | ----------------------------------- |
+    | Mouse click on the close button, one toast  | 0 → 0    | 0 → 0   | 0 → 0  | the region (§18 step 3)             |
+    | Alt+T, Tab, Enter on the close button       | 0 → 0    | 0 → 0   | 0 → 0  | the region                          |
+    | Body click, then a programmatic dismissal   | 0 → 0    | 0 → 0   | 0 → 0  | the region                          |
+    | Close of the first of two toasts            | 0 → 0    | 0 → 0   | 0 → 0  | the next toast's close (§18 step 1) |
+    | Programmatic dismissal with nothing focused | 0 → 0    | 0 → 0   | 0 → 0  | `<body>`; not restoration (control) |
+
+    The figures are `scrollY` before and after. Before H1 the region cases went 0 → 3400 (D1). H1 holds in real browsers and the §18 targets are unchanged.
+
+  - **CF-11, `aria-keyshortcuts`:**
+    - **A, the DOM attribute:** reliable in all three engines.
+      - The default gives `Alt+T`.
+      - `hotkey={["ctrlKey", "shiftKey", "KeyK"]}` gives `Control+Shift+K`, and `["F6"]` gives `F6`.
+      - A punctuation hotkey (`["altKey", "Comma"]`) and `hotkey={false}` give no attribute, as P-16 specifies.
+    - **B, the browser accessibility tree:**
+      - **Chromium only,** through CDP `Accessibility.getFullAXTree`: the region node (role `region`, name "Notifications") carries `keyshortcuts` with the same value in every case, and none when the attribute is absent.
+      - **Firefox and WebKit:** Playwright gives no access to their accessibility trees. `page.accessibility` no longer exists in 1.63.
+      - Playwright's `ariaSnapshot()` is computed by Playwright from the DOM, not read from the browser's tree, and it does not include key shortcuts. It is not B evidence.
+    - **C, assistive technology:** not observable through browser automation, and not claimed. P-29.
+    - **Recommended class:** 1 for A in all three; 2 for B in Chromium; B in Firefox and WebKit not automatable here; C at P-29.
+  - **CF-15, safe-area insets:**
+    - **Production rule:** each list's anchored edge is `--ret-offset` plus `env(safe-area-inset-<edge>, 0px)`, and its width is at most `100%` minus both offsets and both horizontal insets.
+    - **Normal contexts:** every `env(safe-area-inset-*)` resolved to `0px`, not to the fallback, in all three engines. That covers desktop, `hasTouch` at 412 px, Playwright's iPhone 15 Pro descriptor (Chromium and WebKit) and the Pixel 7 descriptor (Chromium), with or without `viewport-fit=cover`. The gutters were exactly `--ret-offset` (16 px).
+    - **Non-zero values:** only Chromium's CDP `Emulation.setSafeAreaInsetsOverride` produced them. With 47/20/34/20 px the production rule computed exactly: top 63 px, bottom 50 px, left and right 36 px, width 412 − 32 − 40 = 340 px.
+      - These are values injected through the browser's own `env()` mechanism, not ones provided by a device.
+      - They applied even without `viewport-fit=cover`, which real devices require, so the override does not model that gating. It is a synthetic approximation.
+    - **Firefox and WebKit:** no way to produce non-zero insets.
+    - **Still useful:** the zero-inset layout assertions (gutters, narrow-viewport width, the six positions, RTL), and Chromium's override as evidence of the `calc()` arithmetic.
+    - **Recommended class:** 1 for the zero-inset layout in all three; 2 for Chromium's override arithmetic; **3** for genuine notched-device safe areas (iOS Safari, Android Chrome, with `viewport-fit=cover`).
+  - **CF-17, lifecycle fallback.** Real production lifecycle and CSS, at about 60 frames per second. Times are from dismissal to `onDismiss` (removal from the store), except the "hidden only after" row, which is to the root's removal from the DOM.
+
+    | Scenario                                                                   | Chromium | Firefox | WebKit                         |
+    | -------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+    | Control: normal motion, trusted `animationend` (120 ms)                    | 132 ms   | 131 ms  | 127 ms                         |
+    | Paused by consumer CSS (`animation-play-state: paused`), no `animationend` | 222 ms   | 222 ms  | 222 ms                         |
+    | Paused, exit token 600 ms                                                  | 702 ms   | 704 ms  | 702 ms                         |
+    | `display: none` on the region (hidden before the toast was created)        | 221 ms   | 221 ms  | **about 1 ms**                 |
+    | `display: none`, exit token 1000 ms (enter token 600 ms)                   | 1102 ms  | 1102 ms | **about 1 ms** (enter: 718 ms) |
+    | Region hidden only after the toast was visible                             | 228 ms   | 228 ms  | 226 ms                         |
+    | Normal motion, exit token 600 ms                                           | 615 ms   | 596 ms  | 614 ms                         |
+    - **The fallback works and follows the computed timing:** duration plus the documented 100 ms margin (`LIFECYCLE_FALLBACK_MARGIN_MS`), within a frame. That holds for paused animations in all three engines, and for `display: none` in Chromium and Firefox. An overridden token moves it. Enter fallbacks under `display: none` follow the tokens in all three (about 293 ms; 718 ms with a 600 ms enter token).
+    - **Unrelated events never completed a toast** (paused, 600 ms token: completion still at about 702 ms in every engine):
+      - a trusted `animationend` from a descendant's own animation (three iterations, bubbling);
+      - a synthetic `animationend` with a wrong name on the root;
+      - a synthetic one with the library's name on a descendant.
+    - **WebKit difference, not reduced:**
+      - **Symptom:** when the region is already `display: none` before the toast is created, the exit's fallback read the root's computed style at `exiting` and got the stale `entering` value (`ret-enter-top`, 0.18 s; Chromium and Firefox read `ret-exit-top`, 0.12 s). So it found no exit animation, took the immediate path (§9 rule 3), and the toast was removed about 1 ms after dismissal. `onDismiss` still fired once.
+      - **Conditions:** reproduced twice. It does not happen when the region is hidden after the toast was visible.
+      - **Not reduced:** five pure-DOM reductions stayed correct in WebKit: parser- and script-created elements, production CSS on static markup, `inert`, and either way of reading the property. So whether it is a WebKit engine quirk or an interaction with the library's flow is **undetermined**.
+      - **Impact:** nothing is visible, since the toast is not displayed, and the lifecycle completes (AC-LC-2 holds). The exit's slot frees about 220 ms early. In this one case "the fallback follows an overridden token" (CF-17) does not hold in WebKit.
+      - **Disposition:** D0-16 was not invoked, because no user-visible effect or acceptance criterion is violated. It is flagged for D2: the maintainer decides whether it is accepted, needs more investigation, or is a defect.
+    - **Recommended class:** 1 for completion with no `animationend` (paused) and for token-following, in all three; 1 for completion under `display: none` in all three (AC-LC-2), with its timing 1 in Chromium and Firefox and 2 or 4 in WebKit pending D2; 1 for filtering unrelated events, trusted and synthetic.
+
+  - **CF-36 and CF-40, a dismissal during the snap-back:**
+    - **Method:** a synthetic below-threshold drag (released at opacity 0.898), then a programmatic dismissal 0, 16, 50, 100, 150 or 250 ms after release. Sampling started in the same task as the dismissal (D1's sampling rule). Production timing: a 200 ms settle and a 120 ms exit, so about 8 or 9 frames. `getAnimations()` showed the `opacity` and `transform` transitions and `ret-exit-top` running together.
+    - **Firefox at production timing:** the exit fades from the current value. Its one rise is +0.011 for one frame (dismissal at 16 ms). Otherwise it is monotone.
+    - **WebKit at production timing:** it starts within about 0.01 of the current value (+0.010 for one frame at 16 ms; otherwise slightly below) and is monotone after.
+    - **Chromium at production timing:** the exit starts from **1** on its first frame, whatever the snap-back value. That is a step of up to +0.10 for a dismissal right after release, shrinking as the settle completes: +0.04 at 50 ms, +0.02 at 100 ms, none from about 150 ms. The curve then equals a plain dismissal's exactly (1, 0.966, 0.881, … 0.044). This is what D1 recorded as "falls from 1".
+    - **With the exit slowed to 900 ms (diagnostic only):** Firefox rises +0.071 and WebKit +0.048, over about 200 ms, before fading. That is D1's "bump", and it is about as long as the settle. Chromium steps to 1, then fades.
+    - **Materiality:** at production timing the Firefox and WebKit deviations are at most about 1% opacity for one frame of a roughly 130 ms fade, unlikely to be human-visible. Chromium's step to 1 on the first frame of a dismissal that lands within about 100 ms of a cancelled swipe is a larger change, but brief, and it turns into an ordinary exit fade. The case needs a cancelled swipe followed, within the 200 ms settle, by a dismissal from elsewhere (a timeout cannot occur while the reason held the timer, so it is programmatic, another control, or dismiss-all).
+    - **Recommendation for the maintainer's decision: B,** an accepted cosmetic interpolation difference between engines, not a material defect. Optionally confirm Chromium's first-frame step with a human visual checkpoint on a device (C), since frame metrics cannot judge perceptibility. Not A: no production change is recommended.
+    - **Recommended class:** 2 (automated evidence in all three; never a blocking assertion of an engine's interpolation).
+  - **Remaining evidence gaps after D1b:**
+    - Firefox and WebKit accessibility trees (CF-11 B);
+    - genuine device safe areas (CF-15);
+    - the unreduced WebKit stale-style case (CF-17);
+    - the perceptibility of Chromium's CF-36 step (optional C);
+    - and every gap D1 recorded, which D1b did not address.
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
