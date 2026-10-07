@@ -2526,7 +2526,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
-- **Status: complete.** D0, D1 and S1 to S5 are done, the final reconciliation and validation passed, and every checkpoint is recorded. Progress ships as candidate B, synchronised by T1, with two public tokens (30 in all) and the `data-paused` hook. The publication review is next. What P-20 leaves open is listed in the S5 record and in the P-22, P-26 and P-29 entries.
+- **Status: complete.** D0, D1 and S1 to S5 are done, the final reconciliation and validation passed, and every checkpoint is recorded. Progress ships as candidate B, synchronised by T1, with two public tokens (30 in all) and the `data-paused` hook. It was merged into `v2` through PR #14 (`6dd1bc9`). What P-20 leaves open is listed in the S5 record and in the P-22, P-26 and P-29 entries.
 - **Already decided, not reopened here:**
   - `ToastOptions.progress` and `ToasterProps.progress`, off by default, resolved toast, then Toaster, then `false` (§6.3, §6.5, P-14);
   - custom toasts reject progress, in the types and at runtime (§6.4, P-12, AC-API-10);
@@ -3175,7 +3175,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - Stack repositioning seeds an inverse vertical offset on the toast root through inline `transform` and carries it back with the stylesheet's `transition: transform`. At rest the root computes to `transform: none`.
   - Swipe composes with this without wrappers, without DOM reordering, and without replacing P-18's individual properties.
   - The expected direction is one library-owned root `transform` built from internal components for the horizontal swipe offset and the vertical reposition offset, with the transition turned off while a direct pointer drag is active. P-21 decides the exact contract, including what a drag does to a reposition already running.
-- **Status: in progress.** D0, D1 and D2 are done: the architecture (D0), the prototype with its machine evidence and the maintainer's required iPhone Safari and Android Chrome sign-off (D1), and the prototype-derived constants and composition contract (D2), all recorded below. The implementation slices S1 to S5 are complete and recorded under the sequence: the gesture helpers, drag and cancel, commit with the P-19 composition, hardening, and the final reconciliation with the prototype removed. The maintainer approved the production S3 dismissal on iPhone Safari and Android Chrome. What remains is the focused publication review, then the PR into `v2`, CI and a merge commit.
+- **Status: complete.** D0, D1 and D2 are done: the architecture (D0), the prototype with its machine evidence and the maintainer's required iPhone Safari and Android Chrome sign-off (D1), and the prototype-derived constants and composition contract (D2), all recorded below. The implementation slices S1 to S5 are complete and recorded under the sequence: the gesture helpers, drag and cancel, commit with the P-19 composition, hardening, and the final reconciliation with the prototype removed. The maintainer approved the production S3 dismissal on iPhone Safari and Android Chrome. After the publication review and its pre-publication correction, it was merged into `v2` through PR #15 with a merge commit (`1644671`).
 - Defects: none. Appendix A assigns no defect to P-21.
 - Acceptance: AC-SW-1 is P-21's. AC-LC-1 to AC-LC-3, AC-TM-2, AC-NT-3, AC-CB-2, AC-Q-3, AC-MO-1 to AC-MO-3, AC-PR-1, AC-RTL-1, AC-A11Y-4, AC-KB-1, AC-CSS-1 and the §32 render counts must not regress. As with AC-MO-1 and AC-MO-2, the real-browser proof of AC-SW-1 ("touch swipe (thresholds, cancel, scrolling, no mouse drag)", §26) is P-22's, including that vertical scrolling still works.
 - **Already decided, not reopened here:**
@@ -3704,6 +3704,138 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
+- **Status: in progress, the current phase.** D0, the decision record below, is done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 is next.
+- Defects: none. Appendix A assigns no defect to P-22.
+- Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
+- **Starting point (the D0 review, at `1644671`):**
+  - No Playwright, browser binaries, browser harness or `browser` job exist. CI has four blocking jobs on Node 24 (P-06).
+  - The repository tests with React 18.2. P-23 owns React 19.
+  - The demo is the P-17 review harness: without `?production-css` its prototype stylesheet masks the production stylesheet, and P-25 replaces it.
+  - ESLint uses `projectService`, so every linted TypeScript file must belong to a tsconfig project, and `typecheck` checks the library, test and tooling projects separately.
+  - `protectedTarget` (P-21) walks from the retargeted `event.target` with `contains` and `parentElement`, neither of which crosses a shadow boundary. The swipe tests have no shadow-root case.
+  - The P-15 to P-21 checks that jsdom cannot make are listed below, per phase, and indexed as CF-1 to CF-43 at the end of this entry.
+- **Decisions locked before implementation (D0).** They govern how P-22 gathers and classifies evidence. They reopen no P-16 to P-21 decision: where they mention earlier behaviour, they describe evidence to gather, not a change.
+  1. **D0-1, evidence classes.** P-22 uses four:
+     1. **Blocking automated:** a normative product or browser contract that Playwright can verify reliably. A failure blocks the `browser` gate.
+     2. **Automated evidence:** browser behaviour that can be collected automatically but is not frozen into a normative CI assertion.
+     3. **Manual recorded checkpoint:** behaviour that needs real browsers, devices, operating-system features or hardware that the automated matrix cannot faithfully reproduce.
+     4. **Evidence-only observation:** browser behaviour gathered to inform a later decision, without declaring the observed browser quirk to be the product contract.
+
+     A browser quirk never becomes a normative assertion merely because it is observable. Each CF item gets its final class at D2, once D1 has established what Playwright can actually do. The index below records only the constraints D0 already places on some items.
+
+  2. **D0-2, pointer-triggered focus restoration.** P-22 gathers browser evidence for a pointer-triggered close and for a swipe dismissal of a toast that holds focus (CF-8, CF-33). It does not change the §10 and §18 contract on browser evidence alone: the final contract decision waits for P-29's assistive-technology evidence. Unexpected browser behaviour is recorded, not fixed opportunistically.
+  3. **D0-3, Shadow DOM and `composedPath()`** (CF-38, P-21 MINOR-1):
+     - P-22 first reproduces and characterises P-21's protected-target behaviour for interactive elements inside shadow roots in custom content, in real browsers.
+     - `protectedTarget()` is not changed to `composedPath()` pre-emptively.
+     - If the evidence shows a material defect, P-22 stops and reports it under D0-16 before any production change. Only a separate maintainer decision may then authorise a narrowly scoped hardening fix.
+     - Without an approved production change, P-22 supplies the evidence for the Shadow DOM boundary P-26 documents.
+  4. **D0-4, pen pointer-ID reuse and the stale pending candidate** (CF-37):
+     - Whether a same-ID `pointerdown` re-bases a stale pending candidate is not decided yet. The decision waits for real pen hardware evidence.
+     - P-22 records: implicit pointer capture; `buttons` during contact and hover; barrel-button behaviour where available; pointer-ID reuse across contacts; and the stale pending candidate's behaviour.
+     - D0 authorises no production change.
+  5. **D0-5, Playwright touch and pen capability.** Nothing is assumed about what Playwright provides in Chromium, WebKit or Firefox. D1 establishes empirically, per engine:
+     - trusted touch input;
+     - touch dragging;
+     - real scroll arbitration;
+     - `pointercancel`;
+     - pointer capture;
+     - pen input;
+     - mouse input;
+     - the relevant limitations of synthetic events.
+
+     The automated and manual split for CF-29 to CF-37 is finalised only at D2, after D1. D0 does not silently weaken the three-engine coverage that §26 and AC-SW-1 require.
+
+  6. **D0-6, blur, visibility and hidden documents.** D1 determines empirically which engines can provide genuine, or sufficiently representative, window `blur` and `focus`, document visibility changes, hidden-document behaviour, and the return and resynchronisation after it (CF-1, CF-5, CF-25, CF-26). Faked browser state is never described as genuine browser lifecycle evidence. Reliable capabilities may become blocking automation; unsupported cases become manual checkpoints or evidence.
+  7. **D0-7, WebKit versus real Safari:**
+     - The blocking automated matrix is Playwright's Chromium, Firefox and WebKit.
+     - Playwright WebKit is not treated as equivalent to complete Safari validation, and its results are never reported as Safari results.
+     - Real Safari is a separate manual checkpoint wherever P-22 needs Safari-specific evidence, for example click without focus (CF-7). Real iOS Safari is a separate real-device checkpoint where relevant.
+     - No macOS CI is added solely to present Playwright WebKit coverage as Safari coverage.
+  8. **D0-8, forced colours and Windows High Contrast:**
+     - Automated coverage uses Chromium's `forced-colors` emulation where applicable (§26).
+     - Real Windows High Contrast is a manual recorded P-22 checkpoint. It covers the carry-forwards assigned to it (CF-14, CF-28): the card edge, the action border, the focus rings, the region ring, the recognisability of each type by its icon, and the progress fill with no track.
+     - P-26's support documentation must later distinguish emulated forced-colours evidence from real Windows High Contrast evidence.
+  9. **D0-9, React version:**
+     - P-22 uses the repository's current React 18.2 baseline. React 19 is not introduced solely for browser testing.
+     - **Reconciliation with §26,** which says the browser suite runs on the latest React. Throughout P-22 the suite runs on React 18.2. This is a recorded, temporary reading of §26, not a silent change, and §26 itself is unchanged.
+     - P-23 owns the React 18/19 compatibility work and the React 19 upgrade and matrix. When P-23 changes the supported React test matrix, it may update the P-22 browser harness.
+  10. **D0-10, browser test target:**
+      - P-22 uses a dedicated, deterministic browser-test harness that exercises the real production implementation and the production stylesheet.
+      - The demo is not the primary target. It carries P-17 review infrastructure, its prototype stylesheet can mask the production one, and P-25 owns its redesign.
+      - The packed npm tarball is not the primary target either. Package consumption stays §27's (P-07, P-23).
+      - When S1 implements the harness, it is deliberately covered by the repository's lint and typecheck structure, not left as an untyped or unlinted test island.
+      - D1 may use disposable spike infrastructure before the permanent S1 harness exists.
+  11. **D0-11, timing:**
+      - P-22 uses real browser timing.
+      - Actual lifecycle events, observable state conditions and bounded tolerances are preferred to arbitrary fixed sleeps.
+      - The harness may override the public motion tokens to slow an animation or transition on purpose, for deterministic observation.
+      - `requestAnimationFrame` may be used inside the page as an observer and frame sampler. It is never mocked to make timing tests pass (§26).
+      - Implementation timing quirks are not frozen into assertions unless they are normative.
+  12. **D0-12, CI shape:**
+      - One blocking `browser` job with three Playwright projects: Chromium, Firefox and WebKit.
+      - The existing hygiene is kept (§28): least-privilege permissions, actions pinned to full commit SHAs, the npm cache, and no permanent debug steps.
+      - Failure artifacts and traces are allowed, produced only where they help with failures.
+      - The blocking gate uses zero retries. Before merge, separate repeat-run (soak) validation looks for flakiness, rather than masking it with CI retries.
+      - D1 and D2 may refine the installation and caching mechanics from measured runtime and Playwright's requirements, but never the three-engine blocking intent.
+  13. **D0-13, visual evidence:**
+      - P-22 adds no visual-regression suite (§26).
+      - Screenshots may be diagnostic artifacts or evidence for manual review. They never become golden-image or pixel-diff assertions.
+      - Items that need human visual judgement (for example CF-23, CF-35, and the appearance in CF-13 and CF-27) stay explicit manual checkpoints or evidence.
+  14. **D0-14, pinch-zoom and `touch-action`** (CF-34, CF-42):
+      - P-21's `touch-action: pan-y` (P-21 D0, decision 16) is kept while evidence is gathered.
+      - P-22 records real-browser and real-device pinch-zoom behaviour.
+      - The value is not changed to `pan-y pinch-zoom`, or to anything else, merely because engines differ.
+      - If evidence shows a material accessibility or UX defect, P-22 stops and raises a separate recorded decision before changing the contract or the production CSS.
+      - P-26 later documents the verified boundary.
+  15. **D0-15, stale status text.** D0 corrects only clearly stale, factual phase-status metadata in this plan: P-20 and P-21 are merged, and P-22 is the current phase. Historical decisions, closure evidence and completed-phase architecture are not rewritten. Corrected at D0: the P-20 and P-21 status lines.
+  16. **D0-16, production defects found by P-22.** P-22 is evidence-first. When browser testing exposes a real production defect, P-22 stops before changing `src/` or the production stylesheet. It reports:
+      - the affected browser, engine or device;
+      - an exact reproduction;
+      - the violated contract or acceptance criterion;
+      - the observed and the expected behaviour;
+      - the evidence;
+      - the likely subsystem or root cause, if known;
+      - the smallest plausible fix scope;
+      - the regression risk.
+
+      The maintainer's approval is required first. A production fix is then an explicit, separately authorised P-22 hardening slice, with focused regression tests. No opportunistic production fix is allowed.
+
+  17. **D0-17, Node version:**
+      - P-22 stays on the repository's current Node 24 baseline.
+      - The planned Node 24 → 26 transition (P-06) is not combined with P-22. It stays separate, on its own schedule.
+      - If the calendar reaches that transition while P-22 is still active, P-22 stops and asks for a maintainer decision rather than changing Node itself.
+- **Sequence.** Each step stops for review:
+  - **D0, decision record (done):** this entry. Documentation only.
+  - **D1, capability and evidence spike:** not implementation.
+    - It establishes the capability matrix of D0-5 and D0-6 per engine. It also covers what the other decisions depend on:
+      - WebKit's click-to-focus;
+      - forced-colours and reduced-motion emulation per engine;
+      - in-page frame sampling;
+      - the first characterisation of shadow-root targets (D0-3);
+      - installation, caching and runtime measurements for D0-12.
+    - It uses disposable spike infrastructure (D0-10). Nothing from it reaches `src/`, the tests, CI or the package output, and S1 does not inherit it unreviewed.
+    - Any production defect it exposes follows D0-16.
+  - **D2, lock (documentation only, before S1):**
+    - the final capability matrix;
+    - the final evidence class of every CF item (D0-1);
+    - the harness design;
+    - the timing approach;
+    - the CI mechanics;
+    - the list of manual checkpoints, with their browsers, devices and hardware;
+    - the S slices.
+  - **S1 to Sn:** the implementation, defined at D2 and not before. Indicatively:
+    - infrastructure and the `browser` job;
+    - lifecycle, motion and reflow;
+    - layout, RTL, progress and forced colours;
+    - focus, `inert` and the environment;
+    - swipe;
+    - the manual checkpoints and the final reconciliation.
+  - **Then:** a focused publication review, the PR into `v2`, CI and a merge commit.
+- **Boundaries:**
+  - **P-23:** React 19, the React 18/19 matrix and the Next.js fixture's Playwright check (§27). P-23 may move the browser harness to the matrix it sets (D0-9).
+  - **P-25:** the demo.
+  - **P-26:** the documentation of every boundary P-22 verifies: Shadow DOM (D0-3), `touch-action` and pinch-zoom (D0-14), and forced colours, distinguishing emulation from real Windows High Contrast (D0-8).
+  - **P-29:** assistive technology; the operating system's own reduced-motion setting; the assistive-technology evidence and the final decision on pointer-triggered restoration (D0-2).
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
@@ -3765,6 +3897,53 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **A dismissal during the snap-back (P-21 S4).** The settle rule still transitions opacity; in Chromium P-18's exit fade runs unaffected. Confirm WebKit and Firefox do not let the running opacity transition override the exit fade.
   - **Pen contact loss (P-21 pre-publication correction).** On real pen hardware in each engine: implicit capture, `buttons` on hover (0, or 2 with the barrel button pressed), and whether a pen reuses its pointer ID across contacts. A stale pending candidate is cleared only by that pointer's own hover (`buttons` 0); a new contact with the same pointer ID and no hover between is ignored at `pointerdown`, so its moves are measured from the stale origin and may activate without the slop and dominance (bounded by its own `pointerup`, with no dismissal unless it travels). Decide whether a same-ID `pointerdown` should re-base the candidate.
   - **Shadow DOM controls (P-21 review, MINOR-1).** A swipe can start from an interactive element inside a shadow root in custom content, since `event.target` is retargeted to the host. Decide whether to walk `composedPath()` to the root, and document the boundary for P-26.
+- **Carry-forward index (D0).** Stable IDs for every check above and for the P-22 items recorded elsewhere in this plan. The lists above stay authoritative for each item's wording; the index only makes them traceable. The last column gives only the constraint a D0 decision already sets. Every other class is set at D2 (D0-1), and "D2" means no D0 constraint beyond D0-1, D0-11 and D0-16.
+
+  | ID    | From | Check                                                                                                        | D0 constraint                                                    |
+  | ----- | ---- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+  | CF-1  | P-15 | Switching the browser or window away and back while a toast holds focus                                      | D0-6                                                             |
+  | CF-2  | P-15 | A focused control becoming disabled, hidden or `inert` without a useful focus event                          | D2                                                               |
+  | CF-3  | P-15 | Focus when the focused node is removed                                                                       | D2                                                               |
+  | CF-4  | P-15 | Pointer boundary when a stack appears under a stationary pointer                                             | D2                                                               |
+  | CF-5  | P-15 | Real `blur` and `visibilitychange`                                                                           | D0-6                                                             |
+  | CF-6  | P-16 | `inert`: focus, restoration before `inert`, the browser's fix-up, pointer and click on an inert toast        | D2                                                               |
+  | CF-7  | P-16 | Click without focus                                                                                          | D0-7: real Safari is a separate manual checkpoint                |
+  | CF-8  | P-16 | The open question on pointer-triggered close                                                                 | D0-2: evidence only, no contract change before P-29              |
+  | CF-9  | P-16 | Revival and `inert` refusing focus                                                                           | D2                                                               |
+  | CF-10 | P-16 | Ordering of restoration, focus events, `inert` and the focus-within handover                                 | D2                                                               |
+  | CF-11 | P-16 | `aria-keyshortcuts` in the DOM and the accessibility tree (assistive technology: P-29)                       | D2                                                               |
+  | CF-12 | P-17 | Focus-visible rings, and when each browser shows them after script focus                                     | D2                                                               |
+  | CF-13 | P-17 | The region ring: appearance, no pointer input, stacking                                                      | D0-13 for its appearance                                         |
+  | CF-14 | P-17 | Forced colours: Chromium emulation, and real Windows High Contrast                                           | D0-8: Chromium emulation automated; Windows High Contrast manual |
+  | CF-15 | P-17 | Layout: six positions, safe areas, narrow viewport, RTL mirroring (AC-RTL-1)                                 | D2                                                               |
+  | CF-16 | P-18 | Enter and exit playback, `animationend` completion, held last frame, left positions settling (AC-MO-1, D-14) | D2                                                               |
+  | CF-17 | P-18 | Fallbacks without `animationend`, and with an overridden token (AC-LC-2)                                     | D2                                                               |
+  | CF-18 | P-18 | Reduced-motion emulation (AC-MO-3)                                                                           | D2                                                               |
+  | CF-19 | P-18 | Spinner rotation, and its events never completing the toast                                                  | D2                                                               |
+  | CF-20 | P-18 | Individual `translate`, `scale` and `rotate` in every engine                                                 | D2                                                               |
+  | CF-21 | P-19 | Reflow in three engines (AC-MO-2)                                                                            | D2                                                               |
+  | CF-22 | P-19 | Reduced-motion reflow (AC-MO-3)                                                                              | D2                                                               |
+  | CF-23 | P-19 | Visual evaluation of the P-18 `scale` × P-19 `transform` overlap                                             | D0-13: human judgement                                           |
+  | CF-24 | P-20 | Progress direction (AC-RTL-1, D-11)                                                                          | D2                                                               |
+  | CF-25 | P-20 | Pause synchronisation in WebKit and Firefox (AC-PR-1, D-10)                                                  | D0-6 for the blur part                                           |
+  | CF-26 | P-20 | Hidden-document resynchronisation (T1)                                                                       | D0-6                                                             |
+  | CF-27 | P-20 | Safe corners of the strip                                                                                    | D0-13 for its appearance                                         |
+  | CF-28 | P-20 | Windows High Contrast for the fill                                                                           | D0-8: manual                                                     |
+  | CF-29 | P-21 | Touch swipe in three engines (AC-SW-1)                                                                       | D0-5                                                             |
+  | CF-30 | P-21 | Scroll arbitration, diagonals and `pointercancel`                                                            | D0-5                                                             |
+  | CF-31 | P-21 | Pen and `touch-action`, pen swipe                                                                            | D0-5; D0-4 for real pen hardware                                 |
+  | CF-32 | P-21 | `inert` with capture mid-gesture                                                                             | D0-5                                                             |
+  | CF-33 | P-21 | Pointer-triggered restoration after a swipe of a focused toast                                               | D0-2: evidence only, no contract change before P-29              |
+  | CF-34 | P-21 | Pinch-zoom per engine                                                                                        | D0-14: evidence; `pan-y` kept                                    |
+  | CF-35 | P-21 | Composition motion (activation mid-reposition, Freeze Y, X kept, the one-frame fly-out hold)                 | D0-13 for the cosmetic hold                                      |
+  | CF-36 | P-21 | A dismissal during the snap-back keeps P-18's exit fade in WebKit and Firefox                                | D2                                                               |
+  | CF-37 | P-21 | Pen contact loss, pointer-ID reuse and the stale pending candidate                                           | D0-4: real pen hardware, manual; no production change            |
+  | CF-38 | P-21 | Shadow DOM controls (MINOR-1)                                                                                | D0-3: characterise first; any fix only by a separate decision    |
+  | CF-39 | P-21 | A touch or pen press focusing the toast root (P-21 pre-publication correction, Chromium)                     | D2                                                               |
+  | CF-40 | P-21 | D2-20 item 10 in WebKit and Firefox: no opacity transition overrides P-18's exit (S4 accounting)             | D2; shares evidence with CF-36                                   |
+  | CF-41 | P-21 | D2 decision 15: scroll arbitration in every browser                                                          | D0-5; shares evidence with CF-30                                 |
+  | CF-42 | P-21 | Evidence on retaining `touch-action: pan-y`, for P-26                                                        | D0-14                                                            |
+  | CF-43 | P-21 | The iPhone Safari and Android Chrome approvals are feel sign-offs and satisfy no CF item                     | D0-1: device approval never stands in for a classified result    |
 
 **P-23 Compatibility and SSR verification**
 
