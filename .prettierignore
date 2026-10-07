@@ -1,4 +1,6 @@
 dist/
 coverage/
 demo-dist/
+browser-dist/
+browser-results/
 package-lock.json

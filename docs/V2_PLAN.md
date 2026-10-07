@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1 is next.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2 is next.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -4284,6 +4284,65 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - The Node 26 date (2026-10-28, D2-15).
     - CF-37's re-base decision, after MC-7.
     - The pointer-triggered restoration contract (CF-8, CF-33), after P-29.
+- **S1 record: infrastructure and the harness (done).** It follows the D2 harness design, timing approach and CI mechanics. No CF item is covered or classified: the smoke specs prove the infrastructure only. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged.
+  - **Dependency:** `@playwright/test` **1.63.0**, pinned exactly in `devDependencies`. It is the current release and the version D1 and D1b used, so the engines are the same: Chromium 153.0.8010.12 (with its headless shell), Firefox 155.0 and WebKit 26.6. The lockfile adds three packages, `@playwright/test`, `playwright` and `playwright-core`, all 1.63.0 and Apache-2.0, with no install scripts and no other dependencies. Nothing else was added.
+  - **React:** the harness runs the repository's React, the `^18.2.0` range the lockfile resolves to **18.3.1**, which is what "React 18.2" means throughout P-22 (D2-14). A smoke spec checks that the page runs exactly the installed version. Node stays 24.
+  - **Layout:**
+    - `playwright.config.ts`: the three projects and the run settings.
+    - `browser/vite.config.ts`: builds and serves the harness.
+    - `browser/harness/index.html`, `main.tsx` and `api.ts`: the harness page, its entry and the type of its control surface.
+    - `browser/tests/harness.ts` (shared helpers, `openHarness`) and `browser/tests/smoke.spec.ts`.
+    - `tsconfig.browser.json`: the TypeScript project for all of the above.
+    - Generated and ignored: `browser-dist/` (the built harness) and `browser-results/` (results, traces, screenshots and the CI report).
+  - **Projects:** `chromium`, `firefox` and `webkit`, each set by `browserName` with a 1280 × 720 viewport. No device descriptor is used, so no project name or descriptor says Safari. WebKit's own default user-agent string still claims Safari (D1), which is why a user-agent string never identifies Safari in this suite.
+  - **Run settings:** headless; `retries: 0`; `forbidOnly` and one worker under `CI`; traces retained on failure and screenshots only on failure; the `list` reporter, plus an HTML report under `CI` that is uploaded only on failure. No project has an exemption or a skip.
+  - **Harness:**
+    - **Build:** Vite (already a direct dev dependency) with `@vitejs/plugin-react` builds `browser/harness` in production mode from the real public entry, `src/index.ts`: React's production build, no test hooks in `src/`. Playwright's `webServer` runs `npm run browser:serve`, which builds and starts `vite preview` on `127.0.0.1:4180` (`strictPort`; an existing server is never reused, so every run tests a fresh build).
+    - **Production stylesheet:** never imported through Vite's CSS pipeline. A small Vite plugin in `browser/vite.config.ts` reads `src/styles.css` at build time, emits it unchanged as `/styles.css` and links it from the page after Vite has processed the HTML. The guard is a smoke spec, not discipline: the served bytes must equal `src/styles.css`, and it must be the page's only stylesheet. A mutation that appended one byte made that spec fail. The demo, its prototype stylesheet and the packed tarball are not used.
+    - **Control surface (`window.__retHarness`, typed in `api.ts`):** `reactVersion`; the public `toast` facade, unchanged; `mount(props)`, which renders `<Toaster {...props} />` and commits synchronously (`flushSync`); `unmount()`; and an event log (`events`, `log(type, detail)`, timed with `performance.now()`). The page sets it only after the stylesheet has loaded and the default `<Toaster />` is mounted, and `openHarness` waits for it. Each test opens a fresh page. Scenarios drive the library through this surface and the DOM, never through demo UI. Nothing in `browser/` is part of the package (`files` is `dist` only, and `npm pack --dry-run` lists no harness file).
+    - **Sampling rule (D2-12):** a spec that observes from the first frame runs its trigger and its `requestAnimationFrame` sampler inside one `page.evaluate` callback, which is one page task. Because the harness exposes the public facade in the page, the trigger can be any library call made there. S2 adds the sampler helper to the harness surface when its first motion spec needs it. `requestAnimationFrame` is never mocked.
+  - **Tooling separation:**
+    - `tsconfig.browser.json` (DOM and Node types) covers `browser/` and `playwright.config.ts`. It is referenced from the root `tsconfig.json`, so ESLint's `projectService` resolves every browser file, and `npm run typecheck` checks it as its fourth project.
+    - ESLint lints `browser/` and `playwright.config.ts` with type information. The harness gets the same React, hooks and `jsx-a11y` rules as `src/`. Only the generated `browser-dist/` and `browser-results/` are ignored, by ESLint, Prettier and Git.
+    - Vitest's include stays `src/**/*.test.{ts,tsx}`: it lists the same 40 files, all under `src/`, so no exclusion was needed. Playwright's `testDir` is `browser/tests` with `testMatch` `**/*.spec.ts`: it lists 9 tests (3 specs × 3 projects) in one file and nothing from `src/`.
+  - **Scripts:**
+    - `npm run test:browser`: the blocking suite (`playwright test --grep-invert @evidence`). One engine: `npm run test:browser -- --project=webkit`.
+    - `npm run browser:serve`: builds and serves the harness on `127.0.0.1:4180`; `npm run browser:serve -- --host` exposes it on the local network for a manual checkpoint.
+    - `npm run typecheck` now includes the browser project; there is no separate command.
+    - `test:browser:evidence`, which D2 lists, is deferred to S2, the first slice with an `@evidence` spec, rather than added with nothing to run.
+    - First local run: `npx playwright install chromium firefox webkit` (with `--with-deps` where the host allows `apt`).
+  - **CI:** a `browser` job in `ci.yml`, blocking like every job, on the existing triggers and the workflow's `permissions: contents: read`:
+    - checkout (`persist-credentials: false`) and `setup-node` at the same pinned SHAs as the other jobs, with Node 24 and the npm cache;
+    - `npm ci --ignore-scripts --no-audit --no-fund`;
+    - `npx playwright install --with-deps chromium firefox webkit`, Playwright's documented install for Ubuntu runners;
+    - `npm run test:browser`;
+    - on failure only, `actions/upload-artifact` v7.0.1 pinned to `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a`, uploading `browser-results/` with a 7-day retention.
+
+    A timeout of 20 minutes. No browser cache (D2-11), no macOS runner, no debug step. Its first real run comes when the branch is pushed for the PR.
+
+  - **Smoke coverage (Class 1 in C, F and W; the same three specs in every engine):**
+    - the harness loads the real library on the installed React, and the region (`Notifications`) is in the page;
+    - `/styles.css` is byte-identical to `src/styles.css` and is the only stylesheet;
+    - a success toast renders with its class and text, reaches `data-phase="visible"`, sits in a `position: fixed` list at `top-right` with `--ret-offset` resolving to `16px` (values only the production stylesheet sets), and its close button removes it with exactly one `onDismiss`, reason `close-button`.
+
+    It does not exercise motion, reflow, progress, focus, swipe or forced colours.
+
+  - **Security and supply chain:**
+    - **Dependency:** exactly the three Playwright packages, with exact versions and registry integrity hashes in the lockfile. None has an install script, and CI still runs `npm ci --ignore-scripts`.
+    - **Browser installation:** the browsers are downloaded only by the explicit `playwright install` step, from Playwright's CDN, at the builds pinned by 1.63.0. `--with-deps` installs Ubuntu packages with `sudo apt-get` on the runner.
+    - **Workflow:** the job adds no permission (`contents: read` for the workflow). Checkout keeps no credentials. Every action is pinned to a full commit SHA with its version comment. The only new action is GitHub's own `actions/upload-artifact`: it is needed to return failure diagnostics, and it needs no token permission.
+    - **Artifacts:** only on failure, only `browser-results/` (hidden files excluded by default), kept 7 days. They hold the HTML report, traces (DOM snapshots, screenshots, console output and the network log of the harness on loopback) and screenshots. The harness renders only test text from the specs, and the job has no secrets, so no sensitive data can reach them. In a public repository they can be downloaded by other GitHub users.
+  - **Local environment (not permanent tooling).** This Windows WSL2 host has no root, so the local runs used Playwright's own browsers with their missing system packages extracted into the session's scratch space. They were found with `playwright install-deps --dry-run`, fetched with `apt-get download` and unpacked with `dpkg -x`. The runs set `PLAYWRIGHT_BROWSERS_PATH` (a scratch tree linking the browsers, with the WebKit MiniBrowser's `sys/lib` pointing at the extracted libraries), `LD_LIBRARY_PATH` and `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS`. None of it is in the repository, the config or CI. CI installs dependencies normally.
+  - **Validation:**
+    - Focused: `tsc -p tsconfig.browser.json` and ESLint on the new files pass. The smoke specs pass in Chromium (3), Firefox (3) and WebKit (3).
+    - Full blocking suite under `CI=1` (one worker): 9 passed in about 8.5 s, including the harness build. Locally (three workers): about 8.8 s. A repeat run (`--repeat-each=5`, one worker): 45 passed in about 40 s. The real soak stays in S6.
+    - Browser downloads: Chromium 393 MB, the headless shell 261 MB, Firefox 306 MB, WebKit 269 MB and ffmpeg 5 MB; about 25 s to download here.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,689 tests), `validate:package`, `build:demo` and `git diff --check` all pass. The workflow parses, with jobs `quality`, `test`, `build-package`, `browser` and `demo`.
+  - **Carried forward to S2:**
+    - the `requestAnimationFrame` sampler helper on the harness surface (D2-12);
+    - `test:browser:evidence` with the first `@evidence` spec;
+    - the fallback tolerance constants (the D2 timing approach);
+    - harness additions as their slices need them: `dir` (S3), token overrides through harness CSS (S2), and the long-page fixture for H1-R (S4).
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event

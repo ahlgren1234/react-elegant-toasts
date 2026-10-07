@@ -25,7 +25,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc -p tsconfig.lib.json && tsc -p tsconfig.test.json && tsc -p tsconfig.tooling.json",
+    "test:browser": "playwright test --grep-invert @evidence",
+    "browser:serve": "vite build --config browser/vite.config.ts && vite preview --config browser/vite.config.ts",
+    "typecheck": "tsc -p tsconfig.lib.json && tsc -p tsconfig.test.json && tsc -p tsconfig.tooling.json && tsc -p tsconfig.browser.json",
     "typecheck:demo": "tsc -p demo/tsconfig.json",
     "lint": "eslint . --max-warnings 0 && node scripts/check-styles.js",
     "lint:fix": "eslint . --fix",
@@ -62,6 +64,7 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
     "@eslint/js": "^9.39.5",
+    "@playwright/test": "1.63.0",
     "@testing-library/jest-dom": "^6.1.4",
     "@testing-library/react": "^14.1.0",
     "@types/node": "^24.19.1",
