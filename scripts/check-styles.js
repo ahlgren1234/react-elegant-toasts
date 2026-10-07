@@ -6,7 +6,8 @@
 // brackets and strings. Every rule must be one of the allowed kinds, and:
 // - every complex selector carries at least one class, and every class is `ret-*`;
 // - no ID selectors;
-// - attribute selectors use only the documented hooks, in a compound that has a `ret-*` class;
+// - attribute selectors use only the documented hooks, in a compound that has a `ret-*` class, or
+//   an internal state hook, only on the toast root (`.ret-toast`);
 // - every keyframe name is `ret-*`;
 // - every custom property declared or read through `var()` is `--ret-*`;
 // - no `!important`.
@@ -19,6 +20,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PREFIX = 'ret-';
 // The documented data attributes (OQ-25). Later phases extend this list as they document more.
 const ATTRIBUTES = ['data-theme', 'data-position', 'data-phase', 'data-paused'];
+// Internal state hooks: the library's own rules may read them on the toast root, but they are not
+// documented or part of the public contract (P-21 D0, decision 6).
+const INTERNAL_ATTRIBUTES = ['data-swiping'];
 
 /**
  * Splits `text` at top-level occurrences of characters matched by `isSeparator`: outside
@@ -92,7 +96,7 @@ function checkSelector(selector, report) {
   }
   if (/#-?[A-Za-z_]/.test(masked)) report(`selector "${selector}" uses an ID selector`);
   for (const name of attributes) {
-    if (!ATTRIBUTES.includes(name)) {
+    if (!ATTRIBUTES.includes(name) && !INTERNAL_ATTRIBUTES.includes(name)) {
       report(`selector "${selector}" uses undocumented attribute [${name}]`);
     }
   }
@@ -101,6 +105,10 @@ function checkSelector(selector, report) {
     const parts = maskAttributes(compound);
     if (parts.attributes.length > 0 && !classesOf(parts.masked).some(c => c.startsWith(PREFIX))) {
       report(`selector "${selector}" has an attribute selector outside a ret- compound`);
+    }
+    const internal = parts.attributes.filter(name => INTERNAL_ATTRIBUTES.includes(name));
+    if (internal.length > 0 && !classesOf(parts.masked).includes('ret-toast')) {
+      report(`selector "${selector}" uses internal attribute [${internal[0]}] off the toast root`);
     }
   }
 }

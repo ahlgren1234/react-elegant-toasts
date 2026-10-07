@@ -130,6 +130,12 @@ const FAILING: readonly (readonly [name: string, css: string, message: string])[
   ['an element-only selector', 'button { color: red; }', 'no ret- class'],
   ['an ID selector', '.ret-toast#main {}', 'ID selector'],
   ['an undocumented attribute', '.ret-toast[data-foo] {}', '[data-foo]'],
+  // P-21 S2: the internal swipe hook is only ever read on the toast root (D0 decision 6).
+  [
+    'the internal swipe hook off the root',
+    '.ret-toaster__list[data-swiping] {}',
+    'off the toast root',
+  ],
   ['an attribute outside a ret- compound', '[data-theme] .ret-toast {}', 'outside a ret-'],
   ['an unprefixed custom property', '.ret-toaster { --toast-bg: red; }', '--toast-bg'],
   ['an unprefixed var() read', '.ret-toast { color: var(--brand); }', '--brand'],
@@ -147,6 +153,8 @@ const PASSING = [
   '.ret-toast[data-phase="exiting"] > .ret-toast__close svg {}',
   // P-20 S2: `data-paused` is documented (decision 1); S3 styles it.
   '.ret-toast[data-phase="visible"]:not([data-paused]) > .ret-toast__progress {}',
+  // P-21 S2: the internal swipe hook, on the toast root.
+  ":where(.ret-toast[data-swiping='drag']) {}",
   '@keyframes ret-example { to { opacity: 1; } }',
 ].join('\n');
 
@@ -504,10 +512,15 @@ describe('the toast card, content and controls (§17.2, OQ-24, P-17 S3)', () => 
     }
   });
 
-  it('gives a custom toast no card chrome, only its box sizing, the close anchor and repositioning', () => {
+  it('gives a custom toast no card chrome, only its box sizing, the close anchor, repositioning and swipe', () => {
     const custom = declared(toastOf('custom', ['custom', 'close']));
     expect(Object.keys(custom).filter(p => CARD.test(p))).toEqual([]);
-    expect(custom).toEqual({ 'box-sizing': 'border-box', position: 'relative', ...REPOSITION });
+    expect(custom).toEqual({
+      'box-sizing': 'border-box',
+      position: 'relative',
+      ...REPOSITION,
+      'touch-action': 'pan-y',
+    });
   });
 
   it('sets the description below the primary text: smaller, muted, still the same column', () => {
@@ -1217,13 +1230,20 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
     });
 
     // Narrowed by P-20 S3: the internal progress fill's rules may set `transform-origin` (§20),
-    // and nothing else of these. Every other rule still sets none of them.
+    // and nothing else of these. Narrowed by P-21 S2: the swipe drag rule sets exactly the root
+    // `transform` and `opacity`, only while a drag is active. Narrowed by P-21 S3: so does the
+    // release rule, only while releasing, and its reduced-motion form only the `transform`. Every
+    // other rule still sets none.
     it('authors no settled opacity, translate, scale, rotate or transform on any rule', () => {
       for (const rule of rules) {
         const own = Object.keys(declarations(rule.style)).filter(property =>
           /^(opacity|translate|scale|rotate|transform)/.test(property)
         );
-        if (/ret-toast__progress-fill\b/.test(rule.selector)) {
+        if (rule.selector === SWIPE_RELEASE && rule.media === REDUCED) {
+          expect(own, rule.selector).toEqual(['transform']);
+        } else if (rule.selector === SWIPE_DRAG || rule.selector === SWIPE_RELEASE) {
+          expect(own.sort(), rule.selector).toEqual(['opacity', 'transform']);
+        } else if (/ret-toast__progress-fill\b/.test(rule.selector)) {
           expect(
             own.filter(property => property !== 'transform-origin'),
             rule.selector
@@ -1254,6 +1274,11 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
           .map(r => [r.selector, r.media])
       ).toEqual([
         [':where(.ret-toast)', null],
+        // P-21 S2: a drag turns the transition off; a settle adds opacity to it.
+        [SWIPE_DRAG, null],
+        [SWIPE_SETTLE, null],
+        // P-21 S3: a release carries transform alone, on the exit timing.
+        [SWIPE_RELEASE, null],
         [':where(.ret-toast)', REDUCED],
       ]);
     });
@@ -1350,9 +1375,15 @@ describe('the loading spinner (§22, P-18 S3)', () => {
 });
 
 const REDUCED = '(prefers-reduced-motion: reduce)';
+/** P-21's internal swipe rules (S2 and S3). */
+const SWIPE_DRAG = ":where(.ret-toast[data-swiping='drag'])";
+const SWIPE_SETTLE = ":where(.ret-toast[data-swiping='settle'])";
+const SWIPE_RELEASE = ":where(.ret-toast[data-swiping='release'])";
 const reducedRules = rules.filter(r => r.media === REDUCED);
-/** P-18's reduced-motion rules: every rule of the block but P-19's repositioning one. */
-const p18ReducedRules = reducedRules.filter(r => r.selector !== ':where(.ret-toast)');
+/** P-18's reduced-motion rules: every rule of the block but P-19's and P-21's. */
+const p18ReducedRules = reducedRules.filter(
+  r => r.selector !== ':where(.ret-toast)' && r.selector !== SWIPE_RELEASE
+);
 
 /**
  * The declarations `element` gets under reduced motion: the top-level rules, then the
@@ -1388,8 +1419,12 @@ describe('stack repositioning (§22, P-19 S2)', () => {
     expect(declarations(rule[0]!.style)).toEqual(REPOSITION);
   });
 
+  // Narrowed by P-21 S2: only the swipe drag rule declares one, and only during a drag. Narrowed by
+  // P-21 S3: and the release rules, only while releasing.
   it('declares no transform, so a toast at rest has none', () => {
-    for (const rule of rules) {
+    for (const rule of rules.filter(
+      r => r.selector !== SWIPE_DRAG && r.selector !== SWIPE_RELEASE
+    )) {
       expect(Object.keys(declarations(rule.style))).not.toContain('transform');
     }
   });
@@ -1431,13 +1466,15 @@ describe('stack repositioning (§22, P-19 S2)', () => {
 
 describe('reduced motion (§17.5, §22, P-18 S4)', () => {
   // Narrowed by P-19 S4: the block's third rule is stack repositioning's (tested below); P-18's
-  // two rules are unchanged and still only remove animation names.
+  // two rules are unchanged and still only remove animation names. Narrowed by P-21 S3: the fourth
+  // takes a swipe release's travel away (tested with the swipe).
   it('is one media block, after every motion rule: P-18 only removes animation names', () => {
     expect((css.match(/@media \(prefers-reduced-motion/g) ?? []).length).toBe(1);
     expect(reducedRules.map(r => r.selector)).toEqual([
       ":where(.ret-toast[data-phase='entering'], .ret-toast[data-phase='exiting'])",
       ':where(.ret-toast__spinner)',
       ':where(.ret-toast)',
+      SWIPE_RELEASE,
     ]);
     for (const rule of p18ReducedRules) {
       expect(declarations(rule.style)).toEqual({ 'animation-name': 'none' });
@@ -1587,10 +1624,12 @@ describe('reduced-motion stack repositioning (§17.5, §22, P-19 S4)', () => {
     expect(tokens).toHaveLength(30);
     expect(tokens.filter(t => /reposition|move|transition|stack/.test(t))).toEqual([]);
     const attributes = new Set(css.match(/\[[a-z-]+/g)?.map(a => a.slice(1)));
+    // P-21 S2 adds `data-swiping`: an internal hook on the toast root, not a public one.
     expect([...attributes].sort()).toEqual([
       'data-paused',
       'data-phase',
       'data-position',
+      'data-swiping',
       'data-theme',
     ]);
   });
@@ -1790,5 +1829,211 @@ describe('package validation marker (P-07)', () => {
 
   it('is a selector of the shipped stylesheet', () => {
     expect(rules.some(rule => marker !== undefined && rule.selector.includes(marker))).toBe(true);
+  });
+});
+
+describe('swipe (§19, P-21 S2 and S3)', () => {
+  const swiping = (
+    state: string | null,
+    type = 'success',
+    phase: (typeof PHASES)[number] = 'visible'
+  ) => {
+    const item = toastIn(phase, 'top-right', type);
+    if (state) item.setAttribute('data-swiping', state);
+    return item;
+  };
+  const indexOf = (selector: string, media: string | null = null) =>
+    rules.findIndex(r => r.selector === selector && r.media === media);
+
+  it('lets the browser keep vertical scrolling on every normal and custom root, and nowhere else', () => {
+    for (const type of ['success', 'default', 'loading', 'custom']) {
+      for (const phase of PHASES) {
+        expect(declared(toastIn(phase, 'bottom-left', type))['touch-action']).toBe('pan-y');
+      }
+    }
+    const withTouchAction = rules.filter(r => r.style.getPropertyValue('touch-action') !== '');
+    expect(withTouchAction.map(r => [r.selector, r.media])).toEqual([[':where(.ret-toast)', null]]);
+    expect(withTouchAction[0]?.style.getPropertyValue('touch-action')).toBe('pan-y');
+  });
+
+  it('turns the internal X and Y and opacity into the root transform only during a drag', () => {
+    expect(declarations(ruleFor(SWIPE_DRAG).style)).toEqual({
+      transform: 'translate(var(--ret-swipe-x, 0px), var(--ret-swipe-y, 0px))',
+      opacity: 'var(--ret-swipe-opacity, 1)',
+      'transition-property': 'none',
+    });
+    for (const type of ['success', 'custom']) {
+      expect(declared(swiping('drag', type))).toMatchObject({
+        transform: 'translate(var(--ret-swipe-x, 0px), var(--ret-swipe-y, 0px))',
+        'transition-property': 'none',
+      });
+    }
+  });
+
+  it('settles transform and opacity on the reposition timing, adding no timing of its own', () => {
+    expect(declarations(ruleFor(SWIPE_SETTLE).style)).toEqual({
+      'transition-property': 'transform, opacity',
+    });
+    const settling = declared(swiping('settle'));
+    expect(settling).toMatchObject({ ...REPOSITION, 'transition-property': 'transform, opacity' });
+    expect(settling.transform).toBeUndefined();
+    expect(settling.opacity).toBeUndefined();
+  });
+
+  it('leaves a root at rest with no transform, opacity or swipe transition', () => {
+    for (const phase of PHASES) {
+      for (const type of ['success', 'custom']) {
+        const rest = declared(swiping(null, type, phase));
+        expect(rest.transform).toBeUndefined();
+        expect(rest.opacity).toBeUndefined();
+        expect(rest['transition-property']).toBe('transform');
+      }
+    }
+  });
+
+  // Narrowed by P-21 S3: the one swipe rule in the block is the release's, tested below.
+  it('springs back at once under reduced motion, while a drag still follows the pointer', () => {
+    expect(declaredReduced(swiping('settle'))).toMatchObject({
+      'transition-property': 'transform, opacity',
+      'transition-duration': '0s',
+    });
+    expect(declaredReduced(swiping('drag')).transform).toBe(
+      'translate(var(--ret-swipe-x, 0px), var(--ret-swipe-y, 0px))'
+    );
+    expect(reducedRules.filter(r => /data-swiping/.test(r.selector)).map(r => r.selector)).toEqual([
+      SWIPE_RELEASE,
+    ]);
+  });
+
+  // S3 (D2 decisions 6 to 9): the fly-out continues from the swipe offset by the internal travel,
+  // on the exit's own timing tokens, and never transitions opacity, which P-18's exit owns.
+  const FLY_OUT =
+    'translate(calc(var(--ret-swipe-x, 0px) + var(--ret-swipe-travel, 0px)), var(--ret-swipe-y, 0px))';
+  /** Values with `var()` keep their source whitespace in this CSSOM: compare them collapsed. */
+  const flat = (values: Record<string, string>) =>
+    Object.fromEntries(
+      Object.entries(values).map(([property, value]) => [
+        property,
+        value.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')'),
+      ])
+    );
+
+  it('releases on transform alone, on the exit duration and easing tokens, holding the swipe opacity', () => {
+    expect(flat(declarations(ruleFor(SWIPE_RELEASE).style))).toEqual({
+      transform: FLY_OUT,
+      opacity: 'var(--ret-swipe-opacity, 1)',
+      'transition-property': 'transform',
+      'transition-duration': 'var(--ret-exit-duration)',
+      'transition-timing-function': 'var(--ret-exit-easing)',
+    });
+    for (const type of ['success', 'custom']) {
+      expect(flat(declared(swiping('release', type, 'exiting')))).toMatchObject({
+        transform: FLY_OUT,
+        opacity: 'var(--ret-swipe-opacity, 1)',
+        'transition-property': 'transform',
+        'transition-duration': 'var(--ret-exit-duration)',
+        'transition-delay': '0s',
+      });
+    }
+  });
+
+  it('never transitions opacity on a release, so P-18 keeps the exit fade (D1 finding 3)', () => {
+    for (const media of [null, REDUCED]) {
+      for (const rule of rules.filter(r => r.selector === SWIPE_RELEASE && r.media === media)) {
+        expect(rule.style.getPropertyValue('transition-property')).not.toMatch(/opacity|all/);
+      }
+    }
+    for (const declaredOf of [declared, declaredReduced]) {
+      const releasing = declaredOf(swiping('release', 'success', 'exiting'));
+      expect(releasing['transition-property']).toBe('transform');
+      // P-18's exit animation still runs on the individual properties, from the swipe opacity.
+      if (declaredOf === declared) {
+        expect(releasing).toMatchObject({
+          'animation-name': 'ret-exit-top',
+          'animation-duration': 'var(--ret-exit-duration)',
+          'animation-fill-mode': 'forwards',
+        });
+      }
+    }
+  });
+
+  it('times the fly-out by the exit token alone: no second duration or easing value', () => {
+    const own = declarations(ruleFor(SWIPE_RELEASE).style);
+    expect(own['transition-duration']).toBe(
+      declared(toastIn('exiting', 'top-right'))['animation-duration']
+    );
+    expect(own['transition-timing-function']).toBe(
+      declared(toastIn('exiting', 'top-right'))['animation-timing-function']
+    );
+    expect(Object.values(own).join(' ')).not.toMatch(/\d+m?s\b|cubic-bezier/);
+  });
+
+  it('releases with no travel and in no time under reduced motion, from where it was dragged', () => {
+    expect(declarations(ruleFor(SWIPE_RELEASE, REDUCED).style)).toEqual({
+      transform: 'translate(var(--ret-swipe-x, 0px), var(--ret-swipe-y, 0px))',
+    });
+    const releasing = declaredReduced(swiping('release', 'success', 'exiting'));
+    expect(releasing).toMatchObject({
+      transform: 'translate(var(--ret-swipe-x, 0px), var(--ret-swipe-y, 0px))',
+      opacity: 'var(--ret-swipe-opacity, 1)',
+      'transition-duration': '0s',
+      'animation-name': 'none',
+    });
+    expect(releasing.transform).not.toMatch(/travel/);
+    // The reduced rules come after the release rule they override, at the same zero specificity.
+    expect(indexOf(SWIPE_RELEASE, REDUCED)).toBeGreaterThan(indexOf(SWIPE_RELEASE));
+    expect(indexOf(':where(.ret-toast)', REDUCED)).toBeGreaterThan(indexOf(SWIPE_RELEASE));
+  });
+
+  it('orders the swipe rules after the reposition transition and before the reduced-motion block', () => {
+    const reposition = rules.findIndex(
+      r => r.selector === ':where(.ret-toast)' && r.style.getPropertyValue('transition-property')
+    );
+    const reduced = indexOf(':where(.ret-toast)', REDUCED);
+    for (const selector of [SWIPE_DRAG, SWIPE_SETTLE, SWIPE_RELEASE]) {
+      expect(indexOf(selector)).toBeGreaterThan(reposition);
+      expect(indexOf(selector)).toBeLessThan(reduced);
+    }
+  });
+
+  it('keeps its custom properties internal: read with a fallback, never declared, not tokens', () => {
+    const read = new Set(css.match(/--ret-swipe-[a-z]+/g));
+    expect([...read].sort()).toEqual([
+      '--ret-swipe-opacity',
+      '--ret-swipe-travel',
+      '--ret-swipe-x',
+      '--ret-swipe-y',
+    ]);
+    for (const rule of rules) {
+      expect(tokensOf(rule.style).filter(t => t.startsWith('--ret-swipe-'))).toEqual([]);
+    }
+    expect([...new Set(rules.flatMap(r => tokensOf(r.style)))]).toHaveLength(30);
+  });
+
+  it('reads the internal hook only on the toast root, and adds no wrapper or other element rule', () => {
+    const hooked = rules.filter(r => /data-swiping/.test(r.selector));
+    expect([...new Set(hooked.map(r => r.selector))].sort()).toEqual(
+      [SWIPE_DRAG, SWIPE_SETTLE, SWIPE_RELEASE].sort()
+    );
+    for (const element of [
+      regionOf(),
+      listAt('top-right'),
+      ...swiping('drag').children,
+      ...swiping('release', 'success', 'exiting').children,
+    ]) {
+      expect(declared(element).transform).toBeUndefined();
+    }
+  });
+
+  it('leaves P-18 the individual opacity, translate and scale of the lifecycle motion', () => {
+    for (const rule of [
+      ruleFor(SWIPE_DRAG),
+      ruleFor(SWIPE_SETTLE),
+      ruleFor(SWIPE_RELEASE),
+      ruleFor(SWIPE_RELEASE, REDUCED),
+    ]) {
+      const own = Object.keys(declarations(rule.style));
+      expect(own.filter(p => /^(translate|scale|rotate|animation)/.test(p))).toEqual([]);
+    }
   });
 });

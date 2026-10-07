@@ -1,6 +1,7 @@
 // Stack repositioning geometry (P-19, D2 decisions 3 and 4). Internal: nothing here is exported
 // from the package entry. Reads only: nothing here writes a style, renders or schedules a frame.
 import type { ToastId, ToastPosition } from '../types';
+import { translationOf } from './swipe';
 
 /** The vertical edge a stack is anchored to. Its toasts are measured from that edge. */
 export type Edge = 'top' | 'bottom';
@@ -42,29 +43,15 @@ export function membershipChanged(previous: readonly ToastId[], next: readonly T
   return previous.length !== next.length || previous.some((id, index) => id !== next[index]);
 }
 
-const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
-
 /**
- * The vertical offset of a resolved `transform`: `none`, or the `matrix()` or `matrix3d()` that
- * computed styles serialise every other transform to. P-19 alone writes `transform` on a toast
- * root, and P-18's `translate` and `scale` are separate properties, so this is P-19's current
- * offset, part-way through a move included. Anything else, malformed or not a matrix, reads as 0:
- * no offset in flight.
+ * A toast root's current visual translation, X and Y, read from its computed style in its own
+ * realm: part-way through any move, snap-back or fly-out (P-21 D2 decision 12). The root's
+ * `transform` is the library's alone, composed of P-19's vertical reposition and P-21's horizontal
+ * swipe; P-18's `translate` and `scale` are separate properties. No offset in flight reads as 0.
  */
-export function translateYOf(transform: string): number {
-  const match = /^matrix(3d)?\((.*)\)$/.exec(transform.trim());
-  if (!match) return 0;
-  const values = (match[2] ?? '').split(',').map(value => value.trim());
-  if (values.length !== (match[1] ? 16 : 6) || !values.every(value => NUMBER.test(value))) {
-    return 0;
-  }
-  return Number(values[match[1] ? 13 : 5]);
-}
-
-/** A toast root's current P-19 offset, read from its computed style in its own realm. */
-export function currentOffsetOf(item: Element): number {
+export function currentTranslationOf(item: Element): { readonly x: number; readonly y: number } {
   const view = item.ownerDocument.defaultView;
-  return view ? translateYOf(view.getComputedStyle(item).transform) : 0;
+  return translationOf(view ? view.getComputedStyle(item).transform : 'none');
 }
 
 /** One toast root and its anchored distance, undefined when it is not laid out in its list. */

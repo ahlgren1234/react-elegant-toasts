@@ -3175,6 +3175,529 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - Stack repositioning seeds an inverse vertical offset on the toast root through inline `transform` and carries it back with the stylesheet's `transition: transform`. At rest the root computes to `transform: none`.
   - Swipe composes with this without wrappers, without DOM reordering, and without replacing P-18's individual properties.
   - The expected direction is one library-owned root `transform` built from internal components for the horizontal swipe offset and the vertical reposition offset, with the transition turned off while a direct pointer drag is active. P-21 decides the exact contract, including what a drag does to a reposition already running.
+- **Status: in progress.** D0, D1 and D2 are done: the architecture (D0), the prototype with its machine evidence and the maintainer's required iPhone Safari and Android Chrome sign-off (D1), and the prototype-derived constants and composition contract (D2), all recorded below. The implementation slices S1 to S5 are complete and recorded under the sequence: the gesture helpers, drag and cancel, commit with the P-19 composition, hardening, and the final reconciliation with the prototype removed. The maintainer approved the production S3 dismissal on iPhone Safari and Android Chrome. What remains is the focused publication review, then the PR into `v2`, CI and a merge commit.
+- Defects: none. Appendix A assigns no defect to P-21.
+- Acceptance: AC-SW-1 is P-21's. AC-LC-1 to AC-LC-3, AC-TM-2, AC-NT-3, AC-CB-2, AC-Q-3, AC-MO-1 to AC-MO-3, AC-PR-1, AC-RTL-1, AC-A11Y-4, AC-KB-1, AC-CSS-1 and the §32 render counts must not regress. As with AC-MO-1 and AC-MO-2, the real-browser proof of AC-SW-1 ("touch swipe (thresholds, cancel, scrolling, no mouse drag)", §26) is P-22's, including that vertical scrolling still works.
+- **Already decided, not reopened here:**
+  - §19 in full: Pointer Events, `pointerType` `touch` and `pen` only, no mouse drag; left positions toward the left edge, right positions toward the right edge, centre positions either way; distance **or** release velocity commits, with values set by prototype, stored as named constants and tested; a custom-property transform and an opacity fade during the drag; the internal `swipe` pause reason; spring back below the threshold and exit with reason `swipe` from the dragged offset above it; never from interactive descendants or while text is being selected; `touch-action: pan-y`; `pointercancel` and lost capture restore; no travel after release under reduced motion; custom toasts included;
+  - positions and swipe direction are physical (§12, §20, OQ-21), and OQ-20;
+  - `DismissReason` includes `"swipe"` (§6.6, §16), and the internal `PauseReason` includes `swipe`, set through `setToastPause(id, "swipe", on)` (§7, §8.1, §10, P-11);
+  - detach clears every toast's `swipe` reason (§8.4, P-11);
+  - `data-paused` collapses every pause reason, `swipe` included, and an exiting toast is never held (P-20 D0, decision 1, and S1);
+  - progress is `pointer-events: none` and never a swipe target (P-20 D0, decision 11);
+  - motion uses `opacity`, `translate` and `scale`, never `transform` (P-18 D0, decision 6), and lifecycle completion is the root's filtered library `animationend`, the computed fallback or the 0 ms path (P-18 D0, decisions 1 to 3 and 9);
+  - the library owns the root `transform`, which is `none` at rest, with no wrapper (P-19 D2, decisions 5, 9 and 10).
+- **Starting point (the D0 review, at `6dd1bc9`):**
+  - The renderer has no gesture code: no pointer-down, move or capture handling, no `touch-action`, no swipe state. The store side is ready: `dismiss(id, "swipe")` and `setToastPause(id, "swipe", on)` need no change.
+  - P-19's `reposition()` writes and then removes inline `transform` and `transition-property` on each moved root, deletes an empty `style` attribute, and reads only the vertical component of the computed matrix (`translateYOf`). Unchanged, it would erase a horizontal swipe offset.
+  - Stack hover (P-15) does not filter `pointerType`, so a touch on a toast already pauses its whole stack until the pointer leaves.
+  - The toast root has `tabindex="-1"`, so a tap or click on its body can focus it.
+  - jsdom has `PointerEvent` but no `setPointerCapture`, `releasePointerCapture` or `hasPointerCapture`. Playwright is not installed: it arrives with P-22.
+- **Decisions locked before implementation (D0).** They refine §19 and the P-18 and P-19 carry-forwards above. Every numeric or feel value is left to D1 and locked in D2.
+  1. **Distance and velocity:**
+     - The swipe displacement is the pointer's horizontal displacement on the physical axis, never a logical (inline-direction) one. Distances are evaluated in CSS pixels, the unit of pointer coordinates.
+     - Velocity is the signed physical horizontal velocity at release. It can commit only when it points in a direction the toast's position allows.
+     - The distance **or** the release velocity commits, as §19 requires.
+     - D1 sets the distance threshold, the velocity threshold and the velocity sampling window and algorithm.
+  2. **Direction:**
+     - Left positions allow only the physical left, right positions only the physical right, and centre positions either physical horizontal direction. RTL does not change this (§20).
+     - A displacement in a forbidden direction is clamped to zero, with no rubber-banding.
+     - In an allowed direction the toast follows the pointer, with no artificial maximum drag distance.
+  3. **Activation and axis ownership:**
+     - `pointerdown` only creates a pending candidate. The gesture activates once the pointer has passed an activation slop with horizontal movement dominant. D1 sets both values.
+     - Before activation there is no `swipe` pause reason, no swipe visual state and no pointer capture, and gesture tracking causes no React render and no store notification.
+     - When the browser takes the pointer for scrolling and sends `pointercancel`, the candidate is dropped with no dismissal.
+  4. **Pause timing:**
+     - `swipe` is set when the gesture activates, never on `pointerdown`.
+     - The gesture code touches only its own toast's `swipe` reason, never hover, focus-within or the global reasons. Overlapping reasons combine by the existing store semantics (§10).
+     - A cancelled gesture clears `swipe` when the release or cancel is handled. The reason's ownership ends there: the timer is not held for the length of a cosmetic snap-back, and timer state never depends on a transition completing. Only a concrete correctness problem found in D1 reopens this.
+     - A successful gesture calls `dismiss(id, "swipe")` **before** it clears `swipe`. The toast is then exiting, so it is never held and never carries `data-paused` (P-20).
+     - Pointer movement never changes timer state.
+  5. **Displacement:**
+     - Gesture state is ephemeral and local to the toast's component.
+     - Each move writes the visual offset through CSSOM into internal CSS custom properties on the existing toast root. A library-owned stylesheet rule turns them into the root's `transform`. The root stays the one motion, layout and swipe surface, and it still computes to `transform: none` at rest.
+     - P-18 keeps the individual `opacity`, `translate` and `scale` for its lifecycle animation. P-19 and P-21 share the root `transform` through one explicitly composed, library-owned contract (decision 8).
+     - Not used: the individual `translate` for the swipe, a nested swipe wrapper, a second toast root, a React `style` per move, or store state per move.
+     - The internal custom properties are implementation details, not public tokens. They do not change the public token count.
+  6. **State hook:**
+     - `data-swiping` on the toast root is an **internal** state hook. Library CSS and tests may use it. It is not part of the stable public CSS contract (OQ-25, §21) and is not documented as a styling API.
+     - The style guards must tell this internal hook apart from the public `data-theme`, `data-position`, `data-phase` and `data-paused`, without weakening attribute validation in general. `scripts/check-styles.js` has one list, of documented attributes, so separating the two is a targeted S2 guard-design task. It does not widen the public contract.
+  7. **Swipe exit:**
+     - A committed swipe exits from its current physical offset. With normal motion it keeps travelling in the committed physical direction through the library-owned root `transform` transition.
+     - P-18 still owns the lifecycle exit: its existing root animation of the individual `opacity`, `translate` and `scale`.
+     - The swipe adds no lifecycle completion. `transitionend` never calls `exited()`. Completion stays P-18's filtered library `animationend`, its computed fallback or the reduced-motion 0 ms path (§9 rule 3).
+     - No swipe-specific lifecycle keyframe is added, unless later evidence shows this design to be impossible.
+     - P-18's `scale: 0.98` also scales the root `transform`, so the offset shrinks slightly during the exit, by about 2% of it. This is accepted provisionally, and D1 inspects it.
+     - D1 sets the fly-out target distance, duration and easing.
+  8. **Composition with P-19:**
+     - P-21 may make narrowly scoped changes to P-19's repositioning code (`reposition()`, `useStackReposition`) in the slice that needs them (S3). It may make them swipe-aware and read both the horizontal and vertical components of the current transform matrix.
+     - There is one library-owned composition of the root `transform`, in which the horizontal swipe offset and the vertical reposition offset coexist. P-19 never erases or overwrites an active swipe offset, and P-21 never erases an active reposition offset.
+     - Measurement stays layout-based and independent of transforms. Root identity and DOM order do not change.
+     - A swipe that activates during a running reposition freezes the toast's **current visual** vertical position into the composed transform. It does not snap to the final layout position.
+     - A membership change while a toast is being dragged, is springing back or is completing a fly-out keeps its horizontal swipe state while it applies or updates the vertical reposition.
+     - D0 does not prove the seeding mechanics. D1 prototypes the composition in real reposition scenarios before production code is authorised. Repositioning of toasts that are not swiping must not regress.
+  9. **Interactive descendants and selection:**
+     - A swipe never starts from an interactive descendant. Detection walks from the pointer target toward the toast root, for example with `closest()`, and the root itself is never classed as interactive: its own `tabindex="-1"` does not count.
+     - The protected set covers at least `button`, `a[href]`, `input`, `select`, `textarea`, `label`, `summary`, editable (`contenteditable`) content, elements with interactive widget roles, and descendants a consumer made explicitly focusable or tabbable. The helper and its exact selector list are an S1 implementation detail, covered by tests.
+     - A non-collapsed text selection that intersects the toast prevents activation.
+     - Ordinary taps on the body stay ordinary taps, and clicking or tapping the body never dismisses (§15, §16, D-17). The action and close controls behave as before.
+     - D1 checks long-press and text selection, and interactive custom content, on real devices where practical.
+  10. **Pointers and capture:**
+      - Only `touch` and `pen` are eligible. A `mouse` pointer, which includes trackpads, is ignored completely: no movement, no pause, no capture.
+      - The first eligible pointer owns the pending or active gesture until it ends. The gesture ignores every other pointer ID.
+      - Lost capture cancels and restores an unfinished gesture. A `lostpointercapture` that follows the normal end of a gesture at `pointerup` never undoes a commit.
+      - The capture APIs are feature-guarded, because jsdom lacks them, and cleanup tolerates them throwing during teardown.
+  11. **A lifecycle change from elsewhere during a gesture.** When another operation takes the toast out of `visible` during an active gesture, for example a programmatic dismissal, a relocation or a detach (an active gesture's `swipe` reason holds the timer, so a timeout cannot expire the toast then; a timeout while the gesture is only pending just drops the candidate):
+      - the gesture gives up ownership, clears its `swipe` reason and releases capture safely;
+      - the toast is not first snapped back to zero: where possible, its current swipe offset is the starting visual state of the exit that is already under way;
+      - the reason already chosen wins, swipe never replaces it, and no callback runs twice (§9 rule 4, §16);
+      - relocation, detach and unmount still clean up completely.
+
+      D1 and S3 validate the visual handoff.
+
+  12. **Reduced motion.** Under `prefers-reduced-motion: reduce`:
+      - the drag still follows the pointer directly, because the user moves it;
+      - a successful swipe still dismisses, with no fly-out after release;
+      - a cancelled swipe returns to rest with no snap-back travel;
+      - P-18's instant lifecycle completion and P-19's untranslated, instant repositioning are unchanged;
+      - CSS reduces the release motion. No `matchMedia` or other JavaScript branch is added for the gesture (P-18 D0, decision 4).
+  13. **Eligibility:**
+      - A swipe can start only while the toast is `visible`. It never starts while the toast is `queued`, `entering` or `exiting`. `entering` is brief, and capturing during P-18's enter motion would add motion composition and races for almost no benefit. `visible` alone gives one clear timer and lifecycle boundary.
+      - Finite, persistent, loading and custom toasts are all eligible, whether or not progress is shown.
+      - Decision 11 governs a toast that leaves `visible` mid-gesture.
+  14. **Capture timing.** Pointer capture is taken only when the gesture activates. A pending tap never captures, so ordinary click targeting, including on non-interactive custom content, never moves to the toast root.
+  15. **Opacity:**
+      - The opacity fades as the displacement grows (§19).
+      - Each move writes the opacity through CSSOM to an internal CSS custom property, never through a React `style` and never through the store.
+      - With normal motion, opacity may join the cosmetic release transition alongside `transform`. P-18 stays authoritative for the lifecycle opacity animation.
+      - D1 sets the fade curve, the minimum opacity and the release timing, and checks that P-18's exit opacity composes acceptably from a partly faded toast.
+  16. **`touch-action`:**
+      - The value stays `touch-action: pan-y`, as §19 requires. P-21 does not change it to `pan-y pinch-zoom`.
+      - One consequence is recorded for P-22 and P-26: a pinch-zoom that starts on a toast is not handled by the browser.
+      - No `touchmove` listener and no `preventDefault()`-based scroll ownership are planned.
+  17. **Focus restoration:**
+      - P-16's restoration semantics (§18) are unchanged for swipe. A successful swipe starts the exit through the same lifecycle machinery as every other dismissal reason, so a toast that holds focus restores it before it becomes inert, exactly as a close-button dismissal does.
+      - P-21 does not special-case pointer-triggered restoration. The action and close controls never start a gesture.
+      - The open question on pointer-triggered close, under P-22, now explicitly includes swipe. It stays owned by P-22 and P-29. P-21 changes no focus behaviour without a separately recorded plan decision.
+- **Performance and state ownership (whole phase):**
+  - High-frequency pointer movement causes no React render, no store notification, no timer change and no new toast view.
+  - Per-move state is ephemeral. High-frequency work is limited to local gesture bookkeeping and direct DOM and CSSOM visual writes.
+  - The store hears only boundaries: `swipe` set at activation, `swipe` cleared when the gesture ends, and one `dismiss(id, "swipe")` on a successful commit.
+  - The gesture listeners are native and element-scoped on the toast root, so containment follows the DOM, not the React tree (P-15). They add no window or document listener, so §32's fixed count of global listeners is unchanged. StrictMode replay leaves no duplicate.
+  - `requestAnimationFrame` is not added by default. D1 may justify coalescing with it only from real-device evidence of a concrete need.
+- **Public API and CSS:**
+  - No new public TypeScript API is expected. `DismissReason` already includes `"swipe"`, and the internal `PauseReason` includes `swipe`.
+  - No new public CSS token is expected. The public set stays at 30. The internal swipe custom properties are not tokens.
+  - `data-swiping` is internal (decision 6).
+  - Custom toasts stay free of wrappers (§6.4, §21).
+- **Readings recorded at D0.** These are not changes to the plan:
+  - **Reduced motion.** §17.5 and §22 remove translation from enter, exit and reflow motion. A drag that follows the pointer is direct manipulation, not motion the library animates, and §19 restricts only the travel after release. Decision 12 keeps the drag and removes the release travel.
+  - **`data-swiping`.** §21 lists it among the indicative state attributes. The stable public contract is OQ-25's documented hooks plus `data-paused` (P-20 D0, decision 1), and anything undocumented is an implementation detail (§21), so an internal `data-swiping` follows §21.
+  - **Internal custom properties.** P-20 D0, decision 5, ruled out token-like internal properties for progress timing only. P-19 D2, decision 8, allows an undocumented internal `--ret-*` property where needed, kept apart from the tokens by tests. The swipe properties follow P-19's rule, and their names, which must pass the `ret-` namespace check (AC-CSS-1), are an S2 detail.
+- **D1 mandate (required before any production code).** D1 is a disposable demo-only prototype on the real rendered toast DOM. Nothing from it reaches `src/`, the package output or the public contract. It validates both the feel and the composition:
+  1. a slow drag in an allowed direction;
+  2. a fast flick;
+  3. a cancel below the threshold, and the snap-back;
+  4. a successful fly-out;
+  5. a drag in a forbidden direction;
+  6. both directions at a centre position;
+  7. vertical page scrolling that starts on a toast;
+  8. diagonal gestures and scroll arbitration;
+  9. taps on the action and close;
+  10. a custom toast with interactive content;
+  11. text selection and long-press, where practical;
+  12. a drag that starts during a P-19 reposition;
+  13. a membership change while another toast is being dragged;
+  14. a neighbour's removal and the reposition during a drag;
+  15. a reposition during a snap-back;
+  16. a reposition during a fly-out;
+  17. P-18's exit composing from a partial swipe offset and opacity, including the `scale` effect (decision 7);
+  18. a cancel under reduced motion;
+  19. a successful swipe under reduced motion;
+  20. RTL leaving the physical directions unchanged.
+
+  D1 proves the composed root-transform design locked above. It does not reopen wrappers or the individual `translate`, unless the locked design proves technically impossible.
+
+  - **Real-device checkpoint, required:** iPhone Safari and Android Chrome.
+  - **Desktop Chromium:** a mouse drag must do nothing. Touch emulation is supplementary evidence only.
+  - **D1 decides, and D2 locks, before production implementation:** the distance threshold; the velocity threshold; the velocity sampling window and algorithm; the activation slop and horizontal dominance; the opacity curve and minimum; the fly-out distance, duration and easing; the snap-back timing; whether `requestAnimationFrame` coalescing is needed; and the composition's seeding mechanics (decision 8).
+
+- **Sequence.** Each implementation slice stops for review:
+  - **D0, decision record:** this entry. Documentation only.
+  - **D1, prototype:** demo-only, under `demo/p21/`, with the real-device checkpoint above. No `src/`, stylesheet, script, test or package change.
+  - **D2, lock:** records the D1 evidence, the constants and the composition mechanics in this entry. Documentation only.
+  - **S1, gesture decisions (done):** pure, internal helpers with their unit tests: direction, clamping, activation, distance and velocity commit, interactive descendants and selection. No DOM wiring, stylesheet or store change.
+    - **Module:** `src/react/swipe.ts`, internal and not on the package entry (the built entry contains none of it).
+      - It encodes D2 decisions 1 to 4 as the named constants `SWIPE_ACTIVATION_SLOP_PX`, `SWIPE_DOMINANCE_RATIO`, `SWIPE_DISTANCE_WIDTH_FRACTION`, `SWIPE_DISTANCE_MAX_PX`, `SWIPE_VELOCITY_WINDOW_MS`, `SWIPE_VELOCITY_THRESHOLD`, `SWIPE_FADE_WIDTH_FRACTION` and `SWIPE_MIN_OPACITY`.
+      - Directions are a physical sign (`SwipeDirection`, −1 left and 1 right). No function takes a document direction, and the arithmetic reads no global.
+      - Functions:
+        - `allowedDirections`, `isDirectionAllowed`, `directionOf` and `isSwipePointer` (touch and pen);
+        - `activationOf`: `pending`, `activate` with a direction, `forbidden`, or `drop` (below);
+        - `allowedOffset` (forbidden or non-finite gives 0);
+        - `distanceThreshold` and `distanceCommits`;
+        - `releaseVelocity`: the first and last finite samples in [release − 100 ms, release], both inclusive, in event order, with no smoothing, and 0 without two samples or positive elapsed time;
+        - `velocityCommits`;
+        - `releaseDecision`: commit, which rule passed, direction, offset, threshold and velocity;
+        - `swipeOpacity`.
+      - Two small DOM reads cover D0 decision 9:
+        - `protectedTarget` walks from the target to the root, never classing the root, with native controls, editable content, ARIA widget roles and any `[tabindex]` descendant;
+        - `selectionIntersects` uses `Range.intersectsNode`, not `Selection.containsNode`. Under the specification's partial containment, `containsNode` reports a selection wholly inside the toast as not intersecting, and jsdom follows it. The D1 prototype's `containsNode` worked only because of Chromium's behaviour.
+    - **Unusable input:**
+      - a width that is not positive gives the 100 px threshold, never 0, and no fade;
+      - a non-finite offset gives 0 offset and opacity 1;
+      - non-finite activation input stays pending.
+    - **Activation, as encoded:**
+      - `activate` needs |dx| ≥ 10 and |dx| ≥ 1.5 × |dy| (both inclusive) in an allowed direction;
+      - the same in a forbidden direction is `forbidden` and never activates. Whether the candidate then keeps waiting or is dropped is left to S2 (review item);
+      - `drop` is total travel ≥ 10 px without dominance, so a vertical move lets the browser scroll.
+    - **Tests:** `swipe.test.ts`, 111 tests, table-driven, with no fake timers or pointer stubs. They cover all six positions, the pointer types, every activation, clamp, distance, window, velocity-sign and opacity boundary, the release decision, protected targets in normal and custom-like content, the root exclusion, and selection inside, across and outside the toast.
+    - **Mutations:** 24, each detected and restored:
+      - mouse accepted; pen rejected;
+      - left and right swapped; centre one-way; an RTL-style sign inversion;
+      - slop `>` instead of `>=`; dominance `>` instead of `>=`; dominance weakened to 1.2;
+      - no clamp; `max` instead of `min`; distance `>`;
+      - velocity threshold ignored; velocity sign ignored; sign agreement ignored;
+      - window ignored; a stale sample included; a division by zero elapsed time;
+      - OR made AND; no opacity clamp; a 0 threshold for an unusable width;
+      - the root classed as interactive; `containsNode` used;
+      - `drop` never returned; a forbidden direction activating.
+    - **Validation:** `format:check`, `lint`, `typecheck`, `typecheck:demo`, the full suite (37 files, 1,432 tests) and `validate:package` all pass. Nothing else in `src/`, no stylesheet, script, package file or the prototype changed. S2 is next.
+  - **S2, drag and cancel (done):** the toast's native listeners, activation, capture, the `swipe` reason, the CSSOM writes, `data-swiping`, the stylesheet's swipe rule and `touch-action`, and the targeted guard narrowing (decision 6). No dismissal yet, and no P-19 change. Render-count, StrictMode, pause-overlap and cancel tests. Manual checkpoint.
+    - **Review decisions on S1, locked for S2:**
+      - **A, forbidden direction:** `forbidden` keeps the candidate pending, measured from the original `pointerdown` origin and never re-based, so reversing into the allowed direction can still activate. Until then there is no capture, pause, `data-swiping`, movement or opacity. `drop` (vertical arbitration won) abandons the pointer for good.
+      - **B, slop:** activation needs a horizontal |dx| ≥ 10 px, with |dx| ≥ 1.5 × |dy|; only dropping uses total travel ≥ 10 px. So dx 9, dy 5 stays pending. S1 is unchanged.
+    - **Architecture:**
+      - `src/react/useSwipe.ts` (internal): a per-root controller in a closure, created by `useSwipe(ref, id, position, phase)` in `ToastItem`. It runs after the toast's focus-restoration and `inert` layout effect.
+      - Native `pointerdown`, `pointermove`, `pointerup`, `pointercancel` and `lostpointercapture` listeners on the root only, with no window or document listener. They are added once per root and toast, and removed on dispose.
+      - A layout effect reports phase changes. The decisions are `swipe.ts`'s, which gains one pure helper, `translationOf` (the X and Y of a resolved transform), with tests.
+    - **Gesture:**
+      - A `pointerdown` makes a pending candidate only when the committed `data-phase` is `visible`, the pointer is touch or pen, no gesture is owned, the target is not protected and no selection intersects. Nothing else changes.
+      - Activation re-checks the phase and the selection, then:
+        1. reads the root's current visual X and Y from its computed transform, so activating mid-snap-back or mid-reposition causes no jump;
+        2. takes pointer capture on the root;
+        3. sets `swipe` once;
+        4. writes the internal properties;
+        5. sets `data-swiping="drag"`.
+      - A move re-bases on the activation point, clamps with `allowedOffset`, keeps samples from the last 100 ms for S3, and writes `--ret-swipe-x` and `--ret-swipe-opacity` through CSSOM. No React state, store call, timer or `requestAnimationFrame` is involved.
+      - Release, `pointercancel` and the root's own loss of capture all spring back in S2. Ownership ends first, then `swipe` clears, then capture is released.
+      - A second pointer can neither move, end, unpause nor take the gesture.
+      - A descendant's bubbled `lostpointercapture`, another pointer's loss, and the loss after a handled release are all ignored.
+    - **Stylesheet:**
+      - `:where(.ret-toast) { touch-action: pan-y }`.
+      - `:where(.ret-toast[data-swiping='drag'])` sets `transform: translate(var(--ret-swipe-x, 0px), var(--ret-swipe-y, 0px))`, `opacity: var(--ret-swipe-opacity, 1)` and `transition-property: none`.
+      - `:where(.ret-toast[data-swiping='settle'])` sets `transition-property: transform, opacity` on P-19's 200 ms reposition timing (D2 decision 5).
+      - The rules sit after the reposition transition and before the reduced-motion block, whose existing `transition-duration: 0s` makes the snap-back instant by order alone.
+      - At rest neither rule applies, so the root has no transform. The swipe properties are only read, with fallbacks, never declared: they are not tokens, and the set stays at 30.
+      - `scripts/check-styles.js` gains a separate internal-attribute list, `data-swiping`, allowed only in a `.ret-toast` compound. The documented list is unchanged, so the public contract does not grow.
+    - **Snap-back:** cosmetic. It is cleared on the root's own `transform` `transitionend`, or after the resolved transition time plus 50 ms, or at once when nothing transitions (reduced motion, jsdom). The pause never waits for it.
+    - **A lifecycle change from elsewhere (D0 decision 11):**
+      - a pending candidate is dropped;
+      - an active drag gives up ownership, its pause and capture. On an exit it keeps `drag` with its offset, so the exit starts from there with no snap-back, and its own reason and a single `onDismiss` stand;
+      - any later non-exiting phase, revival included, clears the kept offset.
+      - S3 moves that kept state to the release state with no direction.
+      - Unmount and StrictMode disposal clear capture, pause, listeners, attribute and properties, and leave a resting root untouched. The last point was caught by P-19's StrictMode seed log.
+    - **Tests:**
+      - `swipe-interaction.test.tsx`, 51 tests: pending, mouse, pen, slop, forbidden-then-allowed, permanent drop, entering-time and selection-time `pointerdown`, capture and one pause, the visual offset at activation, CSSOM writes and opacity, clamp and crossing zero, centre;
+      - zero React commits, store notifications and record changes over 100 moves; no progress fill remount or re-time; no notification at all for a persistent toast;
+      - release never dismissing, pause cleared before the snap-back ends, snap-back cleanup, reduced-motion immediacy, other pause reasons kept, `pointercancel`, a new gesture;
+      - the four lost-capture cases, a second pointer, protected targets in normal and custom content, the root swipeable, close, action and body click unchanged;
+      - foreign exit and revival, unmount, throwing and missing capture APIs, StrictMode.
+      - `styles.test.ts` adds 9 swipe tests and one stylesheet-check case (the internal hook off the root fails), and narrows five guards to the two swipe rules. `swipe.test.ts` adds 6 `translationOf` tests.
+    - **Mutations:** 28, each detected and restored:
+      - the descendant-loss filter, the lost-capture pointer ID;
+      - mouse accepted, forbidden dropping, drop not permanent;
+      - pause at `pointerdown`, pause kept after release, no capture;
+      - no phase or selection check at `pointerdown`, no protected-target check;
+      - a second pointer stealing, moves ignoring the pointer ID;
+      - no clamp, no re-base, the computed offset ignored;
+      - a foreign exit snapping back, revival keeping the offset, dispose keeping the pause;
+      - the settle never cleaned, a descendant's `transitionend` ending it, release committing;
+      - in CSS: the drag transition kept, no `touch-action`, settle without opacity, a reduced-motion override losing, a transform at rest.
+    - **Validation:** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (38 files, 1,499 tests), `validate:package` and `build:demo` all pass.
+    - **Manual checkpoint** (headless Chrome 154, the demo with `?production-css`, trusted CDP touch and mouse input, 412 px mobile metrics):
+      - a touch drag follows (x 110 px, opacity 0.73) with real capture held past the descendant's loss;
+      - release springs back over about 200 ms and is at rest with no inline style at about 250 ms;
+      - a mouse drag does nothing; a 300 px drag still springs back; a vertical drag never starts one; a tap on close dismisses;
+      - with emulated reduced motion the drag still tracks and a cancel is at rest on the next frame.
+      - This is Chromium evidence only: no real device was used for S2.
+    - **Left to S3:** commit and fly-out, the release state, the P-19 composition (a reposition during a drag still uses P-19's vertical-only seed), and moving the kept foreign-exit offset to the release state.
+  - **S3, commit, exit and P-19 composition (done):** the commit, the fly-out, revival clearing the offset, decision 11, and the authorised P-19 changes (decision 8), with P-18 completion untouched and P-19's suites still passing. Manual checkpoint.
+    - **Commit.** On an active `pointerup`, the lift point is the gesture's last move; then S1's `releaseDecision` (distance **or** valid velocity, D2 decisions 2 and 3) decides. No commit keeps S2's snap-back. A commit, in this order: ownership ends; `dismiss(id, "swipe")`, while `swipe` still holds the timer; only `swipe` clears (the toast is already exiting, so it is never held and the clear notifies nobody); capture is released; the release state starts. There is no snap-back, no `transitionend` wait and no timer. If another dismissal won first, the store keeps its reason, so `onDismiss` runs once. `pointercancel` and a lost capture never commit.
+    - **Release state.** `data-swiping` is `drag` (direct manipulation), `settle` (a cancel returning to rest) or `release` (exiting from the swipe offset), all internal. A release sets `--ret-swipe-x` to the current offset and `--ret-swipe-y` to 0, keeps the swipe opacity, and, for a commit only, sets the new internal `--ret-swipe-travel` to `direction × 0.6 × width` (`releaseTravel`, `SWIPE_RELEASE_WIDTH_FRACTION`, width measured at activation). A foreign exit during a drag (D0 decision 11) enters the same state with no travel and its own reason: no snap-back, no `dismiss(id, "swipe")`. Revival or unmount clears it; nothing else does.
+    - **Stylesheet.** `:where(.ret-toast[data-swiping='release'])` sets `transform: translate(calc(x + travel), y)`, `opacity: var(--ret-swipe-opacity, 1)` and `transition-property: transform` on `var(--ret-exit-duration)` and `var(--ret-exit-easing)` (120 ms and `cubic-bezier(0.4, 0, 1, 1)` today, no second value). Opacity is never transitioned on a release, so P-18's exit fades from the partly faded swipe value (D2 decision 9). The reduced-motion block gains one rule, ordered after it, that drops the travel (`translate(x, y)`); the block's existing `transition-duration: 0s` makes it instant. No `!important`, no new token (30), `data-swiping` still internal and root-only, and `check-styles.js` is unchanged.
+    - **Lifecycle.** P-18 is untouched: the exit keyframes, the filtered root `animationend`, the computed fallback and the reduced-motion 0 ms path complete the toast. The release adds no listener; a `transitionend` removes and clears nothing.
+    - **P-19 composition (D2 decision 12).** `reposition.ts` replaces `translateYOf` and `currentOffsetOf` with `currentTranslationOf`, which reads X and Y through `swipe.ts`'s `translationOf` (`matrix()` 4 and 5, `matrix3d()` 12 and 13, anything else (0, 0)); the module still writes no style. `useStackReposition` reads everything first: for each moved root, `draggedYOf` (a style read of the internal swipe Y, defined only under `drag`) or else the computed X and Y. Then it writes: a dragged root gets no seed, only its swipe Y plus the displacement (Freeze Y); every other moved root is seeded with `transition-property: none` and `translateY(Y + d)` when X is 0, exactly as before, or `translate(X, Y + d)` otherwise. The one list flush follows only when something was seeded, then both inline declarations go and the stylesheet target resumes (`none` at rest and while settling, the fly-out while releasing).
+    - **Activation** is S2's: it reads the computed matrix part-way through any transition, so a swipe that starts mid-reposition freezes the current visual Y.
+    - **Tests:**
+      - `swipe-interaction.test.tsx`, 74 (+23): pointer events now carry explicit `timeStamp`s. Distance at, above and below the threshold at 200, 250-capped, 300 and 400 px widths; velocity at exactly 0.4 px/ms, below it and outside the window; a forbidden or disagreeing velocity; centre both ways; edge-only commits; one `dismiss(id, "swipe")` and one `onDismiss("swipe")`; dismissal observed while `swipe` still holds, with hover kept and no `data-paused`; capture released and the loss after it ignored; boundary-only notifications over 100 moves; release from the lift point at the current offset and opacity with 0.6 × width travel; no settle on a commit; Y reset; `transitionend` ignored; completion by `animationend` and by the fallback; the reduced-motion 0 ms path never settling; revival clearing a release; custom toasts; a foreign exit releasing with its own reason (programmatic, close, action, dismiss-all). S2's "every release springs back" test became the below-threshold cancel.
+      - `swipe-composition.test.tsx`, 13, new: a layout stand-in plus a model of the composed computed `transform`, checking each moved root is exactly where it was on screen at the switch. Activation at rest and mid-reposition (D1 B); insertion at top and bottom stacks and a neighbour's removal during a drag (C, F, G); several changes accumulating, with an ordinary neighbour seeded exactly as before and one flush; a cancel after a frozen drag; a reposition during a snap-back (D) and during a fly-out (E) keeping X; a foreign exit with a reposition during it; X never written as 0 at four positions; the same writes under StrictMode.
+      - `styles.test.ts`, 214 (+4): the release rule, its token timing, no opacity transition with P-18's exit still running, and the reduced-motion no-travel rule and its order. Five guards are narrowed to name the release rules.
+      - `swipe.test.ts`, 126 (+9): `releaseTravel`, the locked 0.6, `draggedYOf`. `reposition.test.ts`, 88 (+2): the former vertical-only matrix cases, all kept, now read X and Y.
+      - P-18 (`motion-lifecycle`, `motion`), P-19 (`reposition-render`, unchanged, byte-identical seeds) and P-20 suites pass unchanged.
+    - **Mutations:** 29, each detected and restored: distance OR made AND; dismiss after the pause clear; travel sign flipped; travel omitted; travel ignoring width; P-19 X discarded at the read and at the seed; a dragged root seeded; Freeze Y made follow-layout; an extra flush for drag-only moves; `draggedYOf` ignoring the state; a foreign exit snapping back, travelling, or dismissing as swipe; `transitionend` completing the lifecycle; capture kept; `swipe` never cleared; Y not reset; the release starting at 0, reported as `settle`, or snapping back; the lift point untracked; the decision ignored; revival keeping a release; travel not cleared; and in CSS an opacity transition on release, the reduced-motion travel kept, a hard-coded duration, and the travel omitted.
+    - **Validation:** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (39 files, 1,550 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+    - **Manual checkpoint** (headless Chrome 154 on Windows, the production demo with `?production-css`, trusted CDP touch and mouse, 412 × 915 mobile metrics, a 360 px toast, every frame sampled):
+      - a slow 50 px release springs back in about 200 ms and is at rest with no inline style; a mouse drag and a forbidden-direction drag do nothing;
+      - a distance commit at 130 px dismisses with `swipe`: X continues outward 130 → 333 px while P-18's opacity falls 0.68 → 0.03, removed at about 134 ms; flicks of about 40 px at 0.55 px/ms commit, and one at about 0.42 px/ms by the listener's estimate did not (the controller's own window starts at activation; near-threshold, as D1 recorded for CDP cadence); centre commits both ways;
+      - reduced motion: the drag tracks, a commit shows no travel and is removed on the next frame, a cancel is at rest at once;
+      - composition: an ordinary P-19 insertion moves at most 19.6 px per frame, and no swipe scenario exceeds that. Activation 60 ms into a reposition froze Y at 78.4 px (layout target 80) with a 0 px step; insertion and neighbour removal during a drag kept X 50 px and Y with a 0 px step; a reposition during the snap-back continued X from about 40 px; a reposition during the fly-out kept X moving outward, never backward (no 142 px jump); a foreign dismissal mid-drag, with a reposition during the exit, kept X within 50–52.5 px (P-18's scale) and reported `programmatic` once.
+      - **D2 timing checkpoint passed:** the 0.6-width travel over the 120 ms exit, in real-speed screencast frames and a ×10 slow strip (the public `--ret-exit-duration` set to 1200 ms, which times both), reads as a continuous outward fling that is mostly faded before it covers the far half. No value was tuned.
+      - Chromium evidence only. No real device was used for S3.
+    - **Limitations:**
+      - A reposition during a fly-out restarts its transition from the seed with the full exit duration and easing, so X holds for about one frame before accelerating again, and the toast is removed before reaching the target. Cosmetic, inside the D2 algorithm, and continuous.
+      - A foreign release, like a commit, takes Y to 0 over the exit duration, so a toast frozen by a drag glides to its layout place while it fades (D2 decision 11's reconciliation).
+      - The composition tests model the browser's computed transform; the real interpolation evidence is the Chromium checkpoint above, and P-22 owns cross-engine proof.
+  - **S4, hardening (done):** reduced motion, RTL, custom toasts and the race matrix, with mutations. Manual checkpoint.
+    - **S3 real-device checkpoint.** Before S4, the maintainer checked the production S3 swipe dismissal on iPhone Safari and on Android Chrome: the successful dismissal and the 120 ms, P-18-bound fly-out looked and felt good on both, and no tuning was requested. This is an overall visual and interaction sign-off, not per-scenario browser proof; the P-22 carry-forwards stand.
+    - **Reconciliation.** Every D0 decision (1 to 17, the performance and public-surface rules) and every D2 decision (1 to 19) maps to production code and to tests; none is contradicted, and none was reopened. The gaps were integration coverage only (RTL, the six positions, the race matrices, focus restoration, composition edges), plus one defect:
+      - **Fixed:** a toast revived while its cosmetic snap-back was still running kept `data-swiping="settle"`, its timer and its `transitionend` listener for up to about 250 ms (D2-20 item 23). A non-exiting phase change now clears an unfinished settle as it already cleared a release (`useSwipe.ts`, one condition). A settle that an exit interrupts still carries on home, so nothing jumps.
+      - **Checked, not changed:** a dismissal during the snap-back, whose rule still transitions opacity. In Chromium the exit fades exactly as a plain dismissal (opacity 1, 0.966, … 0.043 over the same frames), so P-18's fade is not overridden there; other engines are P-22's.
+    - **Hardened and tested** (`swipe-hardening.test.tsx`, 111, new; `swipe-composition.test.tsx`, 29, +16):
+      - **RTL and positions:** all six positions × both directions × `ltr` and `rtl` (document and ancestor): only the physical edge directions commit, with physical travel; forbidden directions never activate.
+      - **Custom toasts:** root, text and non-interactive descendants swipe and dismiss with `swipe`, with no wrapper; nested button, link, input, editable content, an ARIA widget and an explicitly focusable descendant never start one; a persistent custom toast swipes.
+      - **Eligibility and phases:** finite (with progress), persistent and loading toasts swipe; queued (not rendered) and just-exiting toasts never start; a phase change between `pointerdown` and activation aborts; a candidate dropped by an exit never returns when the toast is revived under the same pointer.
+      - **Selection:** a selection crossing into the toast blocks; a collapsed one does not; one that appears between `pointerdown` and activation drops the candidate; one made after activation adds no cancellation rule.
+      - **Protected targets:** a control removed or reparented (outside the toast or onto the root) mid-sequence never becomes swipeable, and close still works.
+      - **Capture and cancel:** late losses, cancels, pointerups and another pointer's events after a commit change nothing; `pointercancel` while pending, active or at the activating move never dismisses; a cancel after a foreign exit or another pointer is harmless; an unmount or a root that lost capture with its node cleans up once.
+      - **The `swipe` reason:** through a module pass-through spy, set once and cleared once per gesture across cancel, `pointercancel`, lost capture, commit, foreign exit and unmount with every late event; never touched by a pending candidate, a mouse or an idle unmount.
+      - **Multiple pointers and toasts:** touch and pen in all four orders; a second pointer cannot activate, add velocity samples, unpause, release capture or commit, and a new pointer starts normally afterwards. Two toasts can be swiped at once by two pointers, with state, pause and capture local to each; a neighbour then swipes normally.
+      - **Lifecycle matrix:** pending, drag, settle and release × close, action, programmatic, dismiss-all, timeout and relocation (24 cases), plus in-place updates in each state: the reason already chosen wins, `swipe` only when it committed first, `onDismiss` once, no snap-back from a drag, and no stale pause, capture, state or properties at the end. A relocation of an exiting toast becomes `relocate`, a swipe's exit included: existing §14 store semantics.
+      - **Countdown:** it runs while pending and a timeout drops the candidate; an active drag holds it past its old deadline; a cancel resumes the folded remainder to the millisecond; another reason keeps it held; a last-moment commit keeps `swipe`.
+      - **P-20:** `data-paused` only while active, never while pending or exiting; the fill restarts only at the run boundary.
+      - **P-16:** a swipe of a toast holding focus restores focus to the same place as a programmatic dismissal, and the toast is `inert`. The hotkey, Escape and focus suites pass unchanged.
+      - **P-18:** a child, a foreign name and the wrong names never complete a release; its own exit does. **Reduced motion:** cancel, commit and foreign exit end at once with the normal reasons, never through a settle.
+      - **Revival:** after a foreign exit, a cut-short settle, an interrupted capture and a release, the revived root starts clean, no stale listener or timer acts later, and it swipes again.
+      - **P-19 composition:** top and bottom stacks × first, middle and last toast × insertion and removal (12 cases); settle, release and foreign release at both stacks; two simultaneous drags; a promotion (removal and insertion at once). X kept, Y frozen under a drag, at most one flush, ordinary neighbours seeded exactly `translateY`, same roots.
+    - **D2-20 accounting:** 1–5 S2 and S4 (capture, cancel and multi-pointer tables); 6–7 S2 (100 moves) and S3; 8 S2 and S4 (call counts); 9 S2; 10 S3 (style) and S4 (Chromium settle check), other engines to P-22; 11–12 S3 and S4; 13–16 S3 and S4 (composition, Chromium); 17 the unchanged P-19 suite and S4's seed check; 18 S3 and S4; 19 S1 and S4 (integration, Chromium); 20 S2 and S4; 21–22 S2 and S4; 23 S2, S3 and S4 (the fix); 24 S2 and S4. None is left to manual evidence alone.
+    - **Mutations:** 25, each detected and restored: RTL inverting the directions or the travel sign; the visible-only check removed at `pointerdown` or at activation; the selection check removed at either; the protected-target check bypassed; a descendant's loss or another pointer's loss treated as the root's; a stale pointer moving or ending the gesture, or taking a pending one; the pause guard removed (a duplicate clear); a foreign reason replaced by swipe; no pause during a drag; a stale settle or release surviving revival; dispose or a foreign exit keeping capture, or keeping the pause; a pending candidate kept through a phase change; the reduced-motion travel restored; an opacity transition on release; P-19's X preservation removed; Freeze Y removed. Two first survived (the duplicate clear, hidden by the store's idempotence, and the kept candidate, hidden by activation's re-check) and were killed by the call-count and revival tests above.
+    - **Validation:** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (40 files, 1,677 tests), `validate:package`, `build:demo` and `git diff --check` all pass. Public tokens stay at 30; no API, attribute or `check-styles.js` change.
+    - **Chromium checkpoint** (headless Chrome 154, the production demo, trusted CDP touch, 412 × 915): with the demo's RTL switch (toast `direction: rtl`), top-left and bottom-left commit left only, top-right and bottom-right right only, centre both, each with physical travel (±216 px); a custom toast's nested button never starts a swipe and its body does; a selection inside the toast blocks until cleared; with three toasts, a swipe leaves the others untouched and the next swipes normally; five rapid cancels then a commit; a foreign dismissal mid-drag releases (X 45–47.6 px, P-18's scale) with `programmatic`; a toast revived 20 ms into its snap-back is at once free of swipe state, and swipes again; under emulated reduced motion a cancel is at rest at once, a commit shows no travel and goes on the next frame, and a foreign exit goes before the next frame. Chromium only; no phone check for S4, which changes no gesture feel or motion.
+    - **Accepted limitations (unchanged from S3):** a reposition during a fly-out restarts its transition, holding X for about a frame; a release glides a frozen Y to the layout during the exit (D2 decision 11).
+    - **Carry-forwards:** P-22's P-21 list (below) gains the composition motion and the dismissal during a snap-back in three engines; P-26 and P-29 are unchanged.
+  - **S5, reconciliation (done):** the plan, the carry-forwards, full validation, the final manual checkpoint, and removal of `demo/p21/`.
+    - **Final reconciliation.** Every D0 decision (1 to 17, performance and public surface) and D2 decision (1 to 19) maps to production code and tests, and all 24 D2-20 regression requirements stay accounted for as in S4. Each is satisfied, or explicitly carried to P-22 (cross-engine proof, scroll arbitration, pen, `inert` with capture, pinch-zoom, composition motion, the dismissal during a snap-back), P-26 (documentation) or P-29 (assistive technology and the operating system's reduced-motion setting), or is an accepted limitation. No unresolved defect, no contradiction, nothing reopened. S4's revival fix is confirmed by its tests: a revival mid-settle starts clean with no stale pause, capture, timer or listener, swipes again, and an exit that interrupts a settle still carries it home. Relocation of an exiting toast stays the §14 store rule, which P-21 does not override.
+    - **Prototype removed.** `demo/p21/` (the prototype, its stylesheet and `evidence.mjs`) is deleted, and `demo/index.tsx` is back to its `v2` content: no `?p21` switch, so the whole `demo/` directory equals `v2`. A search for `p21`, the prototype's classes, custom properties, switches and evidence script finds nothing executable; the D1 record above stays as history. The demo build has no prototype chunk (only P-17's stylesheet, which predates P-21), and `?p21` now shows the ordinary demo.
+    - **Leakage.** No `console`, `debugger`, TODO, flag, test-only branch, `requestAnimationFrame`, `matchMedia`, window or document access or `!important` in the P-21 production files, and no test imports demo code. The slice tags left in comments (S2, S3, S4) are provenance, as elsewhere in the code.
+    - **Public surface.** `src/index.ts`, `src/types.ts`, `src/toast.ts`, the store and `package.json` are unchanged from `v2`; `"swipe"` was already a `DismissReason` and the internal `ToastPauseReason`. Tokens stay at 30. `data-swiping` and `--ret-swipe-x`, `-y`, `-opacity` and `-travel` stay internal, and `check-styles.js` admits `data-swiping` only on `.ret-toast`. No element was added: region, list, toast root and content as before, with no wrapper.
+    - **CSS.** Four rules: `drag` (internal X and Y, no transition), `settle` (P-19's 200 ms, `transform` and `opacity`), `release` (exit tokens, `transform` only) and one reduced-motion `release` without travel, ordered after the rules it overrides at zero specificity. Nothing at rest.
+    - **Ownership audits** (no runtime change in S5): pending touches nothing; a drag owns only the root's swipe state through native root listeners and CSSOM; cleanup is idempotent and leaves P-19's state alone at rest; P-18 alone completes the lifecycle (its filtered `animationend`, fallback and 0 ms path) and nothing of the swipe's settle or release can; P-19 still reads before it writes, freezes a dragged Y, keeps every other X, flushes at most once and seeds non-swiping roots exactly `translateY`; `swipe` is set at activation, cleared once, after `dismiss(id, "swipe")` on a commit, and never shows an exiting toast as held; P-16's suites pass unchanged. The 100-move test still shows no React commit, store notification, pause or timer change and no progress re-timing.
+    - **Spot mutations:** 10, all detected and restored: P-19 discarding X, a foreign exit becoming `swipe`, the dismiss and pause order reversed, an opacity transition on release, a descendant's capture loss cancelling, a stale settle surviving revival, RTL flipping the directions or the travel, the reduced-motion travel restored, and `pointermove` notifying the store.
+    - **Production demo smoke** (headless Chrome 154, trusted CDP touch, the default demo and `?production-css`): a cancel is back at rest; a distance commit and a 36 px flick dismiss with `swipe`; centre both ways; a forbidden direction and a mouse drag do nothing; a tap on close and on the action dismiss with their reasons, and a drag from the action does nothing; a custom toast's nested button never swipes and its body does; with the demo's RTL switch (toast `direction: rtl`) top-left still commits left only; under emulated reduced motion a cancel is at rest at once and a commit shows no travel.
+    - **Real devices.** S4 and S5 change no gesture feel or motion (S4's runtime fix only clears stale state on revival), so the S3 sign-off on iPhone Safari and Android Chrome stands; exhaustive browser evidence stays P-22's.
+    - **Validation:** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (40 files, 1,677 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+    - **Accepted limitations:** a reposition during a fly-out holds X for about a frame; a release glides a frozen Y to its layout place during the exit.
+  - **Pre-publication correction (IMPORTANT-1 of the final review).**
+    - **Defect, reproduced before the fix.** A pending candidate holds no capture (D0 decision 14), and a pen has no implicit capture (D1 finding 1), so when a pen's contact ended off the root the root never heard its `pointerup` and the candidate stayed. That pen's hover moves (`buttons` 0) could then activate it: capture, the `swipe` reason, a drag following the hover, and a countdown held indefinitely (a 5 s toast still held after 60 s in jsdom). Six new tests failed against the unfixed code for exactly these reasons.
+    - **Rule.** A `pointermove` from the pointer that owns the gesture with `buttons === 0` proves its contact has ended. It never activates, continues or commits a swipe: a pending candidate is dropped (no capture, pause, visual state, dismissal or settle), and an active gesture ends exactly as on `pointercancel` (ownership, then only `swipe`, then capture; the settle or the reduced-motion instant restore; no `releaseDecision`, no dismissal). It is one early check in `onPointerMove`, after the owner check, so another pointer's moves still change nothing. Touch and pen only, as before; D0 and D2 are unchanged.
+    - **No new-pointer replacement rule.** A different pointer still cannot take a pending or active gesture. A stale candidate whose pointer never returns over the root stays until the toast leaves `visible`; it holds no pause and can no longer activate, so the only effect is that the toast cannot be swiped meanwhile. Whether pens reuse their pointer ID, and so clear it by hovering back, is engine evidence for P-22.
+    - **Tests.** The swipe test helpers now model a contact as browsers report it: `buttons` 1 on `pointerdown` and `pointermove`, 0 on `pointerup` and `pointercancel` (verified unchanged: 214 tests passed with the helpers alone). Seven new tests in `swipe-hardening.test.tsx` (118): a pen hovering after a lift off the root, then a fresh contact swiping; a finite toast timing out normally, with the reason never set; a pending candidate dropped for touch and pen; an active drag past the distance cancelled under normal and reduced motion, with hover kept, capture released once, the reason set and cleared once, and the losses, lifts and moves that follow harmless; a move with no buttons from another pointer ignored while pending and active, and no second pointer taking ownership; stale moves after the cancel ignored and a new pointer starting normally. The 100-move test still passes.
+    - **Mutations:** 6, each detected and restored: the check removed; a pending candidate kept; an active gesture ignoring it, dropping it without cleanup, or committing on it; another pointer's move ending the gesture.
+    - **Chromium** (headless Chrome 154, the production demo, CDP touch and CDP-synthesised pen): touch and pen contact report `buttons` 1 on `pointerdown` and `pointermove` and 0 on `pointerup`, and both still commit normally; a synthesised pen lifted just below the root reached it with `pointerdown` only, then hover moves with `buttons` 0 activated nothing; an active pen drag at 140 px cancelled on a move with no buttons and settled with no dismissal; with focus emulated, both toasts timed out normally once the pen's press-focus left the root. That press focusing the root (P-15's focus-within reason) is the existing pointer-focus behaviour carried to P-22. Real pen hardware was not tested.
+    - **Validation:** `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, the full suite (40 files, 1,684 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+    - **Real devices.** After the correction, the maintainer's smoke test of the production demo passed on iOS and Android, swipe-to-dismiss included, with no tuning or change requested.
+    - **MINOR-1, carried forward:** `protectedTarget` walks from `event.target`, so an interactive element inside a shadow root in custom content is retargeted to its host and not detected. Not fixed here; recorded for P-22 and P-26.
+  - **Then:** a focused publication review, then the PR into `v2`, CI and a merge commit.
+- **D1 record: prototype, machine evidence and real-device sign-off.**
+  - **Prototype:**
+    - `demo/p21/`, reached only through `?p21` in `demo/index.tsx`, which then mounts the prototype instead of the demo and skips the P-17 prototype stylesheet.
+    - It imports nothing from `src/` and uses `p21-` classes, never `ret-`. S5 removes it.
+    - It is a self-contained fixed stack that models the three layers on one root:
+      - P-18-like keyframes on the individual `opacity`, `translate` and `scale`, with the token defaults (180 ms in, 120 ms out), completing on the root's filtered `animationend` or a computed fallback (+100 ms), or at once when no animation runs;
+      - P-19-like membership repositioning with switchable seeding: `production`, a copy of the shipped vertical-only inline `translateY` seed, and `composed`, the candidate below;
+      - the D0 swipe: native root listeners; gesture state in a closure; per-move CSSOM writes to internal `--p21-swipe-x`, `--p21-swipe-y` and `--p21-swipe-opacity`; the internal `data-swiping` (`drag`, `settle`, `release`) consumed by stylesheet rules into the root `transform`; and `touch-action: pan-y`.
+    - Reduced motion is CSS only: the media query, plus an identical local switch for devices that cannot emulate it.
+    - There is a ×5 slow-motion switch, a simplified timer with hover and swipe pause reasons, and scheduled actions (insert, neighbour removal, programmatic dismissal and unmount of the swiped toast, bursts) so membership can change under a held finger.
+    - A heads-up display and a log show the pointer, gesture phase, X, Y, velocity, the threshold results, the decision and every reposition seed.
+    - `demo/p21/evidence.mjs` drives the prototype over the DevTools protocol with trusted touch, pen and mouse input, and samples every frame. No `requestAnimationFrame` drives the gesture; the evidence sampler alone uses it.
+  - **Candidate constants, as prototyped. D2 (below) locks them; it bounds the fly-out by P-18's exit duration instead of this 200 ms.** All can be edited live, and they persist in the URL:
+
+    | Constant             | Candidate                                                                                                                                                                    |
+    | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | Activation slop      | 10 CSS px from `pointerdown`                                                                                                                                                 |
+    | Horizontal dominance | \|dx\| ≥ 1.5 × \|dy\| at the slop; otherwise the candidate is dropped                                                                                                        |
+    | Distance threshold   | `capped`: min(0.4 × toast width, 100 px). `fixed` (80 px) and `fraction` (0.4 × width) stay selectable for comparison.                                                       |
+    | Velocity             | Signed physical px/ms over the samples in the last 100 ms before release; it commits at ≥ 0.4 px/ms (400 px/s), in an allowed direction and the same direction as the offset |
+    | Opacity              | Linear from 1 to a 0.3 minimum, reached at 0.8 × width                                                                                                                       |
+    | Snap-back            | 200 ms, `cubic-bezier(0.2, 0, 0, 1)` (P-19's reposition timing)                                                                                                              |
+    | Fly-out              | A further 60% of the toast's width, 200 ms, `cubic-bezier(0.4, 0, 1, 1)` (P-18's exit easing)                                                                                |
+    | Tracking origin      | The activation point, re-based on the current visual X, so activation causes no horizontal jump                                                                              |
+
+  - **Machine evidence** (headless Chrome 154 on Windows, 412 × 915 mobile metrics, touch emulation, CDP-dispatched trusted input; Chromium only, not a device):
+    - **Activation and tracking.** A body drag activates past the slop, takes capture, sets `data-swiping="drag"` and the `swipe` reason (alongside `hover`, which touch already sets on the stack, P-15), and follows the pointer: `--p21-swipe-x` 45 px and opacity 0.889 at a 50 px move. Before activation there is no swipe state, capture or reason.
+    - **Cancel.** Below the threshold: `settle`, and the `swipe` reason clears at release, not after the transition. The root returns to `transform: none` and opacity 1, with no inline transform left.
+    - **Commit.** A distance commit at x = 135 px gives `exiting (swipe)`, the reason clears after `dismiss`, removal comes on `animationend`, and `onDismiss(swipe)` fires exactly once. A 45 px flick at about 488 px/s commits by velocity at x = 30 px.
+    - **Direction.** A forbidden direction clamps X to 0 and never commits. Centre positions commit both ways.
+    - **Scrolling.** A vertical drag on a toast drops the candidate (dx 0, dy −18) and the page scrolls (scrollY 0 → 272). At 45° the candidate drops and the page scrolls (78 px). At 30° and 20° from horizontal the gesture activates and the page does not scroll.
+    - **Interactive descendants.** No candidate from the action button, a link, an input, a label's control, `role="button"` or a descendant with `tabindex="-1"` in custom content. Text in custom content swipes normally. A tap on close dismisses with `close-button`. A body click logs no dismissal.
+    - **Selection.** An existing selection inside the toast prevents the candidate.
+    - **Pointers.** A mouse drag changes nothing: no X, no swipe state, no capture, only the P-15 hover reason. Pen activates and commits. A second touch on the owned toast is ignored and its lift leaves the gesture running. `pointercancel` restores. Moving far outside the toast keeps driving X under capture. Releasing capture mid-gesture cancels and restores. The `lostpointercapture` that follows every normal `pointerup` is ignored.
+    - **Timer.** With a 600 ms auto-close, a toast held by `swipe` (and `hover`) for 1200 ms does not expire. After release it times out normally.
+    - **A lifecycle change from elsewhere (D0-11).** A programmatic dismissal mid-drag aborts the gesture, clears `swipe` and keeps the offset (mx 52.5 → 58.3 into the exit, with at most 0.11 px horizontal change per frame). The exit runs with reason `programmatic`, and `onDismiss` fires once.
+    - **Root identity.** Every scenario keeps the same root, and no wrapper is used.
+  - **P-19 composition** (×5 slow motion: reposition 1000 ms, exit 600 ms; "step" is the largest frame-to-frame change):
+
+    | Scenario                                  | Composed, freeze under drag (candidate)                                                                                   | Composed, follow layout under drag               | Production seeding (vertical only)                                   |
+    | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------- |
+    | A: activate at rest                       | no jump (Δtop 0)                                                                                                          | same                                             | same                                                                 |
+    | B: activate mid-reposition                | current visual Y frozen (−19.94 px, identical before and after activation); top step 1.7 px, the ordinary transition rate | same                                             | same (activation is P-21's)                                          |
+    | C: insertion while dragging               | X kept at 50 px; Y frozen (−74 px correction), top step 0; on release both carried home (top 4.9, left 3.3 px per frame)  | X kept; **74 px vertical jump** under the finger | X kept (the drag rule wins once the seed is removed); **74 px jump** |
+    | D: insertion during snap-back             | X continuous (seed (19.6, −74), mx step 3.9 px)                                                                           | same                                             | **X erased: 19.6 px jump** (seed (0, −74))                           |
+    | E: insertion during fly-out               | X continuous (mx step 3.4 px), removed once                                                                               | same                                             | **X erased: 142 px jump**                                            |
+    | F: bottom stack, insertion while dragging | Y frozen (+74 px), top step 0, X kept                                                                                     | —                                                | —                                                                    |
+    | G: neighbour removal while dragging       | Y frozen (+74 px), top step 0, X kept, same root                                                                          | **74 px jump**                                   | **74 px jump**                                                       |
+
+    The composed design meets every D0-8 requirement. Shipped P-19 seeding unchanged would erase a settling or flying swipe, as the D0 review found. Freezing Y under the finger is the only policy without a vertical jump; it is the candidate, and the maintainer judges its feel on devices.
+
+  - **Candidate seeding and composition algorithm, for S3.** P-19's reads-then-writes order is kept:
+    1. **Reads.** As today: each root's anchored distance, and for each moved root its displacement `d` (P-19 D2, decision 3). For each moved root, also read `data-swiping` and either:
+       - for `drag`, its inline internal swipe-Y value (a style read, no layout); or
+       - otherwise, both components of its computed matrix: X and Y from `matrix()` indices 4 and 5, or `matrix3d()` indices 12 and 13. This replaces `translateYOf` with an X-and-Y reader; anything else reads as (0, 0).
+    2. **Writes:**
+       - a `drag` root is **not seeded**. Its internal swipe-Y becomes Y + `d`, so it stays under the finger and reaches its layout place through the release transition;
+       - every other moved root is seeded with inline `transition-property: none` and `transform: translate(X px, (Y + d) px)`. For a root that is not swiping, X is 0 and the matrix equals today's `translateY(Y + d)`, so non-swiping repositioning is unchanged.
+    3. **One forced layout** for the list, as today.
+    4. **Remove both inline declarations.** The stylesheet target then resumes, and the transition carries both components: `none` at rest and in `settle`, or the fly-out target in `release`.
+    - **P-21's side:**
+      - **Activation** reads the computed matrix (current visual X and Y, part-way through any transition), writes both into the internal properties, and then sets `drag`, whose rule turns the transition off. The computed transform is unchanged, so nothing jumps.
+      - **Cancel** sets `settle`: no transform rule, so `none`, with the snap-back transition on `transform` and `opacity`.
+      - **Commit** sets swipe-Y to 0, the fly direction and `release`, so the fly-out also completes any interrupted reposition.
+      - **A foreign exit** sets `release` with a zero direction, which keeps X.
+  - **P-18 composition** (×1):
+    - At release, X is 127.5 px and opacity 0.687, the swipe value.
+    - The exit animation's opacity starts from it: 0.645, 0.508, 0.297, 0.030 over about 150 ms. It is not reset to 1.
+    - Opacity must **not** be transitioned on `release`: a running transition outranks an animation in the cascade and would override P-18's exit fade. It is transitioned only on `settle`, where no lifecycle animation runs.
+    - `scale: 0.98` scales the transform's offset. At mx 224.5 px the measured left edge is 263.65 px, against 264.5 px unscaled, with the scaled offset about 4.5 px short. That is 2% of the offset, against the fly-out direction, while the toast is under 0.3 opacity, and the edge still moves outward every frame. **Provisionally acceptable**; the devices confirm.
+    - The visible fly-out is bounded by P-18's exit: the toast is removed when the 120 ms exit ends (about 150 ms with event timing), so about 90 px of the 213 px travel is seen. D2 should size the fly-out to the exit token rather than lengthen the exit.
+  - **Reduced motion** (emulated `prefers-reduced-motion: reduce`):
+    - The drag still tracks (X 127.5 px).
+    - A cancel is at rest on the next frame (X 0, opacity 1).
+    - A commit shows no travel (mx 135 unchanged) and is removed on the next frame through the 0 ms path.
+    - Repositioning is instant.
+    - No JavaScript reads the preference: the display's "rm" field is diagnostics only.
+  - **RTL** (`dir="rtl"`): top-left commits left only, top-right right only, and top-centre both ways. Only the mirrored content layout changes, so the controls move to the left; the directions do not.
+  - **Findings for production:**
+    1. **`lostpointercapture` bubbles from the touched descendant.** Touch is implicitly captured by the element first touched. When the root takes explicit capture at activation, that descendant fires `lostpointercapture`, which bubbles to the root. Without a `target === root` check, every touch gesture was cancelled about 20 ms after activation. S2 must handle only the root's own loss and test it. Pen through CDP had no implicit capture, which is why it passed first.
+    2. **Specificity.** The prototype's first reduced-motion rule lost to the more specific name rules, so the exit still animated under emulated reduced motion. The library's zero-specificity `:where()` rules decide by order, so S2 and S4 must keep the swipe and reduced-motion rules ordered after the rules they override, and test the computed result.
+    3. **Opacity transition on release** (P-18 composition, above).
+    4. **The fly-out is bounded by the exit duration** (above).
+    5. **A 45° dead zone:** at 45° Chromium scrolled while the candidate dropped. Steep diagonals scroll and shallow ones swipe. The devices judge the 1.5 dominance ratio.
+    6. **Touch already sets stack hover (P-15):** during a touch swipe, `swipe` is in practice an overlapping reason. This is as D0 expected and changes nothing.
+  - **Limitations:**
+    - This is machine evidence from one engine with emulated touch. CDP input cadence (about 25–30 ms per move) understates real flick velocities, so **no threshold has a feel judgement yet**.
+    - Not observed: pinch-zoom, long-press selection, the iOS and Android scroll handoff, real pen, and a real operating-system reduced-motion setting.
+    - The prototype's timer models only hover and swipe, and has no ResizeObserver.
+    - The prototype's custom properties use `p21-`; S2 names the production ones under `--ret-`.
+    - `requestAnimationFrame` coalescing is not needed in this evidence: per-move CSSOM writes kept up. Devices may say otherwise.
+  - **Real-device sign-off (done).** The maintainer tested the prototype on iPhone Safari and on Android Chrome, with the candidate values above, and approved it on both: the overall interaction looked and felt good. The maintainer reported no issue with activation, scrolling, the thresholds, the velocity flick, the wrong-direction behaviour, the snap-back, the opacity or the swipe as a whole, and asked for no adjustment of any candidate value. This is approval of the overall interaction and feel on both required platforms. It is not a scenario-by-scenario browser verification: no per-scenario measurements or browser-specific observations were reported. The P-22 carry-forwards stand unchanged.
+- **Decisions locked after the prototype (D2).** They promote the D1 candidates the maintainer approved on both devices, and turn the D1 findings into requirements. They refine D0 and reopen none of it: D1 found no D0 decision invalid. Every constant is a named internal implementation constant (or stylesheet value), not public API, and none is configurable.
+  1. **Activation:**
+     - Slop: **10 CSS px** of pointer travel from `pointerdown`.
+     - Horizontal dominance at the slop: **|dx| ≥ 1.5 × |dy|**. Otherwise the candidate is dropped and the browser keeps the pointer.
+     - Every D0 eligibility rule still applies at activation: `touch` or `pen`, `visible`, not from an interactive descendant, and no intersecting selection (D0 decisions 3, 9, 10 and 13).
+  2. **Distance threshold:**
+     - **`min(0.4 × toastWidth, 100 CSS px)`**, where `toastWidth` is the root's layout width (`offsetWidth`).
+     - For example, 200 px → 80 px, 250 px → 100 px, 350 px → 100 px.
+     - A distance commit happens when `|offsetX| ≥ threshold`, where `offsetX` is the allowed-direction physical horizontal offset after D0's clamp (decision 2).
+  3. **Velocity:**
+     - Signed physical horizontal velocity of the pointer, in CSS px/ms, over the pointer samples within the **100 ms** before release: `(x_last − x_first) / (t_last − t_first)` over those samples, using the events' `timeStamp`. With fewer than two samples, or no elapsed time, it is 0.
+     - It commits at **≥ 0.4 px/ms (400 px/s)**, only when its sign is a direction the position allows **and** matches the sign of the current allowed offset.
+     - The distance **or** a valid velocity commits (§19).
+  4. **Opacity:** `progress = min(|offsetX| / (0.8 × toastWidth), 1)` and `opacity = 1 − 0.7 × progress`. That is 1 at rest, falling linearly to **0.3** at 0.8 of the width, and clamped there. It is an internal rule, written per move through CSSOM to an internal custom property (D0 decision 15), with no token and no option.
+  5. **Snap-back:**
+     - **200 ms** with P-19's reposition easing, `cubic-bezier(0.2, 0, 0, 1)`, both internal stylesheet values (P-19 D2, decision 8). Snap-back transitions `transform` and `opacity`.
+     - It is cosmetic. The `swipe` reason has already cleared when the release or cancel was handled (D0 decision 4), and nothing waits for the transition: no `transitionend` dependency.
+     - Under reduced motion it takes 0 ms through CSS (decision 17).
+  6. **Fly-out duration and the lifecycle bound:**
+     - The fly-out fits inside P-18's exit. Its transition duration **is the exit duration**: the stylesheet reads `var(--ret-exit-duration)` rather than repeating a number. The production value, verified at D2 in `src/styles.css`, is **120 ms**, P-18's public token. A consumer override of the token therefore changes the exit and the fly-out together.
+     - P-18's lifecycle completion does not wait for the swipe. `transitionend` is never a completion source, and there is no swipe-specific lifecycle timer (D0 decision 7). The D1 prototype's independent 200 ms is not adopted.
+  7. **Fly-out distance:**
+     - The fly-out continues in the committed physical direction, to a target **0.6 × toastWidth beyond the release offset**, travelled within the exit duration of decision 6.
+     - This keeps D1's visual intent with travel that fits the real lifecycle. With the 120 ms exit, the whole 0.6-width travel is now seen, where D1 showed about 90 px of 213 px. S3 and the browser hardening must check that the compressed travel does not look unnaturally fast. If the 0.6-width target proves visually wrong at the real duration, implementation stops and reports before this value changes.
+  8. **Fly-out easing:** the exit easing, through `var(--ret-exit-easing)` (`cubic-bezier(0.4, 0, 1, 1)` today). No new motion token. The transform travel and P-18's lifecycle exit share one timing character, as separate mechanisms.
+  9. **Opacity at commit:**
+     - During direct manipulation, opacity follows the displacement (decision 4).
+     - On a successful commit, the swipe opacity is **not** transitioned toward any value. P-18's exit animation becomes authoritative for the exit opacity, starting from the currently resolved, partly faded swipe opacity. Only the transform fly-out transitions.
+     - The reason: a running transition outranks an animation in the cascade, so an opacity transition would override P-18's exit fade (D1).
+     - This refines D0 decision 15's "may join the cosmetic release transition": opacity joins the snap-back transition only.
+     - S3 and S4 need a regression test.
+  10. **P-18's scale on the swipe offset.** P-18's `scale: 0.98` also scales the composed transform, which drew the offset about 2% short in D1. This is **accepted** for P-21 unless later browser or manual evidence shows that it materially harms the interaction. P-18 is not redesigned for it. S3 and S4 keep a visual checkpoint.
+  11. **Freeze Y under a drag (P-19).** An actively dragged toast stays visually frozen at its current Y while the stack's layout changes around it, and its X stays under the pointer. It never takes its new layout position mid-drag ("follow layout"). On release, cancel or commit, the composed transform reconciles to the latest layout target without a discontinuity. D1 evidence:
+      - a swipe that starts mid-reposition keeps the current visual Y;
+      - with Freeze Y, an insertion or removal during a drag keeps X and Y;
+      - follow layout, and production-style seeding, jumped about 74 px;
+      - composed seeding kept X through a snap-back and a fly-out, where production Y-only seeding erased it with visible jumps (about 20 px and 142 px).
+  12. **The P-19 composition algorithm: the S3 implementation target.** P-19's reads-before-writes order is kept.
+      - **Read phase**, for each root the membership change moved:
+        - determine whether it is in an active drag (`data-swiping` in its drag state);
+        - for a dragged root, read its internal swipe-Y value, a style read with no layout;
+        - for any other root, read both X and Y of its computed matrix (`matrix()` indices 4 and 5, `matrix3d()` indices 12 and 13; anything else reads as (0, 0)), replacing the vertical-only `translateYOf`.
+      - **Write phase:**
+        - **dragged root:** no inline seed and no write to its `transform`. Its internal swipe-Y gains the displacement, so the toast stays where it is. Its gesture-owned X is untouched;
+        - **every other moved root:** inline `transition-property: none` and `transform: translate(X px, (Y + displacement) px)`. For an ordinary root that is not swiping, X is 0 and the matrix equals today's `translateY(Y + displacement)`, so its behaviour is unchanged.
+      - **Then:** the existing single forced layout read for the list, and removal of both inline declarations. The stylesheet-owned target resumes (`none` at rest and while settling, the fly-out target while releasing), and the transition carries both axes.
+      - **P-21's side:**
+        - **activation** reads the current computed matrix, writes its X and Y into the internal swipe properties, and only then enters the drag state, whose rule turns the transition off. It produces no visible jump;
+        - **cancel** enters the settling state;
+        - **commit** sets the internal swipe-Y to 0, so the vertical component finishes toward the layout during the fly-out, and continues X through the release state;
+        - **a foreign lifecycle exit** (D0 decision 11) enters the release state with no travel direction. It keeps the current visual offset, with no snap-back before the authoritative exit.
+
+      This may be adjusted only where the production implementation shows a concrete difference from the prototype. Any material architectural change needs a new recorded decision.
+
+  13. **`lostpointercapture`:**
+      - The root's handler treats an event as loss of capture only when **`event.target === root`** and its `pointerId` is the active gesture's.
+      - A `lostpointercapture` that bubbles from a descendant never cancels the gesture. Touch is implicitly captured by the touched descendant, which loses capture when the root takes explicit capture at activation. Without the guard, D1 cancelled every touch gesture about 20 ms after activation.
+      - S2 has an explicit regression test.
+  14. **Cancel and completed gestures:**
+      - `pointercancel`, and a genuine loss of the root's capture, cancel and restore an unfinished gesture.
+      - The `lostpointercapture` that follows a handled `pointerup` is ignored: the gesture is finished before capture is released.
+      - A completed commit is never reverted by a later capture or cancel event.
+      - Mutations cover all three.
+  15. **Diagonals and scroll arbitration:**
+      - The dominance ratio stays at 1.5.
+      - In D1's headless evidence, 45° dropped the candidate and the page scrolled, and 30° and 20° activated the swipe. The maintainer's device approval asked for no change.
+      - D1 does not prove scroll arbitration in every browser: that stays P-22's.
+  16. **`requestAnimationFrame`:**
+      - The initial implementation has no `requestAnimationFrame` coalescing. Per-move work stays local gesture bookkeeping plus direct CSSOM writes to internal custom properties.
+      - If S2 or S3 device evidence shows measurable jank, implementation stops and reports before adding it.
+  17. **Reduced-motion ordering:**
+      - The reduced-motion rules for the swipe release (snap-back and fly-out durations, and the fly-out without travel) win by deliberate stylesheet order at the library's zero `:where()` specificity, after the rules they override. There is no `!important`.
+      - Style tests prove that a cancel and a commit release take zero time under reduced motion, and that the fly-out has no travel.
+      - Direct pointer tracking is unaffected (D0 decision 12).
+  18. **Public surface:**
+      - no new public TypeScript API;
+      - no new public CSS token: the set stays at 30;
+      - `data-swiping` and the internal swipe custom properties are implementation details;
+      - no wrapper;
+      - custom toasts are swipeable;
+      - the physical directions do not depend on RTL.
+        The fly-out reads the existing public `--ret-exit-duration` and `--ret-exit-easing` (decisions 6 and 8); it adds none.
+  19. **The prototype stays** under `demo/p21/`, behind the demo-only `?p21` switch, for comparison through S1 to S4. It is disposable, never package surface, and S5 removes it before publication (done in S5).
+  20. **Regression requirements from D1** (in the slice that implements each behaviour):
+      1. a descendant's bubbled `lostpointercapture` is ignored;
+      2. a genuine loss of the root's capture cancels;
+      3. capture loss after `pointerup` cannot undo a commit;
+      4. `pointercancel` cancels;
+      5. a second pointer cannot take ownership;
+      6. zero React renders per `pointermove`;
+      7. zero store notifications per `pointermove`;
+      8. the `swipe` pause is set only at activation;
+      9. the pause clears independently of the cosmetic settle transition;
+      10. no opacity transition overrides P-18's exit opacity;
+      11. the lifecycle ignores `transitionend`;
+      12. P-18's `animationend` and fallback stay authoritative;
+      13. activation mid-reposition causes no jump;
+      14. insertion or removal during a drag keeps X (and Freeze Y);
+      15. a reposition during a snap-back keeps X;
+      16. a reposition during a fly-out keeps X;
+      17. ordinary non-swiping P-19 repositioning is unchanged in behaviour and seed;
+      18. the reduced-motion release takes zero time;
+      19. RTL does not change the physical swipe mapping;
+      20. a mouse produces no gesture state;
+      21. interactive descendants in custom toasts block the gesture;
+      22. a selection blocks activation;
+      23. revival clears any stale swipe visual state;
+      24. detach and unmount clear capture, listeners, the `swipe` reason and the inline and internal visual state.
+- **Carry-forwards:** P-22 (automated swipe in three engines, real scroll arbitration, pen, `inert` with capture, pointer-triggered restoration, `touch-action` and pinch-zoom), P-26 (swipe semantics and caveats) and P-29 (assistive technology and the operating system's reduced-motion setting). Each is recorded in its own entry. The maintainer's device approval removes none of them.
 
 ### Track E: Verification
 
@@ -3230,6 +3753,18 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Hidden-document resynchronisation (P-20 decision 3, T1).** As far as the matrix allows, a genuinely hidden tab or minimised window shows the bar at the store's held value on return, without the literal model's run-ahead. Intensive throttling (hidden for more than about 5 minutes), occlusion-only hiding and mobile backgrounding were never tested.
   - **Safe corners.** The strip's `clip-path` corner follows the card's inner curve at every fraction, and the moving edge is straight.
   - **Forced colours.** Windows High Contrast for the `CanvasText` fill, with no track.
+
+- Carried over from P-21 (D0). P-21's real-browser evidence is its D1 prototype and manual checkpoints, so P-22 verifies these in real browsers. They are checks, not requirements added to P-21:
+  - **Touch swipe (AC-SW-1, §26).** Automated in Chromium, WebKit and Firefox: commit past the distance or velocity threshold, spring-back below it, both directions at centre positions, the forbidden direction clamped, and no movement or dismissal from a mouse drag.
+  - **Scroll arbitration.** Vertical page scrolling that starts on a toast still works under `touch-action: pan-y`; diagonal gestures; and `pointercancel` when the browser takes the pointer, restoring the toast with no dismissal.
+  - **Pen.** Whether each engine applies `touch-action` to pen input, and pen swipe behaviour.
+  - **`inert` with capture.** What each browser does with a captured pointer when the toast becomes exiting and `inert` mid-gesture (P-21 D0, decision 11).
+  - **Pointer-triggered restoration.** The open question on pointer-triggered close above now includes a swipe of a toast that holds focus, which restores focus by the same §18 machinery (P-21 D0, decision 17).
+  - **Pinch-zoom.** `touch-action: pan-y` means a pinch-zoom that starts on a toast is not handled by the browser. Record each engine's behaviour as evidence for P-26.
+  - **Composition motion (P-21 S3 and S4).** In each engine: activation mid-reposition, Freeze Y, and repositions during a snap-back and a fly-out keep X with no jump; the accepted one-frame hold when a reposition restarts a fly-out stays cosmetic.
+  - **A dismissal during the snap-back (P-21 S4).** The settle rule still transitions opacity; in Chromium P-18's exit fade runs unaffected. Confirm WebKit and Firefox do not let the running opacity transition override the exit fade.
+  - **Pen contact loss (P-21 pre-publication correction).** On real pen hardware in each engine: implicit capture, `buttons` on hover (0, or 2 with the barrel button pressed), and whether a pen reuses its pointer ID across contacts. A stale pending candidate is cleared only by that pointer's own hover (`buttons` 0); a new contact with the same pointer ID and no hover between is ignored at `pointerdown`, so its moves are measured from the stale origin and may activate without the slop and dominance (bounded by its own `pointerup`, with no dismissal unless it travels). Decide whether a same-ID `pointerdown` should re-base the candidate.
+  - **Shadow DOM controls (P-21 review, MINOR-1).** A swipe can start from an interactive element inside a shadow root in custom content, since `event.target` is retargeted to the host. Decide whether to walk `composedPath()` to the root, and document the boundary for P-26.
 
 **P-23 Compatibility and SSR verification**
 
@@ -3304,6 +3839,17 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Accessibility.** The bar is `aria-hidden`, not focusable and not announced. Timing stays adjustable through the pauses (§10).
   - **Customisation caveat.** A normal toast's card is now `position: relative`, to anchor the strip. Absolutely positioned elements inside its content (`description` or a custom icon) now position against the card.
 
+- Notes from P-21 (D0) for the behaviour, customisation and accessibility documentation:
+  - **Availability.** A toast can be swiped away with touch or a pen, never with a mouse or trackpad. Mouse dismissal by dragging is not part of 2.0 (§37).
+  - **Direction.** Physical: toasts at left positions swipe left, at right positions right, and at centre positions either way, also in RTL.
+  - **Custom toasts.** They can be swiped too. A swipe never starts on a button, link, form field or other interactive or focusable element inside the content, or while text in the toast is selected.
+  - **Shadow DOM (P-21 review, MINOR-1).** Unless P-22 changes it, controls inside a web component's shadow root are not recognised as interactive, so a swipe can start on them: state the boundary.
+  - **Close button.** Custom toasts have no close button by default, so for a pointer user a swipe may be the only way to dismiss a persistent custom toast. Point consumers to `closeButton: true` or their own dismiss control (§17.3).
+  - **`touch-action`.** Toasts set `touch-action: pan-y`: vertical scrolling works from a toast, but horizontal panning and a pinch-zoom that starts on a toast are not handled by the browser, and this also applies to content inside a custom toast. Document it, with P-22's evidence, if it is retained.
+  - **Root ownership.** The library owns the toast root's `transform`, its transitions and, during a swipe, its opacity. The P-19 caveats on consumer transforms and transitions on the root apply to swipe motion too.
+  - **Not contract.** `data-swiping` and the internal swipe custom properties are implementation details, not customisation hooks: do not document them.
+  - **Exit tokens (P-21 D2).** `--ret-exit-duration` and `--ret-exit-easing` also time a swiped toast's fly-out, which fits inside the exit. Overriding them changes both together. Under reduced motion there is no fly-out.
+
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
 - Note from P-16: in 0.x a toast's text was in the DOM once. In 2.0 its announcement copy is there too, for about 7000 ms, so a test that finds a toast by its text can match twice after upgrading. The guide mentions this and points to the testing note in the P-26 docs rather than repeating it.
@@ -3335,6 +3881,10 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - In the same audit, check that progress keeps depleting under the operating system's own reduced-motion setting. P-20's evidence is Chromium emulation (S3, S4).
 - Carried over from P-18. Provide the assistive-technology evidence for the pointer-triggered close question recorded under P-22 (click without focus): how focus restored after a mouse close is experienced with screen readers, before the §10 and §18 contract is changed or confirmed.
 - Carried over from P-17. With the screen-reader matrix (§17.6), check that polite and assertive announcements still work now that the live regions are hidden by the `ret-toaster__live-region` class as well as inline styles (S5), including with the stylesheet loaded and an inline `style` blocked by CSP. Also check touch exploration with screen readers around the region's focus ring (decision 3).
+- Carried over from P-21 (D0):
+  - With the screen-reader matrix (§17.6), check touch exploration of toasts while swipe is available: VoiceOver on iOS and, where possible, TalkBack. The close button stays the accessible way to dismiss.
+  - In the same audit, check under the operating system's own reduced-motion setting that a swipe still dismisses with no fly-out and that a cancelled swipe returns with no snap-back travel. P-21's reduced-motion evidence is expected to be emulation only.
+  - Include a swipe of a toast that holds focus in the assistive-technology evidence for the pointer-triggered close question (P-22): how the restored focus is experienced (P-21 D0, decision 17).
 
 ## 36. Acceptance criteria for v2.0
 

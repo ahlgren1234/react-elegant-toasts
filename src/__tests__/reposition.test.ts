@@ -6,16 +6,16 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   anchoredDistance,
-  currentOffsetOf,
+  currentTranslationOf,
   displacement,
   edgeOf,
   measureList,
   membershipChanged,
   remember,
-  translateYOf,
   watchResize,
   type GeometryCache,
 } from '../react/reposition';
+import { translationOf } from '../react/swipe';
 import type { ToastPosition } from '../types';
 
 const root = path.resolve(__dirname, '../..');
@@ -164,25 +164,28 @@ describe('membershipChanged', () => {
   });
 });
 
-describe('translateYOf', () => {
-  it.each<[string, number]>([
-    ['none', 0],
-    ['matrix(1, 0, 0, 1, 0, 0)', 0],
-    ['matrix(1, 0, 0, 1, 7, 24)', 24],
-    ['matrix(1, 0, 0, 1, 7, -24)', -24],
-    ['matrix(1, 0, 0, 1, 0, -12.375)', -12.375],
-    ['matrix(1,0,0,1,0,3.5)', 3.5],
-    ['  matrix(1, 0, 0, 1, 0, 8)  ', 8],
-    ['matrix(1, 0, 0, 1, 0, 1e-5)', 0.00001],
-    ['matrix(0.98, 0, 0, 0.98, 0, 16)', 16],
-    ['matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7, -40, 3, 1)', -40],
-    ['matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)', 0],
-    ['matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 2.25, 0, 1)', 2.25],
-  ])('reads %j as %d', (value, y) => {
-    expect(translateYOf(value)).toBe(y);
+// P-21 S3 (D2 decision 12): P-19 reads both components of the composed root transform, through
+// the one matrix reader the swipe also uses. Every case of the former vertical-only reader stands.
+describe('the composed matrix reader (translationOf)', () => {
+  it.each<[string, number, number]>([
+    ['none', 0, 0],
+    ['matrix(1, 0, 0, 1, 0, 0)', 0, 0],
+    ['matrix(1, 0, 0, 1, 7, 24)', 7, 24],
+    ['matrix(1, 0, 0, 1, 7, -24)', 7, -24],
+    ['matrix(1, 0, 0, 1, 0, -12.375)', 0, -12.375],
+    ['matrix(1,0,0,1,0,3.5)', 0, 3.5],
+    ['  matrix(1, 0, 0, 1, 0, 8)  ', 0, 8],
+    ['matrix(1, 0, 0, 1, 0, 1e-5)', 0, 0.00001],
+    ['matrix(0.98, 0, 0, 0.98, 0, 16)', 0, 16],
+    ['matrix(1, 0, 0, 1, -142.5, 19.6)', -142.5, 19.6],
+    ['matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7, -40, 3, 1)', 7, -40],
+    ['matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)', 0, 0],
+    ['matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 2.25, 0, 1)', 0, 2.25],
+  ])('reads %j as X %d and Y %d', (value, x, y) => {
+    expect(translationOf(value)).toEqual({ x, y });
   });
 
-  // The safe fallback is 0, "no offset in flight": never NaN and never a throw.
+  // The safe fallback is (0, 0), "no offset in flight": never NaN and never a throw.
   it.each([
     '',
     'auto',
@@ -194,6 +197,7 @@ describe('translateYOf', () => {
     'matrix(1, 0, 0, 1, 0, 5px)',
     'matrix(1, 0, 0, 1, 0, NaN)',
     'matrix(1, 0, 0, 1, 0, Infinity)',
+    'matrix(1, 0, 0, 1, Infinity, 5)',
     'matrix(1, 0, 0, 1, 0, 5',
     'matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 5, 0)',
     'matrix3d(1, 0, 0, 1, 0, 5)',
@@ -202,33 +206,33 @@ describe('translateYOf', () => {
     'scale(0.98)',
     'rotate(45deg)',
     'MATRIX(1, 0, 0, 1, 0, 5)',
-  ])('reads the unsupported or malformed %j as 0', value => {
-    expect(translateYOf(value)).toBe(0);
+  ])('reads the unsupported or malformed %j as (0, 0)', value => {
+    expect(translationOf(value)).toEqual({ x: 0, y: 0 });
   });
 });
 
-describe('currentOffsetOf', () => {
-  it("reads the root's resolved transform from its own window", () => {
+describe('currentTranslationOf', () => {
+  it("reads the root's resolved transform from its own window, both components", () => {
     const item = document.createElement('li');
     const read = vi
       .spyOn(window, 'getComputedStyle')
-      .mockReturnValue({ transform: 'matrix(1, 0, 0, 1, 0, -18)' } as CSSStyleDeclaration);
-    expect(currentOffsetOf(item)).toBe(-18);
+      .mockReturnValue({ transform: 'matrix(1, 0, 0, 1, 33, -18)' } as CSSStyleDeclaration);
+    expect(currentTranslationOf(item)).toEqual({ x: 33, y: -18 });
     expect(read).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledWith(item);
     read.mockRestore();
   });
 
-  it('reads 0 from jsdom, which resolves no matrix', () => {
+  it('reads (0, 0) from jsdom, which resolves no matrix', () => {
     const item = document.createElement('li');
     document.body.append(item);
-    item.style.transform = 'translateY(12px)';
-    expect(currentOffsetOf(item)).toBe(0);
+    item.style.transform = 'translate(20px, 12px)';
+    expect(currentTranslationOf(item)).toEqual({ x: 0, y: 0 });
   });
 
-  it('reads 0 for a root whose document has no window', () => {
+  it('reads (0, 0) for a root whose document has no window', () => {
     const item = document.implementation.createHTMLDocument().createElement('li');
-    expect(currentOffsetOf(item)).toBe(0);
+    expect(currentTranslationOf(item)).toEqual({ x: 0, y: 0 });
   });
 });
 
