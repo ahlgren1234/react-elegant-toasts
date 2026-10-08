@@ -38,8 +38,9 @@ export interface ToastState {
   /** Layout box, before transforms: `offsetTop` and `offsetHeight`. */
   readonly offsetTop: number;
   readonly offsetHeight: number;
-  /** Computed `transform`, and its vertical translation (0 for `none`). */
+  /** Computed `transform`, and its horizontal and vertical translation (0 for `none`). */
   readonly transform: string;
+  readonly transformX: number;
   readonly transformY: number;
   /** Computed individual `translate` and `scale`, and their vertical parts (0 and 1 for `none`). */
   readonly translate: string;
@@ -49,6 +50,8 @@ export interface ToastState {
   readonly opacity: number;
   readonly animationName: string;
   readonly offsetParentIsList: boolean;
+  /** The root's internal swipe state (`data-swiping`: drag, settle or release), or null. */
+  readonly swiping: string | null;
 }
 
 /** A rectangle from `getBoundingClientRect()`. */

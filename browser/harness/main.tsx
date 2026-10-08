@@ -281,6 +281,7 @@ const DISCONNECTED: ToastState = {
   offsetTop: Number.NaN,
   offsetHeight: Number.NaN,
   transform: 'none',
+  transformX: 0,
   transformY: 0,
   translate: 'none',
   translateY: 0,
@@ -289,6 +290,7 @@ const DISCONNECTED: ToastState = {
   opacity: Number.NaN,
   animationName: 'none',
   offsetParentIsList: false,
+  swiping: null,
 };
 
 function toastState(label: string): ToastState {
@@ -307,6 +309,7 @@ function toastState(label: string): ToastState {
     offsetTop: item.offsetTop,
     offsetHeight: item.offsetHeight,
     transform,
+    transformX: transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41,
     transformY: transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m42,
     translate: style.translate,
     translateY: translateYOf(style.translate),
@@ -315,6 +318,7 @@ function toastState(label: string): ToastState {
     opacity: Number.parseFloat(style.opacity),
     animationName: style.animationName,
     offsetParentIsList: item.offsetParent?.classList.contains('ret-toaster__list') ?? false,
+    swiping: item.getAttribute('data-swiping'),
   };
 }
 
