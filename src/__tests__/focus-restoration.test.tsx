@@ -800,3 +800,107 @@ describe('no scrolling (P-22 H1)', () => {
     expect(document.activeElement).toBe(origin);
   });
 });
+
+// A press on a position's list itself never focuses the region (P-22 H2). In real browsers a press
+// on a gap between toasts, or through an exiting toast, which is inert and so never the target,
+// lands on the `<ol>`, and its default action focuses the nearest focusable ancestor, the region:
+// it undid restoration after a double-click on a close button (P-22 S4.1, the D0-16 report). jsdom
+// neither focuses on a press nor skips inert targets, so these tests check the request, the
+// prevented default, and that nothing else changes; the browser runs are the evidence.
+describe('a press on the list (P-22 H2)', () => {
+  const listOf = (id: string) => itemOf(id).parentElement as HTMLOListElement;
+
+  /** Presses `target` and returns whether its default action was left to run. */
+  function pressOn(target: Element): boolean {
+    let notPrevented = true;
+    act(() => {
+      notPrevented = fireEvent.mouseDown(target);
+    });
+    return notPrevented;
+  }
+
+  it('prevents the default of a press on the list itself, so focus stays where it was', () => {
+    mount();
+    showVisible(['a', 'b']);
+    const origin = externalButton('origin');
+    focusOn(origin);
+    expect(pressOn(listOf('a'))).toBe(false);
+    expect(document.activeElement).toBe(origin);
+  });
+
+  it('keeps the restoration from an exiting toast when the list beneath it is pressed', () => {
+    mount();
+    showVisible(['a', 'b']);
+    focusOn(closeOf('b'));
+    act(() => dismiss('b'));
+    expect(itemOf('b').hasAttribute('inert')).toBe(true);
+    expect(document.activeElement).toBe(closeOf('a'));
+    // A browser sends this press to the list: the exiting toast is inert, so never the target.
+    expect(pressOn(listOf('a'))).toBe(false);
+    expect(document.activeElement).toBe(closeOf('a'));
+    expect(recordOf('a')?.pausedBy).toEqual(['focus-within']);
+  });
+
+  it('leaves presses on a toast, its content and its controls alone, and they still work', () => {
+    mount();
+    showVisible(['a']);
+    const item = itemOf('a');
+    for (const target of [
+      item,
+      item.querySelector('.ret-toast__title')!,
+      actionOf('a'),
+      closeOf('a'),
+    ]) {
+      expect(pressOn(target)).toBe(true);
+    }
+    act(() => {
+      fireEvent.click(closeOf('a'));
+    });
+    expect(recordOf('a')?.phase).toBe('exiting');
+  });
+
+  it('leaves a list inside custom content alone', () => {
+    mount();
+    showCustom(
+      'c',
+      <ol aria-label="inner">
+        <li>inner item</li>
+      </ol>
+    );
+    const inner = screen.getByRole('list', { name: 'inner', hidden: true });
+    expect(pressOn(inner)).toBe(true);
+    expect(pressOn(screen.getByText('inner item', inToasts))).toBe(true);
+  });
+
+  it('never stops the press or the click that follows from propagating', () => {
+    mount();
+    showVisible(['a']);
+    const seen: [string, boolean][] = [];
+    const record = (event: Event) => seen.push([event.type, event.defaultPrevented]);
+    document.addEventListener('mousedown', record);
+    document.addEventListener('click', record);
+    onTestFinished(() => {
+      document.removeEventListener('mousedown', record);
+      document.removeEventListener('click', record);
+    });
+    pressOn(listOf('a'));
+    act(() => {
+      fireEvent.click(listOf('a'));
+    });
+    expect(seen).toEqual([
+      ['mousedown', true],
+      ['click', false],
+    ]);
+    expect(recordOf('a')?.phase).toBe('visible');
+  });
+
+  it('leaves the region focusable from script, and restoration still reaches it', () => {
+    mount();
+    showVisible(['a']);
+    focusOn(regionOf());
+    expect(document.activeElement).toBe(regionOf());
+    focusOn(closeOf('a'));
+    act(() => dismiss('a'));
+    expect(document.activeElement).toBe(regionOf());
+  });
+});
