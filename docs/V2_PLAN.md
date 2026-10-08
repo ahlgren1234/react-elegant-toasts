@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2, focus-within, `aria-keyshortcuts` and the focus rings, is done (recorded below). S4.3, the focus and environment evidence, is done (recorded below). S4.4 is next, after review.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2, focus-within, `aria-keyshortcuts` and the focus rings, is done (recorded below). S4.3, the focus and environment evidence, is done (recorded below). S4.4, the S4 reconciliation, is done (recorded below): S4 is ready for the maintainer's acceptance and is not yet accepted. S5 has not started.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -4771,6 +4771,79 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - CF-12: no visible ring after Alt+T following pointer use;
       - CF-11's assistive-technology discoverability;
       - the operating systems' own settings.
+- **S4.4 record: S4 reconciliation (done; S4 awaits the maintainer's acceptance).** A reconciliation of S4 (S4-H2, S4.1, S4.2, S4.3) against the D2 matrix. It is not an acceptance: S4 is ready for the maintainer to accept, and is not accepted by this record. No CF item was reclassified. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged since S4-H2's approved fix (`58148bf`).
+  - **Evidence-integrity stop and correction.** The reconciliation found that the S4.3 record claimed more than four evidence tests enforced: CF-12 Class 2, CF-7 and CF-8, CF-1 and CF-5, and CF-4. It stopped before committing and reported. The maintainer approved strengthening the assertions as well as correcting the wording. Both are done in `3a17f9f`, which the S4.3 record now describes test by test. Each strengthened test still asserts only that its scenario genuinely ran, never an observed value:
+    - **CF-12:** focus reached the intended element in all 10 scenarios.
+    - **CF-7 and CF-8:**
+      - **Mouse path:** a trusted press and click on `a`'s close, which took focus first.
+      - **Keyboard path:** Tab reached `a`'s close, and no pointer pressed a close.
+      - **Both:** restoration reached `b`'s close; `a` was dismissed once with `close-button`; and the observation was made with focus on `b`'s close and the pointer away from every stack.
+    - **CF-1 and CF-5:** a trusted window `blur`, then a trusted `focus`; `hasFocus()` and the held state in each observed phase.
+    - **CF-4:** the pointer lies over the new toast and never moved; a `pointerenter` on the list with `isTrusted` true; the stack held.
+
+    The strengthened tests passed in every applicable engine, and no earlier observation changed. The S4.1 count-only evidence tests (mouse buttons, tap, pen) are unchanged: the S4.1 record claims no more than they assert.
+
+  - **Totals:**
+    - **Blocking:** 198 tests, 66 per engine, the same 66 in Chromium, Firefox and WebKit. S4 contributes 22 per engine: `focus.spec.ts` 11, `focus-ring.spec.ts` 8 and `focus-within.spec.ts` 3.
+    - **Evidence:** 60 tests, 20 per engine. S4 contributes 15 per engine: `focus.evidence.spec.ts` 4, `focus-dom.evidence.spec.ts` 7 and `environment.evidence.spec.ts` 4. A full run gives 48 passed and 12 skipped; every skip is a Chromium-only CDP test in Firefox or WebKit, and its reason names the manual checkpoint or gap.
+  - **Blocking gate integrity:**
+    - CI's `browser` job runs `npm run test:browser`, which is `playwright test --grep-invert @evidence`. Its listing has 198 tests in the 10 blocking spec files and none from an `*.evidence.spec.ts`; the evidence listing has the 60 in the 5 evidence files.
+    - `retries: 0`, with `forbidOnly` under `CI`.
+    - No `test.skip`, `.only`, `.fixme` or `.fail` in a blocking spec. No S4 blocking test branches on the engine or returns early.
+  - **Coverage matrix.** "Pass" is the blocking result in C (Chromium), F (Firefox) and W (WebKit); "recorded" is Class 2 or 4 evidence, never a contract.
+
+    | Item  | Class (D2)              | Spec and tests                                                                                                                             | C              | F                | W                | Remaining limitation                                                                                           | Destination                    |
+    | ----- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+    | H1-R  | 1                       | `focus.spec.ts`, "H1-R: removal restoration never scrolls the page" (5)                                                                    | pass           | pass             | pass             | —                                                                                                              | AC-KB-1 (no regression)        |
+    | S4-H2 | 1                       | `focus.spec.ts`, "CF-6 and H2: presses on an exiting toast and the list keep focus" (3); unit tests in `focus-restoration.test.tsx` (6)    | pass           | pass             | pass             | a non-primary press on a bare gap loses its own default (untested)                                             | —                              |
+    | CF-1  | 2; 3                    | `environment.evidence.spec.ts`, "CF-1: a genuine window blur while a toast holds focus"                                                    | recorded       | skip (gap)       | skip (gap)       | genuine blur in Firefox and Safari; real window and app switching                                              | MC-1, MC-5                     |
+    | CF-2  | 1; 2                    | `focus-within.spec.ts`, "CF-2: the focus-within reason follows the DOM" (3); `focus-dom.evidence.spec.ts`, "CF-2 Class 2 and CF-6 Class 2" | pass; recorded | pass; recorded   | pass; recorded   | none: no engine left a toast held after focus left                                                             | —                              |
+    | CF-3  | 2                       | `focus-dom.evidence.spec.ts`, "CF-3: where focus goes …"                                                                                   | recorded       | recorded         | recorded         | —                                                                                                              | —                              |
+    | CF-4  | 2                       | `environment.evidence.spec.ts`, "CF-4: a stack appearing under a stationary pointer"                                                       | recorded       | recorded         | recorded         | never asserted across engines                                                                                  | —                              |
+    | CF-5  | blur 2 (C); 3; hidden 3 | `environment.evidence.spec.ts`, "CF-5: a genuine window blur with nothing focused, and visibility"                                         | recorded       | skip (gap)       | skip (gap)       | hidden documents in every engine: CDP minimise never hides a document, and no `visibilitychange` is dispatched | MC-1, MC-2, MC-3, MC-5         |
+    | CF-6  | 1; 2                    | `focus.spec.ts`, "CF-6: restoration before inert …" (3) and the H2 tests; `focus-dom.evidence.spec.ts`, "CF-6 Class 2 …" and the CF-2 test | pass; recorded | pass; recorded   | pass; recorded   | —                                                                                                              | —                              |
+    | CF-7  | 4; 3                    | `focus-dom.evidence.spec.ts`, "CF-7 and CF-8 (Class 4) …"                                                                                  | recorded       | recorded         | recorded         | Playwright WebKit focuses a clicked button: Safari's click without focus is not observable here                | MC-1, MC-2, P-29               |
+    | CF-8  | 4                       | the same test                                                                                                                              | recorded       | recorded         | recorded         | the pointer-close contract                                                                                     | P-29 (with CF-33)              |
+    | CF-9  | 2                       | `focus-dom.evidence.spec.ts`, "CF-9: reviving an exiting toast …"                                                                          | recorded       | recorded         | recorded         | —                                                                                                              | —                              |
+    | CF-10 | 2                       | `focus-dom.evidence.spec.ts`, "CF-10: the order of restoration …"                                                                          | recorded       | recorded         | recorded         | observer entries give delivery order, not DOM-write order; S4.1 proves restoration before `inert`              | —                              |
+    | CF-11 | A 1; B 2                | `focus-ring.spec.ts`, "CF-11 A: aria-keyshortcuts …"; `environment.evidence.spec.ts`, "CF-11 B …"                                          | pass; recorded | pass; skip (gap) | pass; skip (gap) | the Firefox and WebKit accessibility trees: an unverified gap                                                  | P-29 (assistive technology, C) |
+    | CF-12 | 1; 2; 3                 | `focus-ring.spec.ts`, "CF-12: focus rings while :focus-visible matches" (4); `focus-dom.evidence.spec.ts`, "CF-12 Class 2 …"               | pass; recorded | pass; recorded   | pass; recorded   | appearance; real Safari; Windows High Contrast; no ring after Alt+T following pointer use                      | MC-1, MC-6, MC-8, P-29         |
+    | CF-13 | 1; 3                    | `focus-ring.spec.ts`, "CF-13: the region ring takes no pointer input and stacks above the lists" (3, one of them the labelled diagnostic)  | pass           | pass             | pass             | appearance; Windows High Contrast                                                                              | MC-6, MC-8                     |
+
+  - **Evidence review.** Each point the reconciliation was asked to check holds in the specs and the records:
+    - Chromium's CDP minimise is genuine blur evidence for Chromium only, and is never presented as hidden-document evidence;
+    - the Firefox and WebKit accessibility-tree gaps are explicit skips, never passes;
+    - Playwright WebKit is never called Safari, and no user-agent string is used to identify one;
+    - CF-7 and CF-8 stay Class 4 observations;
+    - `:focus-visible` is recorded per engine, never assumed identical; the engines happened to agree;
+    - CF-10 separates observer delivery from DOM-write order.
+  - **Manual checkpoints, all pending for S6.** None has been run, none is passed, and P-21's device approvals satisfy none (CF-43). What S4 leaves to each:
+    - **MC-1, macOS Safari:**
+      - CF-7, click without focus, reported apart from the keyboard path;
+      - CF-8's Safari path;
+      - CF-12's rings after Tab, Alt+T and restoration, including Safari's Tab-to-buttons setting;
+      - CF-1 and CF-5 genuine blur;
+      - CF-26.
+    - **MC-2, iOS Safari:** CF-7's tap without focus; CF-5 and CF-26 backgrounding (with S5's swipe items).
+    - **MC-3, Android Chrome:** CF-5 and CF-26 backgrounding (with S5's swipe items).
+    - **MC-4, Firefox for Android:** nothing from S4; S5's Gecko touch layer.
+    - **MC-5, desktop Chrome and Firefox:** CF-1, CF-5 and CF-25 genuine blur by window and app switching; CF-26 hidden documents. What S4 has here is Chromium's CDP blur only.
+    - **MC-6, Windows High Contrast:** CF-12's and CF-13's rings, with S3's CF-14 and CF-28.
+    - **MC-7, real pen:** S4.1's barrel-button press on a gap; S5's pen items.
+    - **MC-8, human visual review:** CF-12's and CF-13's appearance, with the earlier slices' items.
+  - **P-29 carry-forwards from S4.** S6 writes these into the P-29 entry; P-29 decides them, and S4 implements none of them:
+    - **CF-7:** Safari's click without focus, from MC-1 and MC-2, reported apart from the keyboard path.
+    - **CF-8 with CF-33:** the pointer-close restoration contract (D0-2).
+      - The evidence: after a mouse close, focus is restored to the next toast's close with no `:focus-visible`, and that toast stays held by focus-within with its progress frozen, in all three engines.
+      - The keyboard close restores to the same target with the ring showing.
+    - **CF-11 C:** the hotkey's discoverability through assistive technology. The DOM attribute (Class 1) and Chromium's tree (Class 2) match, and the Firefox and WebKit trees are an unverified gap.
+    - **CF-12 (a deliberate UX and accessibility decision is needed):** after pointer use, Alt+T can focus a toast with no visible ring. In all three engines the hotkey after a body click did not match `:focus-visible`, so the ring styles, which S4.2 proves, never applied. It is not a D0-16 report: D2-6 keeps engines' heuristics out of the contract. Any change, for example to how the hotkey shows focus, needs its own decision. No focus-visible CSS, hotkey or restoration behaviour was changed in S4.
+    - **The operating systems' own settings,** as already recorded.
+  - **Validation (at `3a17f9f`, the documentation of this record aside):**
+    - **Browser suites:** the blocking suite under `CI=1`, 198 of 198; the `@evidence` suite, 48 passed and 12 skipped.
+    - **Repository gates:** `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects, the browser one included), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+    - **Soak:** no full-suite soak, since no instability appeared. Each S4 slice's own targeted repeat stands: S4.1 165 of 165, S4.2 165 of 165, and the H2 reproduction 120 of 120.
+  - **Next:** the maintainer's acceptance of S4; then S5 (swipe), not started.
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
