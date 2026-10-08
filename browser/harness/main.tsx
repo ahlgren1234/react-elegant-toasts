@@ -4,8 +4,12 @@ import { createRoot } from 'react-dom/client';
 import { Toaster, toast } from '../../src';
 import type {
   Box,
+  FocusEventDetail,
+  FocusState,
+  FocusTarget,
   FrameSample,
   HarnessEvent,
+  InertEventDetail,
   ProgressState,
   RetHarness,
   SampleOptions,
@@ -33,6 +37,20 @@ async function stylesheetLoaded(): Promise<void> {
 
 const container = document.getElementById('root');
 if (!container) throw new Error('The harness has no #root.');
+
+// Scenarios that need page markup outside the Toaster, selected by `?scenario=`. `long-page`: a
+// focusable button at the top, then 4000 px of content, then the Toaster, so focusing the region,
+// which sits in the flow below, would scroll the page (P-22 H1).
+if (new URLSearchParams(location.search).get('scenario') === 'long-page') {
+  const outside = document.createElement('button');
+  outside.type = 'button';
+  outside.textContent = 'Outside';
+  outside.dataset.harness = 'outside';
+  const content = document.createElement('div');
+  content.style.height = '4000px';
+  container.before(outside, content);
+}
+
 const root = createRoot(container);
 const events: HarnessEvent[] = [];
 const log = (type: string, detail?: unknown) => {
@@ -112,6 +130,87 @@ new MutationObserver(records => {
   attributes: true,
   attributeFilter: ['data-phase'],
 });
+
+/** Names an element for the focus records ({@link FocusTarget}). */
+function describe(target: EventTarget | null): FocusTarget | null {
+  if (target === null) return null;
+  if (target === window) return 'window';
+  if (!(target instanceof Element)) return 'other:node';
+  if (target === document.body) return 'body';
+  if (target.classList.contains('ret-toaster')) return 'region';
+  if (target instanceof HTMLElement && target.dataset.harness === 'outside') return 'outside';
+  const item = target.closest('.ret-toast');
+  if (item) {
+    const label = labelOf(item) ?? '?';
+    if (target === item) return `toast:${label}`;
+    if (target.parentElement === item && target.classList.contains('ret-toast__close'))
+      return `close:${label}`;
+    if (target.parentElement === item && target.classList.contains('ret-toast__action'))
+      return `action:${label}`;
+    return `content:${label}`;
+  }
+  return `other:${target.tagName.toLowerCase()}`;
+}
+
+// Focus movement, captured on the document and window before the library sees it. The detail has
+// no `label`, so these entries never join a toast's animation and phase entries.
+for (const type of ['focusin', 'focusout'] as const) {
+  document.addEventListener(
+    type,
+    event => {
+      const detail: FocusEventDetail = {
+        target: describe(event.target),
+        related: describe(event.relatedTarget),
+        trusted: event.isTrusted,
+        targetInert: event.target instanceof Element && event.target.closest('[inert]') !== null,
+      };
+      log(type, detail);
+    },
+    { capture: true }
+  );
+}
+for (const type of ['focus', 'blur'] as const) {
+  window.addEventListener(
+    type,
+    event => {
+      if (event.target !== window) return;
+      const detail: FocusEventDetail = {
+        target: 'window',
+        related: null,
+        trusted: event.isTrusted,
+        targetInert: false,
+      };
+      log(`${type}:window`, detail);
+    },
+    { capture: true }
+  );
+}
+
+// `inert` on toast roots, apart from the phase recorder above so its entries keep their meaning.
+// The active element is read when the observer runs: after the commit's layout effects, before any
+// later task can move focus.
+new MutationObserver(records => {
+  for (const record of records) {
+    if (!isToastRoot(record.target)) continue;
+    const detail: InertEventDetail = {
+      toast: labelOf(record.target),
+      inert: record.target.hasAttribute('inert'),
+      active: describe(document.activeElement),
+    };
+    log('inert', detail);
+  }
+}).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['inert'] });
+
+function focusState(): FocusState {
+  const active = document.activeElement;
+  return {
+    active: describe(active),
+    focusVisible: active?.matches(':focus-visible') ?? false,
+    scrollY: window.scrollY,
+    hasFocus: document.hasFocus(),
+    visibilityState: document.visibilityState,
+  };
+}
 
 let scenarioStyle: HTMLStyleElement | null = null;
 
@@ -260,6 +359,7 @@ const harness: RetHarness = {
   toastRoot,
   toastState,
   progressState,
+  focusState,
   sampleFrames,
 };
 

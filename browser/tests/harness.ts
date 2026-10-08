@@ -27,9 +27,12 @@ export const LATE_TOLERANCE_MS = 150;
 /** Sub-pixel tolerance for layout and visual positions. */
 export const PX = 0.5;
 
-/** Opens a fresh harness page and waits until the stylesheet has loaded and the Toaster is mounted. */
-export async function openHarness(page: Page): Promise<void> {
-  await page.goto('/');
+/**
+ * Opens a fresh harness page, in the page `scenario` when given (`?scenario=`), and waits until the
+ * stylesheet has loaded and the Toaster is mounted.
+ */
+export async function openHarness(page: Page, scenario?: 'long-page'): Promise<void> {
+  await page.goto(scenario ? `/?scenario=${scenario}` : '/');
   await page.waitForFunction(() => window.__retHarness !== undefined);
 }
 

@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1 resumes only after the H2 review.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2 is next, after review.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -4521,6 +4521,63 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Results:** all pass in Chromium, Firefox and WebKit. With the fix reverted, A, the slowed A and B fail in every engine (focus on the region). Repeat run under `CI=1`, `--repeat-each=5`: 120 passed, 10 skipped (the Chromium-only touch swipe elsewhere), no failure.
   - **Validation:** `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` pass. The blocking browser suite passes (132 of 132 under `CI=1`), and the `@evidence` run gives 11 passed, 4 skipped.
   - **Carried forward to S4.1:** CF-6 Class 1's press and click on an inert exiting toast, as permanent blocking tests in all three engines, asserting that focus does not move, alongside H1-R and the rest of CF-6.
+- **S4.1 record: focus restoration and `inert` (done).** H1-R, CF-6 at its Class 1 layer, and S4-H2's regression are blocking in Chromium, Firefox and WebKit, with trusted Playwright input only. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified. S4.1 is the first of S4's four reviewed parts (S4.1 to S4.4, from the S4 orientation); CF-2, CF-11, CF-12 and CF-13 are S4.2's, and S4's evidence specs S4.3's.
+  - **Maintainer decisions for S4 (at the S4 orientation review):**
+    - **CF-12:** Class 1 ring assertions may use a keyboard-established path beginning with trusted Tab; script focus with no earlier keyboard input stays Class 2. No engine's `:focus-visible` heuristic is the product contract.
+    - **H1-R:** D1b's body-click case is kept as written, with its focus precondition asserted.
+    - **CF-13:** S4.2 may add a separate diagnostic stacking probe that overrides `pointer-events: auto` through consumer CSS. It never replaces the production-CSS hit-testing assertions, and it is reported as diagnostic.
+    - **CF-2 and CF-6:** both have blocking and evidence layers, as D2 classifies them; only CF-6 Class 1 is S4.1's.
+  - **Specs added** (`browser/tests/`; 11 blocking tests per engine, so the blocking suite is now 55 per engine and 165 in all; 4 evidence tests per engine):
+    - `focus.spec.ts`:
+      - **H1-R** (5 per engine), on the long page. Its preconditions: the page is at the top, can scroll more than 3000 px, and the region lies more than 3000 px below the viewport. Each case checks `scrollY` (0) and the §18 target:
+        - a mouse close of the only toast: the region;
+        - Tab to the outside button, Alt+T, Tab and Enter: the region, never the element focused before the hotkey;
+        - a click on the toast's body, then a programmatic dismissal: the region;
+        - a mouse close of the first of two toasts: the next toast's close;
+        - control: a programmatic dismissal with nothing focused leaves focus on `<body>`. The only focus entry is the `inert` one, with `<body>` active.
+      - **CF-6, restoration before `inert`** (3 per engine), one per §18 step, each reached by trusted Tab and closed with Enter: the next toast's close (step 1), the previous toast (step 2) and the region (step 3).
+      - **H2's regression** (3 per engine):
+        - with the public exit token slowed to 3 s (D0-11), a trusted press, then a click on the inert exiting toast's close, then a click on its body: focus stays on the next toast's close, no focus event follows the restoration, nothing else is dismissed, and, with the pointer away from the stack, the remaining toast keeps `data-paused` (its focus-within reason);
+        - a double-click on a close button at production timing: exactly two `focusin`s, the clicked close and then the next toast's close, one `close-button` dismissal, and the remaining toast's focus-within pause kept;
+        - a click on the gap between two toasts with the outside button focused: focus stays on it, no focus event, nothing dismissed, no scroll.
+    - `focus.evidence.spec.ts` (`@evidence`): the mouse-button follow-up below.
+  - **Preconditions, asserted and never assumed:** that a clicked close button takes focus (its trusted `focusin` comes first in the log); that a click on the body focuses the root (CF-39); each Tab and the Alt+T step; that nothing is focused in the control case; for H2, that the pressed points lie on the exiting toast only, never on its neighbour, and that a gap separates the two toasts. A precondition that fails in an engine fails the test.
+  - **How the CF-6 ordering is observed.** From records made as it happens, never inferred from a later snapshot:
+    - the `focusout` leaving the exiting toast and the `focusin` at the target are logged synchronously, as they are dispatched, with whether their target was inside an `inert` subtree at that moment. Both must report `targetInert: false`, and the `focusout`'s `relatedTarget` must be the target;
+    - the `inert` entry comes later in the log, and its observer callback read the target as the active element;
+    - no focus event follows it, so no browser fix-up and no second restoration moved focus;
+    - a frame sampler, started and confirmed running before Enter is pressed, reads the active element, the phase and `inert` in every frame until 5 frames after removal. Frame 0 shows the pre-press state. From the first frame after the press to the end, focus is on the target, including every frame in which the toast is `inert` and after it is removed.
+  - **Harness extensions** (`browser/harness/`; observation only):
+    - **`?scenario=long-page`:** a focusable `outside` button at the top, then 4000 px of content, then the Toaster's container, so a focused region would scroll the page (H1). `openHarness(page, 'long-page')` opens it.
+    - **Focus recorder:** `focusin` and `focusout`, captured on the document, and the window's own `focus` and `blur` (`focus:window`, `blur:window`). Each records the target and `relatedTarget` named for the specs (`body`, `region`, `toast:<label>`, `close:<label>`, `action:<label>`, `content:<label>`, `outside`), `isTrusted`, and `targetInert`. The detail has no `label` and no type starts with `window-`, so S2's per-toast entries and S3's window-event filter are unaffected.
+    - **A separate `inert` observer:** an `inert` entry when a toast root gains or loses the attribute, with the active element read in the observer's callback. S2's phase recorder is unchanged.
+    - **`focusState()`:** the active element, whether it matches `:focus-visible`, `scrollY`, `document.hasFocus()` and `visibilityState`.
+  - **Browser differences:** none in the blocking outcomes. In all three engines a trusted mouse click focuses the clicked close button, and a click on the body focuses the root. The event order is the same in each: the `focusout` from the exiting toast, the `focusin` at the target, then `inert`.
+  - **Mutation checks**, each a temporary edit reverted at once (`git status` clean for `src/`):
+    - **H1's `preventScroll` removed from restoration:** the three H1-R cases that restore to the region fail in every engine (9). The next-toast case passes, as it must: toasts are `position: fixed`, so focusing one scrolls nothing.
+    - **`inert` applied before restoration** (the two lines of `ToastItem`'s layout effect swapped): the three CF-6 tests fail in every engine (9), on `targetInert: true` for the `focusout` leaving the exiting toast. The H1-R outcomes still pass: no engine blurs synchronously when `inert` is set, so the ordering assertion is what detects it.
+    - **H2's guard removed:** the three H2 tests fail in every engine (9), with focus on the region.
+  - **Mouse-button evidence (`@evidence`; the S4-H2 follow-up, no production change).** Two toasts with an outside button focused, then a press on the gap between them. A pure-DOM control in the same engine, without the library: a `tabindex="-1"` section around a fixed `<ol>` with a box.
+    - **With H2's guard, all three engines:** the primary, middle and secondary buttons each have their `mousedown` prevented on the list, and the outside button keeps focus. `click`, `auxclick` and `contextmenu` still follow, and `contextmenu` is not prevented, so the context menu still opens.
+    - **The pure-DOM control, all three engines:** the primary, **middle and secondary** presses each focus the section.
+    - **Touch (Playwright `touchscreen.tap`):** the compatibility `mousedown` has `button` 0. In Chromium and WebKit the tap is adjusted to the nearest toast and focuses its root (CF-39, outside H2). In Firefox it targets the list, is prevented, and the outside button keeps focus.
+    - **Pen (Chromium protocol pen, not pen evidence):** the tip (`button` 0) and the barrel (`button` 2) are both prevented, and focus is kept; the barrel still gets `contextmenu`. Real pens stay with MC-7. Firefox and WebKit skip, naming it.
+    - **Conclusion:** restricting the guard to `event.button === 0` would bring H2's defect back for middle and secondary presses, including a pen's barrel button, in every engine. A narrowing follow-up is not justified. What the guard costs a non-primary press on a bare gap is that press's own default, such as autoscroll where a platform offers it; that is not observable headless and stays untested.
+  - **Commands:** unchanged. `npm run test:browser` (165 tests); `npm run test:browser:evidence` (9 per engine; 27 in all, 6 of them skipped: 4 S3 tests and the protocol pen outside Chromium).
+  - **Validation:**
+    - **Focused:** `focus.spec.ts` passes 33 of 33 (11 per engine).
+    - **Repeat run:** `focus.spec.ts` with `--repeat-each=5` under `CI=1` (one worker, zero retries): **165 of 165**. S1 to S3 were not soaked again: nothing they cover changed.
+    - **Full blocking suite** under `CI=1`: 165 of 165 in about 3.2 minutes. The `@evidence` run: 21 passed, 6 skipped.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects, the browser one included), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S4.2:**
+      - CF-2 Class 1: removal and re-keying of the focused node;
+      - CF-11 A: the `aria-keyshortcuts` attribute;
+      - CF-12 Class 1: the ring styles, on the Tab-established path;
+      - CF-13 Class 1: hit-testing, with the separate diagnostic stacking probe;
+      - S3's `:focus-visible` observation, for CF-12's Class 2 record (S4.3).
+    - **S4.3 (evidence):** CF-1, CF-2 and CF-6 Class 2, CF-3, CF-4, CF-5 (blur), CF-9, CF-10, CF-11 B and CF-12 (script focus); CF-7 and CF-8 as Class 4. The focus recorder and the `inert` observer are their instruments.
+    - **S6:** rerun the evidence specs, this one included; real pens for the barrel-button case (MC-7).
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event

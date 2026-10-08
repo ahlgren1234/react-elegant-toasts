@@ -71,6 +71,45 @@ export interface ProgressState {
   readonly fill: Box | null;
 }
 
+/**
+ * An element as the focus records name it: `body`, `region` (the Toaster's section), `toast:<label>`
+ * (a toast root), `close:<label>` and `action:<label>` (its library controls), `content:<label>`
+ * (anything else inside it), `outside` (the long-page scenario's button), `window`, or
+ * `other:<tag>`. An unlabelled toast's label is `?`.
+ */
+export type FocusTarget = string;
+
+/**
+ * What the recorder logs for a trusted or script `focusin` or `focusout` anywhere in the document,
+ * and for `focus:window` and `blur:window`. It has no `label`, so it never joins a toast's own
+ * animation and phase entries.
+ */
+export interface FocusEventDetail {
+  readonly target: FocusTarget | null;
+  readonly related: FocusTarget | null;
+  readonly trusted: boolean;
+  /** Whether the target was inside an `inert` subtree when the event was dispatched. */
+  readonly targetInert: boolean;
+}
+
+/** What the recorder logs, as `inert`, when a toast root gains or loses `inert`. */
+export interface InertEventDetail {
+  readonly toast: string | undefined;
+  readonly inert: boolean;
+  /** The document's active element when the observer ran, before any later task. */
+  readonly active: FocusTarget | null;
+}
+
+/** Where focus is, read synchronously. */
+export interface FocusState {
+  readonly active: FocusTarget | null;
+  /** Whether the active element matches `:focus-visible`. */
+  readonly focusVisible: boolean;
+  readonly scrollY: number;
+  readonly hasFocus: boolean;
+  readonly visibilityState: DocumentVisibilityState;
+}
+
 export interface FrameSample<T> {
   /**
    * 0 is the synchronous read when sampling starts; n is the n-th `requestAnimationFrame`. A
@@ -112,7 +151,9 @@ export interface RetHarness {
    * Recorded: `animationstart`, `animationiteration`, `animationend`, `animationcancel`,
    * `transitionrun`, `transitionstart`, `transitionend` and `transitioncancel` inside a toast, a
    * toast root's `phase` change, and a toast root `added` to or `removed` from the DOM, each with a
-   * {@link ToastEventDetail}. Mutation entries are timed when their observer runs.
+   * {@link ToastEventDetail}. Mutation entries are timed when their observer runs. Also `focusin`,
+   * `focusout`, `focus:window` and `blur:window` ({@link FocusEventDetail}), and `inert`
+   * ({@link InertEventDetail}).
    */
   readonly events: HarnessEvent[];
   log(type: string, detail?: unknown): void;
@@ -127,6 +168,8 @@ export interface RetHarness {
   toastState(label: string): ToastState;
   /** The progress indicator of the toast labelled `label`. */
   progressState(label: string): ProgressState;
+  /** Where focus is now, and the page's scroll and focus state. */
+  focusState(): FocusState;
   /**
    * Samples `read` now (frame 0) and then in each `requestAnimationFrame` callback, never mocking
    * it. To observe a change from its first frame (D2-12), call this and make the change in the same
