@@ -75,6 +75,17 @@ const windowEvents = (page: Page) =>
       }))
   );
 
+/**
+ * Genuine evidence that the window really lost and regained focus: the window's own `blur`, then
+ * its own `focus`, both dispatched by the browser (`isTrusted`). Other entries are not counted.
+ */
+function expectTrustedBlurThenFocus(events: { type: string; trusted?: boolean }[]): void {
+  const blur = events.findIndex(event => event.type === 'blur:window' && event.trusted === true);
+  const focus = events.findIndex(event => event.type === 'focus:window' && event.trusted === true);
+  expect(blur, 'a trusted window blur').toBeGreaterThanOrEqual(0);
+  expect(focus, 'a trusted window focus after it').toBeGreaterThan(blur);
+}
+
 /** Logs `visibilitychange`, if the browser ever dispatches one; never dispatched by the spec. */
 const watchVisibility = (page: Page) =>
   page.evaluate(() => {
@@ -132,8 +143,21 @@ test.describe('environment evidence', { tag: '@evidence' }, () => {
     await page.waitForTimeout(HOLD_MS);
     const releasedLater = await environment(page);
     const events = await windowEvents(page);
-    // Genuine evidence: the window's own trusted blur and focus.
-    expect(events.filter(event => event.type === 'blur:window')).toHaveLength(1);
+    expectTrustedBlurThenFocus(events);
+    // Each observation was made in the state it describes.
+    expect(minimised, 'minimised: the document lost focus, and the toast is held').toMatchObject({
+      hasFocus: false,
+      paused: true,
+    });
+    expect(restored, 'restored: the document has focus, still on a’s close').toMatchObject({
+      hasFocus: true,
+      focus: 'close:a',
+    });
+    expect(released, 'released: focus left the toast, which resumed').toMatchObject({
+      hasFocus: true,
+      paused: false,
+    });
+    expect(released.focus).not.toBe('close:a');
     await record(info, 'cf-1-blur-with-focus', {
       focused,
       minimised,
@@ -174,7 +198,20 @@ test.describe('environment evidence', { tag: '@evidence' }, () => {
     await page.waitForTimeout(HOLD_MS);
     const restoredLater = await environment(page);
     const events = await windowEvents(page);
-    expect(events.filter(event => event.type === 'blur:window')).toHaveLength(1);
+    expectTrustedBlurThenFocus(events);
+    // Each observation was made in the state it describes.
+    expect(before, 'before: focused document, running toast').toMatchObject({
+      hasFocus: true,
+      paused: false,
+    });
+    expect(minimised, 'minimised: the document lost focus, and the toast is held').toMatchObject({
+      hasFocus: false,
+      paused: true,
+    });
+    expect(restored, 'restored: the document has focus, and the toast resumed').toMatchObject({
+      hasFocus: true,
+      paused: false,
+    });
     await record(info, 'cf-5-blur-and-visibility', {
       before,
       minimised,
@@ -191,13 +228,20 @@ test.describe('environment evidence', { tag: '@evidence' }, () => {
     await openHarness(page);
     await page.evaluate(() => {
       const h = window.__retHarness!;
+      // Boundary events on the lists, and every pointer move anywhere, with where it was.
       for (const type of ['pointerenter', 'pointerleave', 'pointerover', 'pointermove']) {
         document.addEventListener(
           type,
           event => {
-            const target = event.target as Element;
-            if (!target.classList?.contains('ret-toaster__list')) return;
-            h.log(`list-${type}`, { trusted: event.isTrusted });
+            const pointer = event as PointerEvent;
+            const onList = (event.target as Element).classList?.contains('ret-toaster__list');
+            if (type !== 'pointermove' && !onList) return;
+            h.log(`pointer-${type}`, {
+              onList,
+              trusted: event.isTrusted,
+              x: pointer.clientX,
+              y: pointer.clientY,
+            });
           },
           { capture: true }
         );
@@ -211,7 +255,9 @@ test.describe('environment evidence', { tag: '@evidence' }, () => {
     const box = (await page.locator('.ret-toast.h-probe').boundingBox())!;
     await page.evaluate(() => window.__retHarness!.toast.dismiss('probe'));
     await expect(page.locator('.ret-toast.h-probe')).toHaveCount(0);
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const point = { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
+    await page.mouse.move(point.x, point.y);
+    // From here the pointer is not moved until the 1 px move below.
     await page.evaluate(() => window.__retHarness!.events.splice(0));
     const since = await page.evaluate(() => performance.now());
     await page.evaluate(() =>
@@ -221,24 +267,49 @@ test.describe('environment evidence', { tag: '@evidence' }, () => {
     // The pointer stays still for a while: does the stack learn that it is under it?
     await page.waitForTimeout(HOLD_MS);
     const stationary = await page.evaluate(
-      since => ({
-        paused: window.__retHarness!.toastRoot('a')!.hasAttribute('data-paused'),
-        events: window
-          .__retHarness!.events.filter(event => event.type.startsWith('list-'))
-          .map(event => ({ type: event.type, after: Math.round(event.time - since) })),
-      }),
-      since
+      ({ since, point }) => {
+        const h = window.__retHarness!;
+        const rect = h.toastRoot('a')!.getBoundingClientRect();
+        return {
+          pointerOverToast:
+            point.x >= rect.left &&
+            point.x <= rect.right &&
+            point.y >= rect.top &&
+            point.y <= rect.bottom,
+          paused: h.toastRoot('a')!.hasAttribute('data-paused'),
+          events: h.events
+            .filter(event => event.type.startsWith('pointer-'))
+            .map(event => ({
+              type: event.type.slice(8),
+              after: Math.round(event.time - since),
+              ...(event.detail as { onList: boolean; trusted: boolean; x: number; y: number }),
+            })),
+        };
+      },
+      { since, point }
     );
-    await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2);
+    // The scenario genuinely ran: the pointer lies over the new toast and never moved; the list's
+    // pointerenter came from the browser; the stack is held by it. The delay is recorded only.
+    expect(stationary.pointerOverToast, 'the pointer lies over the new toast').toBe(true);
+    for (const event of stationary.events.filter(entry => entry.type === 'pointermove')) {
+      expect({ x: event.x, y: event.y }, 'no pointer movement').toEqual(point);
+    }
+    const enter = stationary.events.find(entry => entry.type === 'pointerenter' && entry.onList);
+    expect(enter, 'a pointerenter on the list').toBeDefined();
+    expect(enter?.trusted, 'dispatched by the browser').toBe(true);
+    expect(stationary.paused, 'the stack is held by its hover reason').toBe(true);
+    await page.mouse.move(point.x + 1, point.y);
     await expect
       .poll(() =>
         page.evaluate(() => window.__retHarness!.toastRoot('a')!.hasAttribute('data-paused'))
       )
       .toBe(true);
     const moved = await page.evaluate(() =>
-      window.__retHarness!.events.filter(event => event.type.startsWith('list-')).map(e => e.type)
+      window
+        .__retHarness!.events.filter(event => event.type.startsWith('pointer-'))
+        .map(event => ({ type: event.type.slice(8), ...(event.detail as object) }))
     );
-    await record(info, 'cf-4-stationary-pointer', { stationary, afterOnePixel: moved });
+    await record(info, 'cf-4-stationary-pointer', { point, stationary, afterOnePixel: moved });
   });
 
   test('CF-11 B: keyshortcuts in Chromium’s accessibility tree (CDP)', async ({

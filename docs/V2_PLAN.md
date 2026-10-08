@@ -4660,10 +4660,30 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - `focus-dom.evidence.spec.ts` (7 per engine): CF-2 Class 2, CF-3, CF-6 Class 2, CF-9, CF-10, CF-12 Class 2, and CF-7 with CF-8;
     - `environment.evidence.spec.ts` (4 per engine): CF-1 and CF-5 (Chromium), CF-4 (all three), CF-11 B (Chromium).
 
-    Each test asserts only that it obtained genuine evidence: the precondition of its scenario (for example, that the button held focus and paused the toast), or a trusted window `blur` for CF-1 and CF-5. A Chromium-only test skips in Firefox and WebKit with a reason naming the manual checkpoint or gap, so the report shows the gap instead of a pass.
+    The tests assert that their scenario genuinely ran, never the observed values themselves. A Chromium-only test skips in Firefox and WebKit with a reason naming the manual checkpoint or gap, so the report shows the gap instead of a pass. What each enforces, as corrected at S4.4 (the strengthening there is recorded in the S4.4 record):
+    - **CF-2 Class 2 and CF-3 (removal and re-keying):** before the change, the fixture button holds focus and the toast is held.
+    - **CF-3 (Toaster unmount):** a toast's close holds focus before the unmount.
+    - **CF-6 Class 2 (container inert):** a toast's close holds focus and the toast is held before the container becomes inert.
+    - **CF-9:** the toast is exiting and `inert` before each revival is attempted.
+    - **CF-10:** `a`'s close holds focus before each close, and `a` is removed.
+    - **CF-12 Class 2:** in each of the 10 scenarios, focus reached the intended element: the root, the close, the action, the next toast's close or the region. Whether `:focus-visible` matched is recorded only.
+    - **CF-7 and CF-8:**
+      - **Mouse path:** a trusted `pointerdown` and `click` on `a`'s close, and that close taking focus after the press.
+      - **Keyboard path:** Tab reaching `a`'s close, and no pointer press on any close.
+      - **Both:** a later restoration `focusin` on `b`'s close, `a` dismissed once with `close-button`, and focus on `b`'s close with the pointer away from every stack when the observation is made. `:focus-visible`, `b`'s pause and its progress are recorded only (Class 4).
+    - **CF-1 and CF-5 (Chromium):**
+      - a trusted window `blur` followed by a trusted window `focus`;
+      - each observation made in the state it describes: while minimised, `document.hasFocus()` false and the toast held; after restoring, `hasFocus()` true, with CF-1's close still focused and CF-5's toast running again; and, for CF-1, the toast running again once Escape has moved focus out of it.
+
+      Visibility is recorded only.
+
+    - **CF-4:** the pointer lies over the new toast; every `pointermove` from the placement to the 1 px move is at the placed point, so the pointer did not move; the list received a `pointerenter` with `isTrusted` true; and the stack is held. The delay is recorded only.
+    - **CF-11 B (Chromium):** the region node was found in the accessibility tree for every configuration.
+
+    Until S4.4, the CF-12 and CF-7/CF-8 tests asserted only that their results existed; CF-1 and CF-5 counted the window `blur` without checking `isTrusted`; and CF-4 checked neither the pointer's placement nor its stillness, and its record dropped `isTrusted`. The observations recorded below were correct in every run, but those tests did not enforce them.
 
   - **Harness change:** the CF-2 fixture (`focusFixture`) gains `disable`, `hide` and `inert` modes, which keep the focused element and only change an attribute through the content's own React state: `disabled`, `hidden`, or `inert` on a wrapper, set in a layout effect because React 18 has no `inert` prop. The button now sits in that wrapper in every mode. The S4.2 `remove` and `rekey` tests pass unchanged. The `held` (`data-paused`) and activation recorders are spec-local, and every other record comes from the S4.1 focus recorder and `inert` observer.
-  - **Two evidence runs** (`CI=1`) agree on every outcome below. Timings that varied between runs are given as ranges.
+  - **Two evidence runs** (`CI=1`) agree on every outcome below, and so do the two at S4.4 (one before and one after the strengthening). Timings that varied between runs are given as ranges.
   - **CF-2 Class 2, a focused control disabled, hidden or made inert (the D0-16 trigger): no defect.** A finite custom toast. Trusted Tab focuses the fixture button, which holds focus and pauses the toast (both asserted), and trusted Enter applies the change.
     - **The same outcome in all three engines, for each of `disabled`, `hidden` and `inert`:**
       - the engine dispatches a trusted `focusout` from the button, with a null `relatedTarget`;
@@ -4730,7 +4750,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - After Escape releases focus (§18), the toast resumes from 0.966 with no reset, at 0.916 half a second later.
     - **CF-5, nothing focused:** minimising holds the toast (`window-blur`) with the fill at 0.969; restoring releases it and the fill continues (0.967, then 0.916).
     - **Visibility, in both:** `document.visibilityState` stayed `visible` and `document.hidden` false while minimised, and the browser dispatched no `visibilitychange`. The spec never dispatches one. Chromium's CDP minimise is genuine blur evidence for Chromium only. It is not hidden-document evidence and says nothing of Firefox, WebKit or Safari.
-  - **CF-4, a stack appearing under a stationary pointer.** The pointer is placed where the toast will appear, and the toast is created. With no pointer movement, every engine dispatches a trusted `pointerenter` to the list and the stack's hover pause is set: after 7 to 9 ms in Chromium and Firefox, and 126 to 206 ms in WebKit. A later 1 px move dispatches no second `pointerenter`. No synthetic boundary event is used, and nothing is asserted across engines.
+  - **CF-4, a stack appearing under a stationary pointer.** The pointer is placed where the toast will appear, and the toast is created. With no pointer movement, every engine dispatches a trusted `pointerenter` to the list, at the pointer's own coordinates, and the stack's hover pause is set: after 7 to 21 ms in Chromium and Firefox, and 45 to 209 ms in WebKit, over four runs. (`isTrusted` was asserted, and kept in the record, only from S4.4.) A later 1 px move dispatches no second `pointerenter`. No synthetic boundary event is used, and nothing is asserted across engines.
   - **Unverified gaps and their destinations:**
     - genuine blur in Firefox and Safari: MC-5 and MC-1;
     - genuinely hidden documents, backgrounding and resynchronisation in every engine (CF-5, CF-26): MC-1, MC-2, MC-3 and MC-5. A dispatched `visibilitychange` is never evidence (D2-4);

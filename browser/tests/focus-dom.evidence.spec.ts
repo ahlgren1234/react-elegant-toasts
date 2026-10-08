@@ -307,46 +307,55 @@ test.describe('focus behaviour evidence', { tag: '@evidence' }, () => {
       }, ids);
       await expect(page.locator('.ret-toast[data-phase="visible"]')).toHaveCount(ids.length);
     };
-    const state = () => page.evaluate(() => window.__retHarness!.focusState());
+    /** Records the focus state, after checking that focus reached the scenario's target. */
+    const observe = async (name: string, target: string) => {
+      const state = await page.evaluate(() => window.__retHarness!.focusState());
+      expect(state.active, `${name}: focus reached ${target}`).toBe(target);
+      results[name] = state;
+    };
 
     await fresh(['a']);
     await page.evaluate(() => window.__retHarness!.toastRoot('a')!.focus());
-    results['programmatic root, no keyboard before'] = await state();
+    await observe('programmatic root, no keyboard before', 'toast:a');
     await fresh(['a']);
     await page.evaluate(() =>
       document.querySelector<HTMLElement>('.ret-toast.h-a .ret-toast__close')!.focus()
     );
-    results['programmatic close, no keyboard before'] = await state();
+    await observe('programmatic close, no keyboard before', 'close:a');
     await fresh(['a']);
     await page.keyboard.press('Alt+t');
-    results['Alt+T, no keyboard before'] = await state();
+    await observe('Alt+T, no keyboard before', 'toast:a');
     await fresh(['a']);
     await page.keyboard.press('Tab');
-    results['Tab to the action'] = await state();
+    await observe('Tab to the action', 'action:a');
     await page.keyboard.press('Alt+t');
-    results['Alt+T after Tab'] = await state();
+    await observe('Alt+T after Tab', 'toast:a');
     await fresh(['a']);
     await page.locator('.ret-toast.h-a .ret-toast__title').click();
-    results['body click (CF-39)'] = await state();
+    await observe('body click (CF-39)', 'toast:a');
     await page.keyboard.press('Alt+t');
-    results['Alt+T after a body click'] = await state();
+    await observe('Alt+T after a body click', 'toast:a');
     await fresh(['b', 'a']);
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => window.__retHarness!.focusState().active)).toBe('close:a');
     await page.keyboard.press('Enter');
     await expect(page.locator('.ret-toast.h-a')).toHaveCount(0);
-    results['restoration to the next close after a keyboard close'] = await state();
+    await observe('restoration to the next close after a keyboard close', 'close:b');
     await fresh(['a']);
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => window.__retHarness!.focusState().active)).toBe('close:a');
     await page.keyboard.press('Enter');
     await expect(page.locator('.ret-toast.h-a')).toHaveCount(0);
-    results['restoration to the region after a keyboard close'] = await state();
+    await observe('restoration to the region after a keyboard close', 'region');
     await fresh(['a']);
     await page.evaluate(() => window.__retHarness!.toastRoot('a')!.focus());
+    expect(await page.evaluate(() => window.__retHarness!.focusState().active)).toBe('toast:a');
     await page.evaluate(() => window.__retHarness!.toast.dismiss('a'));
     await expect(page.locator('.ret-toast.h-a')).toHaveCount(0);
-    results['restoration to the region after programmatic focus and dismissal'] = await state();
+    await observe('restoration to the region after programmatic focus and dismissal', 'region');
+    // Recorded, never asserted: whether each engine matches :focus-visible is not the contract.
     expect(Object.keys(results)).toHaveLength(10);
     await record(info, 'cf-12-focus-visible', results);
   });
@@ -365,8 +374,12 @@ test.describe('focus behaviour evidence', { tag: '@evidence' }, () => {
           document.addEventListener(
             type,
             event => {
-              const target = event.target as Element;
-              if (target.closest('.ret-toast__close')) h.log(`close-${type}`, null);
+              const close = (event.target as Element).closest('.ret-toast__close');
+              if (!close) return;
+              const toast = [...close.parentElement!.classList]
+                .find(name => name.startsWith('h-'))
+                ?.slice(2);
+              h.log(`close-${type}`, { toast, trusted: event.isTrusted });
             },
             { capture: true }
           );
@@ -387,11 +400,22 @@ test.describe('focus behaviour evidence', { tag: '@evidence' }, () => {
         await page.locator('.ret-toast.h-a .ret-toast__close').click();
       } else {
         await page.keyboard.press('Tab');
+        expect(
+          await page.evaluate(() => window.__retHarness!.focusState().active),
+          'the keyboard path: Tab reached a’s close'
+        ).toBe('close:a');
         await page.keyboard.press('Enter');
       }
       await expect(page.locator('.ret-toast.h-a')).toHaveCount(0);
       // The pointer leaves the stack: does focus-within alone keep the remaining toast paused?
       await page.mouse.move(AWAY.x, AWAY.y);
+      expect(
+        await page.evaluate(
+          ({ x, y }) => document.elementFromPoint(x, y)?.closest('.ret-toaster__list') ?? null,
+          AWAY
+        ),
+        'the observation is made with the pointer away from every stack'
+      ).toBeNull();
       const after = await page.evaluate(() => ({
         focus: window.__retHarness!.focusState(),
         bPaused: window.__retHarness!.toastRoot('b')!.hasAttribute('data-paused'),
@@ -407,15 +431,43 @@ test.describe('focus behaviour evidence', { tag: '@evidence' }, () => {
           window
             .__retHarness!.events.filter(
               event =>
-                event.time >= since && (event.type.startsWith('close-') || event.type === 'focusin')
+                event.time >= since &&
+                (event.type.startsWith('close-') ||
+                  event.type === 'focusin' ||
+                  event.type === 'dismiss')
             )
-            .map(event =>
-              event.type === 'focusin'
-                ? `focusin ${(event.detail as { target: string }).target}`
-                : event.type
-            ),
+            .map(event => ({ type: event.type, ...(event.detail as object) })),
         since
       );
+      const index = (match: (entry: Record<string, unknown>) => boolean) =>
+        order.findIndex(entry => match(entry));
+      const pressed = index(entry => entry.type === 'close-pointerdown');
+      const clicked = index(entry => entry.type === 'close-click');
+      const focusedA = index(entry => entry.type === 'focusin' && entry.target === 'close:a');
+      const restored = index(entry => entry.type === 'focusin' && entry.target === 'close:b');
+      if (path === 'mouse') {
+        // The pointer path ran: a trusted press and click on a's close, which took focus.
+        expect(order[pressed], 'a trusted press on a’s close').toMatchObject({
+          toast: 'a',
+          trusted: true,
+        });
+        expect(order[clicked], 'a trusted click on a’s close').toMatchObject({
+          toast: 'a',
+          trusted: true,
+        });
+        expect(focusedA, 'a’s close took focus from the press').toBeGreaterThan(pressed);
+      } else {
+        // The keyboard path ran: no pointer press reached a close.
+        expect(pressed, 'no pointer press on a close').toBe(-1);
+        expect(focusedA, 'a’s close took focus from Tab').toBeGreaterThanOrEqual(0);
+      }
+      // Restoration reached b's close, after a's close held focus, and a was closed by it.
+      expect(restored, 'restoration reached b’s close').toBeGreaterThan(focusedA);
+      expect(order.filter(entry => entry.type === 'dismiss')).toEqual([
+        { type: 'dismiss', id: 'a', reason: 'close-button' },
+      ]);
+      expect(after.focus.active, 'focus is on b’s close when observed').toBe('close:b');
+      // Recorded, never asserted (Class 4): :focus-visible on b's close, and b's pause and progress.
       results[path] = { order, after, later };
     }
     await record(info, 'cf-7-cf-8-pointer-close', results);
