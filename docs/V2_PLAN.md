@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2, focus-within, `aria-keyshortcuts` and the focus rings, is done (recorded below). S4.3 is next, after review.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2, focus-within, `aria-keyshortcuts` and the focus rings, is done (recorded below). S4.3, the focus and environment evidence, is done (recorded below). S4.4 is next, after review.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -4655,6 +4655,102 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - MC-6 for CF-12's and CF-13's rings under Windows High Contrast;
       - MC-8 for their appearance.
     - **P-29:** CF-11's assistive-technology discoverability; the Firefox and WebKit accessibility trees stay an unverified gap.
+- **S4.3 record: focus and environment evidence (done).** Every S4 evidence layer is recorded. CF-1, CF-2 Class 2, CF-3, CF-4, CF-5 (blur), CF-6 Class 2, CF-9, CF-10, CF-11 B and CF-12 Class 2 are Class 2 `@evidence`; CF-7 and CF-8 are Class 4 `@evidence`. Each is recorded, never asserted as the product contract, and no class changed. No blocking test was added or changed. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged. No D0-16 report was raised.
+  - **Specs added** (`browser/tests/`, all `@evidence`, run by `npm run test:browser:evidence` only):
+    - `focus-dom.evidence.spec.ts` (7 per engine): CF-2 Class 2, CF-3, CF-6 Class 2, CF-9, CF-10, CF-12 Class 2, and CF-7 with CF-8;
+    - `environment.evidence.spec.ts` (4 per engine): CF-1 and CF-5 (Chromium), CF-4 (all three), CF-11 B (Chromium).
+
+    Each test asserts only that it obtained genuine evidence: the precondition of its scenario (for example, that the button held focus and paused the toast), or a trusted window `blur` for CF-1 and CF-5. A Chromium-only test skips in Firefox and WebKit with a reason naming the manual checkpoint or gap, so the report shows the gap instead of a pass.
+
+  - **Harness change:** the CF-2 fixture (`focusFixture`) gains `disable`, `hide` and `inert` modes, which keep the focused element and only change an attribute through the content's own React state: `disabled`, `hidden`, or `inert` on a wrapper, set in a layout effect because React 18 has no `inert` prop. The button now sits in that wrapper in every mode. The S4.2 `remove` and `rekey` tests pass unchanged. The `held` (`data-paused`) and activation recorders are spec-local, and every other record comes from the S4.1 focus recorder and `inert` observer.
+  - **Two evidence runs** (`CI=1`) agree on every outcome below. Timings that varied between runs are given as ranges.
+  - **CF-2 Class 2, a focused control disabled, hidden or made inert (the D0-16 trigger): no defect.** A finite custom toast. Trusted Tab focuses the fixture button, which holds focus and pauses the toast (both asserted), and trusted Enter applies the change.
+    - **The same outcome in all three engines, for each of `disabled`, `hidden` and `inert`:**
+      - the engine dispatches a trusted `focusout` from the button, with a null `relatedTarget`;
+      - `document.activeElement` becomes `<body>`;
+      - the toast is released within 0 to 2 ms of that `focusout`, through P-15's `focusout` reconciliation, and then times out normally (`timeout`).
+
+      Focus never left while the toast stayed held.
+
+    - **Focus move against an unusable `activeElement`:** the fix-up is either synchronous with the state change or deferred to the next rendering update, 5 to 15 ms later. Until then the disabled, hidden or inert button is still `document.activeElement` and still matches `:focus`, and the toast correctly stays held: focus has not left yet. Which modes were deferred varied between runs:
+      - WebKit deferred all three in the first run;
+      - Chromium deferred `inert` in one run and `disabled` in the other;
+      - Firefox deferred `hidden` in one run and `inert` in the other.
+    - **`targetInert`:** for `inert`, the `focusout` reports its target already inert, since the attribute came first; for `disabled` and `hidden` it does not.
+  - **CF-3, focus after a focused node is removed outside restoration:**
+    - **Content removed or re-keyed (S4.2's fixture):** Chromium dispatches a trusted `focusout` with a null `relatedTarget`; Firefox and WebKit dispatch no focus event. In all three, focus lands on `<body>`, and the toast is released within 2 ms of the activation.
+    - **The Toaster unmounted while a toast's close holds focus** (§18: an unmount restores nothing): `<body>` in all three. Chromium again dispatches a `focusout`; Firefox and WebKit dispatch nothing.
+  - **CF-6 Class 2, `inert` without restoration.** Covered by two scenarios:
+    - **The fixture's `inert` wrapper,** as in CF-2 above;
+    - **The page makes the Toaster's container (`#root`) inert** while a toast's close holds focus, the modal-dialog pattern. Every engine dispatches a trusted `focusout`, focus goes to `<body>`, and the toast is released 1 to 2 ms later. Chromium and Firefox do this at once; WebKit still reported the close as active, with the toast held, immediately after the attribute was set, and fixed it up within the next frames.
+  - **CF-9, revival of an exiting toast** (exit slowed to 2 s; `focus()` attempted on the root at each step, then released):
+    - while exiting, and in the same task as the reviving `toast()` call, before React commits: `inert` is set, the phase is `exiting`, and focus is refused;
+    - after a microtask (React's commit), and in the next task and the next frame: `inert` is gone, the phase is `entering`, and focus succeeds.
+
+    The same in all three engines. Alt+T right after a later revival focuses the toast, which is not inert. So `inert` refuses focus only until the revival commits; there is no window in which the committed, eligible toast refuses focus.
+
+  - **CF-10, the order of restoration, focus events, `inert` and the pause handover.** Two finite toasts. Focus is on `a`'s close by Tab, then `a` is closed by Enter, by a mouse click or programmatically. The same order in all three engines and on every path, within 0 to 12 ms of the trigger:
+    1. `focusout` from `a`'s close, with `relatedTarget` `b`'s close;
+    2. `focusin` on `b`'s close;
+    3. then, in one observer delivery, `a`'s `data-phase` `exiting`, `inert` on `a` (with `b`'s close already active), `a` released and `b` held.
+
+    Focus events are logged synchronously as they are dispatched. Phase, `inert` and held entries are observer callbacks, delivered after the commit, so their position after the focus events is not their DOM-write order: the commit writes `data-phase` before the layout effect restores focus. The restoration-before-`inert` order is what S4.1 proves (`targetInert: false`). On the mouse path, `b` was already held by hover before the click.
+
+  - **CF-11 B, Chromium's accessibility tree** (CDP `Accessibility.getFullAXTree`): the region node (role `region`, name "Notifications") carries `keyshortcuts` exactly equal to the DOM attribute in all five configurations: `Alt+T`, `Control+Shift+K`, `F6`, none for `["altKey", "Comma"]`, and none for `hotkey={false}`.
+    - **Firefox and WebKit:** their accessibility trees are not reachable with Playwright. This is an **unverified gap**, reported as a skip, never a pass.
+    - **Not used:** Playwright's `ariaSnapshot()`, which is computed from the DOM.
+    - **No screen-reader or assistive-technology claim:** that is P-29's.
+  - **CF-12 Class 2, `:focus-visible` after script focus.** Each case on a fresh page, without earlier input unless stated; the same in all three engines:
+
+    | Case                                                                                                     | Matches |
+    | -------------------------------------------------------------------------------------------------------- | ------- |
+    | Programmatic `focus()` on the root, or on the close, with no earlier input                               | yes     |
+    | Alt+T with no earlier input                                                                              | yes     |
+    | Tab to the action; Alt+T after it                                                                        | yes     |
+    | A mouse click on the toast's body (CF-39)                                                                | no      |
+    | Alt+T after that body click                                                                              | **no**  |
+    | Restoration to the next toast's close, or to the region, after a keyboard close                          | yes     |
+    | Restoration to the region after a programmatic focus and a programmatic dismissal, with no earlier input | yes     |
+    | Restoration to the next toast's close after a mouse close (CF-8, below)                                  | no      |
+    - **The heuristic follows the last input modality.** With no pointer input, script focus matches. After a pointer interaction it does not, and the Alt+T chord does not switch the modality back to keyboard.
+    - **This differs from D1,** which recorded Alt+T "with no earlier keyboard focus" as matching in Firefox only. D1's disposable harness is gone, so its input history cannot be re-checked. The table suggests that earlier pointer input there would explain D1's result, and the difference from P-17 S5's manual Chromium review. This is a reading of the evidence, not a reclassification.
+    - **For the maintainer and P-29:** a user who has used the pointer and then presses Alt+T gets the toast focused with **no visible ring, in every engine**. The §17.4 ring styles exist and apply whenever `:focus-visible` matches (S4.2), and D2-6 keeps engines' heuristics out of the contract, so this is not a D0-16 report. It is an accessibility observation for P-29, beside CF-8's pointer-close question. Any change, for example to how the hotkey shows focus, needs its own decision.
+
+  - **CF-7 and CF-8, a pointer close against a keyboard close (Class 4).** Two finite toasts with progress. The pointer leaves the stack after the close.
+    - **Mouse:** in all three engines `pointerdown`, then `mousedown`, then a `focusin` on the pressed close, then `click`, then restoration's `focusin` on `b`'s close.
+      - Playwright WebKit focuses a clicked button like the others. It cannot show Safari's click without focus, and this is never a Safari result (D0-7).
+      - Afterwards focus is on `b`'s close and does not match `:focus-visible`. `b` stays held by focus-within, its progress frozen (unchanged over 30 frames): it "looks stuck", with no ring, as P-18 S5 anticipated.
+    - **Keyboard:** the same target and the same held `b`, but `:focus-visible` matches, so the ring shows.
+    - **No contract change (D0-2).** The pointer-close question goes to P-29 with this evidence, and real Safari's click-without-focus stays MC-1 (and MC-2 for an iOS tap).
+  - **CF-1 and CF-5, genuine window blur (Chromium CDP minimise, D2-4).** Focus emulation is turned off after navigation, as in S3; the window is minimised and restored through CDP.
+    - **CF-1, a toast holding focus:**
+      - Minimising dispatches a trusted `focusout` from the focused close (null `relatedTarget`) and then the window's trusted `blur`. `document.hasFocus()` becomes false, `document.activeElement` stays the close, and the toast stays held: its focus-within reason reconciles to the still-active close, and `window-blur` joins it.
+      - The progress fill held at 0.967 for 0.5 s while minimised.
+      - Restoring dispatches the window's `focus` and a `focusin` on the same close. The toast stays held by focus-within alone, with the fill unchanged over another 0.5 s.
+      - After Escape releases focus (§18), the toast resumes from 0.966 with no reset, at 0.916 half a second later.
+    - **CF-5, nothing focused:** minimising holds the toast (`window-blur`) with the fill at 0.969; restoring releases it and the fill continues (0.967, then 0.916).
+    - **Visibility, in both:** `document.visibilityState` stayed `visible` and `document.hidden` false while minimised, and the browser dispatched no `visibilitychange`. The spec never dispatches one. Chromium's CDP minimise is genuine blur evidence for Chromium only. It is not hidden-document evidence and says nothing of Firefox, WebKit or Safari.
+  - **CF-4, a stack appearing under a stationary pointer.** The pointer is placed where the toast will appear, and the toast is created. With no pointer movement, every engine dispatches a trusted `pointerenter` to the list and the stack's hover pause is set: after 7 to 9 ms in Chromium and Firefox, and 126 to 206 ms in WebKit. A later 1 px move dispatches no second `pointerenter`. No synthetic boundary event is used, and nothing is asserted across engines.
+  - **Unverified gaps and their destinations:**
+    - genuine blur in Firefox and Safari: MC-5 and MC-1;
+    - genuinely hidden documents, backgrounding and resynchronisation in every engine (CF-5, CF-26): MC-1, MC-2, MC-3 and MC-5. A dispatched `visibilitychange` is never evidence (D2-4);
+    - the Firefox and WebKit accessibility trees (CF-11 B): no tooling here. Assistive technology is P-29's;
+    - real Safari's click without focus and its rings (CF-7, CF-12): MC-1, and MC-2 for iOS;
+    - CF-12 ring appearance: MC-8; and under Windows High Contrast: MC-6.
+  - **Commands:** unchanged. `npm run test:browser` (198 tests, unchanged); `npm run test:browser:evidence` (20 per engine, 60 in all: 48 passed and 12 skipped, the Chromium-only CDP tests in Firefox and WebKit).
+  - **Validation:**
+    - the new evidence specs pass (or skip, naming the gap) in all three engines, in two evidence runs;
+    - the full `@evidence` run: 48 passed, 12 skipped;
+    - the full blocking suite under `CI=1`: 198 of 198, the S4.2 tests included after the fixture change;
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S4.4:** S4's reconciliation of every S4 CF item, H1-R and S4-H2 against these records.
+    - **S6:** the manual checkpoints above; rerunning the evidence specs.
+    - **P-29:**
+      - CF-7, and CF-8 with CF-33: the pointer-close contract question, now with this evidence;
+      - CF-12: no visible ring after Alt+T following pointer use;
+      - CF-11's assistive-technology discoverability;
+      - the operating systems' own settings.
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event

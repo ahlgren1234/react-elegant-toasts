@@ -112,7 +112,7 @@ export interface FocusState {
 }
 
 /** What a {@link RetHarness.focusFixture}'s button does to itself when activated. */
-export type FocusFixtureMode = 'remove' | 'rekey';
+export type FocusFixtureMode = 'remove' | 'rekey' | 'disable' | 'hide' | 'inert';
 
 export interface FrameSample<T> {
   /**
@@ -176,7 +176,9 @@ export interface RetHarness {
   focusState(): FocusState;
   /**
    * Custom toast content with a focusable button, `.h-target`, which on activation updates the
-   * content's own React state: `remove` unmounts it, `rekey` replaces it under a new key.
+   * content's own React state: `remove` unmounts it, `rekey` replaces it under a new key, and
+   * `disable`, `hide` and `inert` keep the element and set `disabled`, `hidden`, or `inert` on a
+   * wrapper.
    */
   focusFixture(mode: FocusFixtureMode): ReactElement;
   /**

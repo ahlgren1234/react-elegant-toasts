@@ -1,4 +1,4 @@
-import { useState, version } from 'react';
+import { useLayoutEffect, useRef, useState, version } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { Toaster, toast } from '../../src';
@@ -215,24 +215,43 @@ function focusState(): FocusState {
 
 /**
  * Custom toast content whose button, `.h-target`, changes the content's own React state when
- * activated: `remove` unmounts the button, `rekey` replaces it with a new element under a new key.
- * Either way the focused node leaves the DOM with no `focusout` the library can rely on (P-15).
+ * activated: `remove` unmounts the button and `rekey` replaces it with a new element under a new
+ * key, so the focused node leaves the DOM with no `focusout` the library can rely on (P-15).
+ * `disable`, `hide` and `inert` keep the same element and only change an attribute: `disabled`,
+ * `hidden`, or `inert` on a wrapper around it (set in a layout effect, since React 18 has no
+ * `inert` prop).
  */
 function FocusFixture({ mode }: { readonly mode: FocusFixtureMode }) {
   const [round, setRound] = useState(0);
-  if (mode === 'remove' && round > 0) return <p>Removed</p>;
+  const wrapper = useRef<HTMLSpanElement>(null);
+  const changed = round > 0;
+  useLayoutEffect(() => {
+    wrapper.current?.toggleAttribute('inert', mode === 'inert' && changed);
+  }, [mode, changed]);
+  if (mode === 'remove' && changed) return <p>Removed</p>;
+  const labels: Record<FocusFixtureMode, string> = {
+    remove: 'Remove',
+    rekey: `Renew ${round}`,
+    disable: 'Disable',
+    hide: 'Hide',
+    inert: 'Make inert',
+  };
   return (
     <p>
       Fixture{' '}
-      <button
-        key={round}
-        type="button"
-        className="h-target"
-        data-round={round}
-        onClick={() => setRound(value => value + 1)}
-      >
-        {mode === 'remove' ? 'Remove' : `Renew ${round}`}
-      </button>
+      <span ref={wrapper}>
+        <button
+          key={mode === 'rekey' ? round : 0}
+          type="button"
+          className="h-target"
+          data-round={round}
+          disabled={mode === 'disable' && changed}
+          hidden={mode === 'hide' && changed}
+          onClick={() => setRound(value => value + 1)}
+        >
+          {labels[mode]}
+        </button>
+      </span>
     </p>
   );
 }
