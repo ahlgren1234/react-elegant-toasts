@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { ToasterProps, toast } from '../../src';
 
 // The harness's control surface, read by the Playwright specs through `page.evaluate`. It is test
@@ -110,6 +111,9 @@ export interface FocusState {
   readonly visibilityState: DocumentVisibilityState;
 }
 
+/** What a {@link RetHarness.focusFixture}'s button does to itself when activated. */
+export type FocusFixtureMode = 'remove' | 'rekey';
+
 export interface FrameSample<T> {
   /**
    * 0 is the synchronous read when sampling starts; n is the n-th `requestAnimationFrame`. A
@@ -170,6 +174,11 @@ export interface RetHarness {
   progressState(label: string): ProgressState;
   /** Where focus is now, and the page's scroll and focus state. */
   focusState(): FocusState;
+  /**
+   * Custom toast content with a focusable button, `.h-target`, which on activation updates the
+   * content's own React state: `remove` unmounts it, `rekey` replaces it under a new key.
+   */
+  focusFixture(mode: FocusFixtureMode): ReactElement;
   /**
    * Samples `read` now (frame 0) and then in each `requestAnimationFrame` callback, never mocking
    * it. To observe a change from its first frame (D2-12), call this and make the change in the same

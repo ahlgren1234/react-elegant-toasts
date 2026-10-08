@@ -1,10 +1,11 @@
-import { version } from 'react';
+import { useState, version } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { Toaster, toast } from '../../src';
 import type {
   Box,
   FocusEventDetail,
+  FocusFixtureMode,
   FocusState,
   FocusTarget,
   FrameSample,
@@ -212,6 +213,30 @@ function focusState(): FocusState {
   };
 }
 
+/**
+ * Custom toast content whose button, `.h-target`, changes the content's own React state when
+ * activated: `remove` unmounts the button, `rekey` replaces it with a new element under a new key.
+ * Either way the focused node leaves the DOM with no `focusout` the library can rely on (P-15).
+ */
+function FocusFixture({ mode }: { readonly mode: FocusFixtureMode }) {
+  const [round, setRound] = useState(0);
+  if (mode === 'remove' && round > 0) return <p>Removed</p>;
+  return (
+    <p>
+      Fixture{' '}
+      <button
+        key={round}
+        type="button"
+        className="h-target"
+        data-round={round}
+        onClick={() => setRound(value => value + 1)}
+      >
+        {mode === 'remove' ? 'Remove' : `Renew ${round}`}
+      </button>
+    </p>
+  );
+}
+
 let scenarioStyle: HTMLStyleElement | null = null;
 
 const toastRoot = (label: string) =>
@@ -360,6 +385,7 @@ const harness: RetHarness = {
   toastState,
   progressState,
   focusState,
+  focusFixture: mode => <FocusFixture mode={mode} />,
   sampleFrames,
 };
 

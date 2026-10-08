@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2 is next, after review.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2, focus-within, `aria-keyshortcuts` and the focus rings, is done (recorded below). S4.3 is next, after review.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -4578,6 +4578,83 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - S3's `:focus-visible` observation, for CF-12's Class 2 record (S4.3).
     - **S4.3 (evidence):** CF-1, CF-2 and CF-6 Class 2, CF-3, CF-4, CF-5 (blur), CF-9, CF-10, CF-11 B and CF-12 (script focus); CF-7 and CF-8 as Class 4. The focus recorder and the `inert` observer are their instruments.
     - **S6:** rerun the evidence specs, this one included; real pens for the barrel-button case (MC-7).
+- **S4.2 record: focus-within, `aria-keyshortcuts` and the focus rings (done).** CF-2, CF-11, CF-12 and CF-13 at their Class 1 layers are blocking in Chromium, Firefox and WebKit, with trusted Playwright input wherever focus or the pointer matters. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified. No D0-16 report was raised.
+  - **Specs added** (`browser/tests/`; 11 blocking tests per engine, so the blocking suite is now 66 per engine and 198 in all; no evidence test):
+    - `focus-within.spec.ts` (CF-2, 3 per engine);
+    - `focus-ring.spec.ts`: CF-11 A (1 per engine), CF-12 (4) and CF-13 (3).
+  - **CF-2 (Class 1), the focus-within reason follows the DOM.**
+    - **Method:** a custom toast whose content is the harness fixture: a button whose activation changes the content's own React state, either unmounting it (`remove`) or replacing it under a new key (`rekey`).
+    - **Sequence:** the toast runs 400 ms; trusted Tab focuses the button, which sets `data-paused`; the toast is held for a full duration (1.5 s), a deliberate span, because outliving its duration while paused is the property; trusted Enter activates the button.
+    - **Preconditions, asserted:** Tab focuses the fixture button; the focused node has left the DOM (`isConnected` false) and, when re-keyed, its replacement is a new, unfocused element; nothing inside the toast holds focus.
+    - **Asserted:**
+      - `data-paused` clears for the removed and the re-keyed button;
+      - the toast's held state changes exactly twice, held then released, recorded as it happens by a `data-paused` observer;
+      - the timeout comes when the time left at the pause has run after the release: never earlier, less two frames of recorder latency, and no later than `LATE_TOLERANCE_MS` (150 ms). The remaining time is computed from the recorder's visible, held and released times, and it differs from the full duration by the 400 ms run;
+      - the reason is `timeout`.
+    - **Another reason is kept:** with the pointer on the toast (hover, §10), removing the focused button leaves the toast held through a further full duration. Only moving the pointer away releases it, and the timeout then follows the remaining time.
+    - **Not in this layer:** a focused control that becomes disabled, hidden or `inert` (attribute changes). It is CF-2's Class 2 layer, S4.3.
+    - **Browser difference** (observed with a temporary probe on the same fixture; not asserted): when the focused node is removed or re-keyed, Chromium dispatches a trusted `focusout` with a null `relatedTarget`; Firefox and WebKit dispatch no focus event at all. In all three, `document.activeElement` is then `<body>`. So in Firefox and WebKit, P-15's `MutationObserver` reconciliation is the only thing that releases the toast (see the mutation checks).
+  - **CF-11 A, the DOM attribute.** On one page, re-rendering the Toaster through the harness's `mount(props)`, the region's `aria-keyshortcuts` is:
+    - `Alt+T` by default;
+    - `Control+Shift+K` for `["ctrlKey", "shiftKey", "KeyK"]`, and also for `["shiftKey", "ctrlKey", "KeyK"]`, since ARIA's modifier order is written whatever order is given (§17.2);
+    - `F6` for `["F6"]`;
+    - absent for `["altKey", "Comma"]` (punctuation, not advertised) and for `hotkey={false}`;
+    - `Alt+T` again once the props are back to the default.
+
+    Only the DOM attribute: the accessibility tree is CF-11 B (Class 2, S4.3), and assistive technology is P-29's.
+
+  - **CF-12 (Class 1), the rings.** Every state is reached by trusted keyboard input, and keyboard modality is established by Tab first.
+    - **Colours:** `--ret-focus` and `--ret-surface` are read on the focused element itself and resolved to colours in the page. Nothing is hard-coded, so the check holds in any theme.
+    - **Each ring:** `:focus-visible` must match, then the computed outline is checked.
+      - **Action and close,** by Tab: a 2px solid `--ret-focus` outline at an offset of 2px.
+      - **Toast root,** by Tab to the action, then Alt+T: 2px solid `--ret-focus`, offset −1px (inside the card's edge).
+      - **Custom toast:** its close, by Tab, has a 2px solid ring at 2px in `currentColor`. A consumer class gives the toast the colour `rgb(170, 20, 90)`, and the ring must equal it, not `--ret-focus`. Its root, by Alt+T, has the `--ret-focus` ring at +2px (outside the toast).
+      - **Region,** after Tab to the only toast's close and Enter, so restoration focuses the region (§18 step 3): the section's own outline is `none`. Its `::after` is fixed at an inset of 4px, with a 3px solid `--ret-focus` border on every side, a 12px radius, and a 2px solid `--ret-surface` outline.
+    - **Focus-visible preconditions:** for the root and the region, which take focus from script only, the match after earlier Tab input is asserted as a precondition, as the S4 CF-12 decision allows. It matched in all three engines, as S3 also saw. The path with no earlier keyboard input stays Class 2 (S4.3); no engine's heuristic is the contract.
+  - **CF-13 (Class 1), the region ring.** The region is focused by keyboard close and restoration; two finite toasts are then shown. The preconditions, asserted: the toasts took no focus, the region still matches `:focus-visible`, and its `::after` is drawn.
+    - **Production proof (the production stylesheet only):**
+      - the ring's computed `pointer-events` is `none`;
+      - `elementFromPoint` at each toast's centre hits that toast, and at a point away from the stacks, or on the ring's own band, never hits the region;
+      - a trusted pointer over a toast sets the stack's hover pause on both toasts, and moving away clears it;
+      - a trusted click on a toast's close dismisses it (`close-button`);
+      - on the long page, a trusted click on the outside button, which lies inside the ring's box, gives the button its trusted `click` and focus;
+      - stacking, read from computed styles: the ring is `position: fixed` at `--ret-z-index` (9999), and every list is a fixed child of the region at the same z-index. So the ring, the region's `::after`, comes after the lists in tree order and paints above them.
+    - **Diagnostic (consumer CSS, not production):** a separate test adds `.ret-toaster:focus-visible::after { pointer-events: auto; }` through the harness style, which makes the ring hit-testable. Hit-testing follows the painting order, and it then finds the region at both toasts' centres and away from them, so the ring's box lies above the lists. Removing the override restores the production result: `pointer-events: none`, and the toasts are hit again. This observes stacking only and is never the proof that the ring takes no pointer input. The stacking result needs the override: hit-testing cannot see a non-hit-testable box. It is blocking because CF-13's stacking layer is Class 1, and it is named as diagnostic in the report.
+  - **Harness extension:** `focusFixture(mode)`, the CF-2 fixture component (`FocusFixtureMode`: `remove` or `rekey`). Nothing else: the S4.1 recorders and `focusState()` are reused, and the `data-paused` observer is spec-local.
+  - **Mutation checks**, each a temporary edit reverted at once (`git status` clean for `src/`):
+    - **CF-2:**
+      - the reconciliation `MutationObserver` never connected: the three CF-2 tests fail in Firefox and WebKit (6) and pass in Chromium, whose own `focusout` releases the toast. This is the browser difference above;
+      - the reason never cleared (`setToastPause` called only on entry): all 9 fail;
+      - resuming with the full duration instead of the remaining time: all 9 fail, on "when the remaining time has run".
+    - **CF-11:**
+      - ARIA's modifier order broken: the CF-11 test fails in every engine (`Shift+Control+K`);
+      - the raw `code` advertised for an unnameable key: fails in every engine (`Comma`).
+    - **CF-12** (stylesheet), each failing in every engine only the tests that cover that rule:
+      - the root ring's −1px offset removed: the root test (3);
+      - the custom close's `currentColor` rule removed: the custom-toast test (3);
+      - the region ring's border in `--ret-surface`: the region test (3);
+      - the action and close ring at 1px: the action-and-close and custom-toast tests (6).
+    - **CF-13:**
+      - the ring's `pointer-events: none` removed: all three CF-13 tests fail in every engine (9). The production hit-test finds the region, the outside click lands on the region, and the diagnostic's restored-production check reads `auto`;
+      - the ring's `z-index` removed: the production stacking assertion fails (`auto` against `9999`), and the diagnostic hit-test finds the toast above the ring, in every engine (6). The outside-click test passes, as it should.
+  - **Commands:** unchanged. `npm run test:browser` (198 tests); `npm run test:browser:evidence` (unchanged: 21 passed, 6 skipped).
+  - **Validation:**
+    - **Focused:** `focus-within.spec.ts` 9 of 9 and `focus-ring.spec.ts` 24 of 24, across the three engines.
+    - **Repeat run:** both with `--repeat-each=5` under `CI=1` (one worker, zero retries): **165 of 165** in 5.1 minutes. Earlier slices were not soaked again: nothing they cover changed.
+    - **Full blocking suite** under `CI=1`: 198 of 198 in about 4.4 minutes. The `@evidence` run: 21 passed, 6 skipped.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S4.3 (evidence):**
+      - CF-2's Class 2 layer (a focused control disabled, hidden or `inert`), including whether any engine leaves the toast paused after focus has genuinely left, which would be a D0-16 report;
+      - CF-3, where focus goes on removal outside restoration, starting from the event difference above;
+      - CF-11 B, Chromium's accessibility tree;
+      - CF-12, `:focus-visible` after script focus with no earlier keyboard input, and S3's data point;
+      - with CF-1, CF-4, CF-5 (blur), CF-6 Class 2, CF-9 and CF-10, and CF-7 and CF-8 as Class 4.
+    - **S6:**
+      - MC-1 for CF-12's rings in real Safari, including its Tab-to-buttons setting;
+      - MC-6 for CF-12's and CF-13's rings under Windows High Contrast;
+      - MC-8 for their appearance.
+    - **P-29:** CF-11's assistive-technology discoverability; the Firefox and WebKit accessibility trees stay an unverified gap.
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
