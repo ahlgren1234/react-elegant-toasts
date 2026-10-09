@@ -38,6 +38,13 @@ export default defineConfig({
   build: {
     outDir: fileURLToPath(new URL('../browser-dist', import.meta.url)),
     emptyOutDir: true,
+    // The automated harness, and the manual QA page for S6's device checkpoints (`/manual.html`).
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL('harness/index.html', import.meta.url)),
+        manual: fileURLToPath(new URL('harness/manual.html', import.meta.url)),
+      },
+    },
   },
   // Loopback only by default; `npm run browser:serve -- --host` exposes it to a device on the local
   // network for a manual checkpoint.
