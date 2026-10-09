@@ -99,6 +99,79 @@ const pointers = (page: Page): Promise<PointerRecord[]> =>
       .map(event => event.detail as PointerRecord)
   );
 
+const INPUT = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'];
+const CAPTURE = ['gotpointercapture', 'lostpointercapture'];
+
+interface Provenance {
+  readonly trusted: boolean;
+  readonly pointerType: 'touch' | 'pen';
+}
+
+/** What a scenario's input must be, from its label: never assumed, always checked (below). */
+const provenanceOf = (input: 'trusted' | 'protocol' | 'synthetic'): Provenance =>
+  input === 'synthetic'
+    ? { trusted: false, pointerType: 'touch' }
+    : { trusted: true, pointerType: input === 'protocol' ? 'pen' : 'touch' };
+
+/**
+ * The scenario's own pointer: the `pointerId` of its `pointerdown` on `target` (any part of the
+ * target name), or of the first `pointerdown` when no target is given. Events of any other pointer
+ * (a browser's own mouse move after a layout change, say) are not the scenario's, and are only
+ * recorded.
+ */
+function scenarioPointer(records: readonly PointerRecord[], target?: string) {
+  const down = records.find(
+    record => record.type === 'pointerdown' && (!target || record.target.includes(target))
+  );
+  expect(down, `precondition: a pointerdown${target ? ` on ${target}` : ''}`).toBeDefined();
+  return {
+    mine: records.filter(record => record.pointerId === down!.pointerId),
+    others: records
+      .filter(record => record.pointerId !== down!.pointerId)
+      .map(
+        record =>
+          `${record.type} (${record.trusted ? 'trusted' : 'untrusted'} ${record.pointerType})`
+      ),
+  };
+}
+
+/**
+ * Asserts, from the recorded events, that the scenario's own pointer input (down, move, up and
+ * cancel) all has the expected provenance: trusted browser input or script-dispatched (`isTrusted`
+ * false), and the expected `pointerType`. Returns a summary for the record, with any other
+ * pointer's events listed, never asserted.
+ */
+function expectProvenance(
+  records: readonly PointerRecord[],
+  expected: Provenance,
+  target?: string
+) {
+  const { mine, others } = scenarioPointer(records, target);
+  const input = mine.filter(record => INPUT.includes(record.type));
+  for (const record of input) {
+    expect(
+      { trusted: record.trusted, pointerType: record.pointerType },
+      `${record.type} provenance`
+    ).toEqual(expected);
+  }
+  return { events: input.length, ...expected, otherPointerEvents: others };
+}
+
+/** Every capture event of the scenario's pointer is the browser's own, never a dispatched one. */
+function expectBrowserCapture(
+  records: readonly PointerRecord[],
+  pointerType: 'touch' | 'pen',
+  target?: string
+) {
+  const { mine } = scenarioPointer(records, target);
+  for (const capture of mine.filter(record => CAPTURE.includes(record.type))) {
+    expect(
+      { trusted: capture.trusted, pointerType: capture.pointerType },
+      `${capture.type} on ${capture.target}`
+    ).toEqual({ trusted: true, pointerType });
+  }
+}
+
 const dismissals = (page: Page) =>
   page.evaluate(() =>
     window.__retHarness!.events.filter(event => event.type === 'dismiss').map(event => event.detail)
@@ -342,14 +415,17 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
     const result = await outcome(page, 'a');
     const records = await pointers(page);
     const { velocity, offset, samples } = releaseVelocity(records);
-    // The scenario: trusted touch, released under the distance, fast by D2's own measure.
-    expect(records.every(r => r.trusted && r.pointerType === 'touch')).toBe(true);
+    // The scenario: trusted touch on a's title (its own pointer's input and capture), released
+    // under the distance, fast by D2's own measure.
+    const provenance = expectProvenance(records, provenanceOf('trusted'), 'h-a');
+    expectBrowserCapture(records, 'touch', 'h-a');
     expect(Math.abs(offset)).toBeLessThan(thresholdFor(width));
     expect(velocity, 'precondition: a fast release').toBeGreaterThanOrEqual(2 * VELOCITY_PX_PER_MS);
     await record(info, 'cf-29-trusted-velocity', {
       input: 'trusted',
       width,
       threshold: thresholdFor(width),
+      provenance,
       offset,
       velocity: Number(velocity.toFixed(3)),
       samples,
@@ -382,17 +458,34 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
       const result = await outcome(page, id);
       const after = await probe(page, id);
       const records = await pointers(page);
-      // The scenario: a trusted touch that started on this toast and moved.
-      expect(records[0]).toMatchObject({
-        type: 'pointerdown',
-        trusted: true,
-        pointerType: 'touch',
-      });
-      expect(records[0]!.target).toContain(`h-${id}`);
-      expect(records.some(r => r.type === 'pointermove')).toBe(true);
+      // The scenario: trusted touch only, starting on this toast; capture events are the
+      // browser's own.
+      const provenance = expectProvenance(records, provenanceOf('trusted'), `h-${id}`);
+      expectBrowserCapture(records, 'touch', `h-${id}`);
+      const { mine } = scenarioPointer(records, `h-${id}`);
+      const down = mine[0]!;
+      expect(down.type).toBe('pointerdown');
+      // The movement the browser actually delivered, which may stop short of the input: from
+      // the pointerdown to the last move delivered before any cancel.
+      const cancel = mine.find(r => r.type === 'pointercancel');
+      const moves = mine.filter(
+        r => r.type === 'pointermove' && (!cancel || r.time <= cancel.time)
+      );
+      expect(moves.length, 'precondition: moves were delivered').toBeGreaterThan(0);
+      const last = moves[moves.length - 1]!;
+      const dx = last.x - down.x;
+      const dy = last.y - down.y;
+      const travelled = Math.hypot(dx, dy);
       results[`${angle}°`] = {
+        intendedAngle: angle,
+        provenance,
+        deliveredMoves: moves.length,
+        delivered: { dx, dy, travelled: Math.round(travelled) },
+        // Under the slop an angle would be noise: recorded as unmeasured instead.
+        observedAngle:
+          travelled >= SLOP_PX ? Math.round((Math.atan2(dy, dx) * 180) / Math.PI) : null,
         activated: mid.swiping === 'drag',
-        cancelled: records.some(r => r.type === 'pointercancel'),
+        cancelled: cancel !== undefined,
         scrolled: 1000 - after.scrollY,
         dismissals: result,
         pausedAfter: after.paused,
@@ -422,10 +515,12 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
     await new Promise(resolve => setTimeout(resolve, 150));
     await pen.up();
     const horizontal = await pointers(page);
-    expect(horizontal.some(r => r.type === 'pointerdown' && r.pointerType === 'pen')).toBe(true);
+    const horizontalProvenance = expectProvenance(horizontal, provenanceOf('protocol'), 'h-a');
+    expectBrowserCapture(horizontal, 'pen', 'h-a');
+    expect(horizontal[0]!.type).toBe('pointerdown');
+    expect(horizontal[0]!.target).toContain('h-a');
     results['horizontal on a toast'] = {
-      pointerTypes: [...new Set(horizontal.map(r => r.pointerType))],
-      trusted: horizontal.every(r => r.trusted),
+      provenance: horizontalProvenance,
       capturedByRoot: horizontal.some(
         r => r.type === 'gotpointercapture' && r.target === 'root:h-a'
       ),
@@ -450,10 +545,15 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
       await vertical.up();
       const after = await probe(page, 'b');
       const records = await pointers(page);
-      expect(records[0]).toMatchObject({ type: 'pointerdown', pointerType: 'pen' });
+      const target = onToast ? 'h-b' : 'DIV';
+      const provenance = expectProvenance(records, provenanceOf('protocol'), target);
+      expectBrowserCapture(records, 'pen', target);
+      expect(records[0]!.type).toBe('pointerdown');
+      if (onToast) expect(records[0]!.target).toContain('h-b');
       results[name] = {
+        provenance,
         scrolled: 1000 - after.scrollY,
-        cancelled: records.some(r => r.type === 'pointercancel'),
+        cancelled: scenarioPointer(records, target).mine.some(r => r.type === 'pointercancel'),
         dismissals: onToast ? await outcome(page, 'b') : undefined,
       };
     }
@@ -477,12 +577,26 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
     await finger.up();
     await outcome(page, 'a');
     const records = await pointers(page);
-    // The scenario: the root took real capture, then the dismissal came during the drag.
-    expect(records.some(r => r.type === 'gotpointercapture' && r.target === 'root:h-a')).toBe(true);
+    // The scenario: trusted touch input; the root took capture, the dismissal came during the
+    // drag, and the root lost the capture after it. Every capture event is the browser's own.
+    const provenance = expectProvenance(records, provenanceOf('trusted'), 'h-a');
+    expectBrowserCapture(records, 'touch', 'h-a');
     expect(beforeDismissal).toBeGreaterThan(0);
-    const describe = (r: PointerRecord) => `${r.type} → ${r.target}`;
+    expect(
+      records
+        .slice(0, beforeDismissal)
+        .some(r => r.type === 'gotpointercapture' && r.target === 'root:h-a')
+    ).toBe(true);
+    expect(
+      records
+        .slice(beforeDismissal)
+        .some(r => r.type === 'lostpointercapture' && r.target === 'root:h-a')
+    ).toBe(true);
+    const describe = (r: PointerRecord) =>
+      `${r.type} → ${r.target} (${r.trusted ? 'trusted' : 'untrusted'} ${r.pointerType})`;
     await record(info, 'cf-32-capture-mechanics', {
       input: 'trusted',
+      provenance,
       beforeDismissal: records
         .slice(0, beforeDismissal)
         .filter(r => r.type !== 'pointermove')
@@ -551,7 +665,14 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
         .filter(({ sample, previous, next }) => previous && next && sample.swiping === 'release')
         .filter(({ sample, previous }) => Math.abs(sample.x - previous!.x) <= 0.05)
         .map(({ sample }) => Math.round(sample.now - samples[0]!.now));
-      // The scenario: a fly-out (release state) that the insertion, when there is one, interrupted.
+      // The scenario: the labelled input, on b's title, and a fly-out (release state) that the
+      // insertion, when there is one, interrupted.
+      const records = await pointers(page);
+      const provenance = expectProvenance(
+        records,
+        provenanceOf(trusted ? 'trusted' : 'synthetic'),
+        'in:h-b:ret-toast__title'
+      );
       expect(samples.some(sample => sample.swiping === 'release')).toBe(true);
       if (insertedAt !== null) {
         const releasing = samples.filter(sample => sample.swiping === 'release');
@@ -561,6 +682,7 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
       }
       results[reposition ? 'with a reposition' : 'control, no reposition'] = {
         input: trusted ? 'trusted' : 'synthetic',
+        provenance,
         frames: samples.length,
         holdsAtMs: holds,
         insertedAtMs: insertedAt === null ? null : Math.round(insertedAt - samples[0]!.now),
@@ -695,11 +817,17 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
         await fake.up();
       }
       const records = await pointers(page);
-      const down = records.find(r => r.type === 'pointerdown')!;
-      // The scenario: the contact began on the intended button, and the root saw a retargeted host.
+      const down = scenarioPointer(records, 'h-a').mine[0]!;
+      // The scenario: the labelled input, beginning on the intended button.
+      const provenance = expectProvenance(
+        records,
+        provenanceOf(browserName === 'chromium' ? 'trusted' : 'synthetic'),
+        'h-a'
+      );
       expect(down.origin).toBe(shadow ? 'shadow:h-shadow-target' : 'in:h-a:h-light-target');
       results[name] = {
         ...(results[name] as object),
+        provenance,
         pointerdownTarget: down.target,
         pointerdownOrigin: down.origin,
         dismissals: await outcome(page, 'a'),
@@ -786,12 +914,20 @@ test.describe('swipe evidence', { tag: '@evidence' }, () => {
     }
     const result = await outcome(page, 'a');
     expect(result).toEqual([{ id: 'a', reason: 'swipe' }]);
+    // The swipe was the labelled input, on a's title.
+    const records = await pointers(page);
+    const provenance = expectProvenance(
+      records,
+      provenanceOf(trusted ? 'trusted' : 'synthetic'),
+      'in:h-a:ret-toast__title'
+    );
     const after = await page.evaluate(() => ({
       focus: window.__retHarness!.focusState(),
       bPaused: window.__retHarness!.toastRoot('b')!.hasAttribute('data-paused'),
     }));
     await record(info, 'cf-33-swipe-restoration', {
       input: trusted ? 'trusted' : 'synthetic',
+      provenance,
       active: after.focus.active,
       focusVisible: after.focus.focusVisible,
       bPaused: after.bPaused,

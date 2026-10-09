@@ -5025,23 +5025,38 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
     A recorder logs the page's own pointer and capture events: `isTrusted`, `pointerType`, `pointerId`, the target, the innermost target through open shadow roots (`composedPath()[0]`), position and `timeStamp`.
 
-  - **Integrity (the S4.4 rule).** Each test asserts that its scenario genuinely occurred, never the observed values:
-    - **CF-29:** every event trusted `touch`, the release under the distance, and the D2 release velocity, recomputed from the trusted timestamps, at least twice the threshold;
-    - **CF-30, CF-31, CF-32, CF-39 and CF-33:** a trusted (or protocol) `pointerdown` of the intended type on the intended toast, the moves delivered, and the root's real capture where capture is the subject;
-    - **CF-35:** a fly-out actually under way, and the insertion landing during it;
-    - **CF-36 and CF-40:** a release below opacity 1, the snap-back or release state in the release frame, the exit reached, and the removal;
-    - **CF-38:** the contact beginning on the intended button (`composedPath()[0]`);
-    - **CF-33:** the swiped toast holding focus first, and the `swipe` dismissal.
-  - **CF-29, a trusted velocity commit (Chromium):** activation, then one move a delivered frame later, and an immediate lift, with an offset of 80 px against the 100 px distance. The D2 velocity, recomputed from the trusted timestamps, measured 1.13 to 1.16 px/ms over three runs, and the flick committed with `swipe` each time. An earlier shape, with two moves after activation, measured only 0.86 px/ms, too close to the precondition, and was replaced.
-    - **Limitation:** Chromium delivers touch moves once per frame, so a velocity scenario needs moves at least a frame apart; moves sent within one frame coalesce, and the activation and the last position can then share an event, leaving no offset to commit. That is why the trusted velocity commit stays Class 2.
-  - **CF-30 and CF-41, diagonals (Chromium trusted):** 150 px drags from a toast's title on the long page at `scrollY` 1000, at angles from horizontal.
+  - **Integrity (the S4.4 rule; corrected at S5.4, recorded in the S5.4 record).** Each test asserts that its scenario genuinely occurred, never its observed values.
+    - **Provenance, asserted from the recorded events in every test except CF-39's mouse case** (checked as below) **and CF-36's** (its synthetic contact is dispatched by the spec itself):
+      - the scenario's own pointer is the `pointerId` of its `pointerdown` on the intended target;
+      - each of that pointer's `pointerdown`, `pointermove`, `pointerup` and `pointercancel` must be trusted `touch` (Chromium CDP touch), trusted `pen` (Chromium protocol pen), or `isTrusted` false with `touch` (synthetic, Firefox and WebKit). The label is checked against the events, never taken from the engine's name;
+      - another pointer's events are listed in the record, never asserted. None appeared in the S5.4 runs.
+    - **Capture events,** where present: those of the scenario's pointer must be trusted, with its `pointerType` (CF-29, CF-30 and CF-41, CF-31 and CF-32).
+    - **Scenario preconditions:**
+      - **CF-29:** the release offset under the distance, and the D2 release velocity, recomputed from the trusted timestamps, at least twice the threshold;
+      - **CF-30 and CF-41:** a `pointerdown` on the intended toast, and at least one delivered move;
+      - **CF-31:** a `pointerdown` on the intended toast, or on page content;
+      - **CF-32:** the root's `gotpointercapture` before the dismissal, and its `lostpointercapture` after it;
+      - **CF-35:** the contact on `b`'s title, a fly-out under way, and the insertion landing during it;
+      - **CF-36 and CF-40:** a release below opacity 1, the snap-back or release state in the release frame, the exit reached, and the removal;
+      - **CF-38:** the contact's innermost target (`composedPath()[0]`) being the intended button;
+      - **CF-39:** a trusted `pointerdown` of the intended type (mouse, touch or pen);
+      - **CF-33:** the contact on `a`'s title, the swiped toast holding focus first, and the `swipe` dismissal.
+    - **Recorded only:** activation, cancellation, scrolling, dismissals, focus, opacities, holds and the delivered movement.
 
-    | Angle | Swipe activated | Browser `pointercancel` | Page scrolled | Dismissed    |
-    | ----- | --------------- | ----------------------- | ------------- | ------------ |
-    | 20°   | yes             | no                      | 0             | yes, `swipe` |
-    | 30°   | yes             | no                      | 0             | yes, `swipe` |
-    | 45°   | no              | no                      | 0             | no           |
-    | 60°   | no              | yes                     | 130–135 px    | no           |
+    None of these is a product contract.
+
+  - **CF-29, a trusted velocity commit (Chromium):** activation, then one move a delivered frame later, and an immediate lift, with an offset of 80 px against the 100 px distance. The D2 velocity, recomputed from the trusted timestamps, measured 1.13 to 1.16 px/ms over five runs, and the flick committed with `swipe` each time. An earlier shape, with two moves after activation, measured only 0.86 px/ms, too close to the precondition, and was replaced.
+    - **Limitation:** Chromium delivers touch moves once per frame, so a velocity scenario needs moves at least a frame apart; moves sent within one frame coalesce, and the activation and the last position can then share an event, leaving no offset to commit. That is why the trusted velocity commit stays Class 2.
+  - **CF-30 and CF-41, diagonals (Chromium trusted):** CDP input of 150 px from a toast's title on the long page at `scrollY` 1000, in 8 moves, at an intended angle from horizontal. The delivered movement is measured from the browser's own events: from the `pointerdown` to the last `pointermove` before any `pointercancel`. It was the same in the three S5.4 runs that recorded it.
+
+    | Intended | Moves delivered | Delivered dx / dy | Observed angle | Swipe activated | Browser `pointercancel` | Page scrolled | Dismissed    |
+    | -------- | --------------- | ----------------- | -------------- | --------------- | ----------------------- | ------------- | ------------ |
+    | 20°      | 8 of 8          | 141 / 51 px       | 20°            | yes             | no                      | 0             | yes, `swipe` |
+    | 30°      | 8 of 8          | 130 / 75 px       | 30°            | yes             | no                      | 0             | yes, `swipe` |
+    | 45°      | 8 of 8          | 106 / 106 px      | 45°            | no              | no                      | 0             | no           |
+    | 60°      | 1 of 8          | 9 / 15 px         | 59°            | no              | yes, after that move    | 128–135 px    | no           |
+    - **At 60°,** the browser delivered one move of 17 px and then took the pointer for scrolling. The rest of the input became page scroll, never pointer moves, so the observed angle rests on that single move.
+    - **The angles** are the input's intent and the delivered moves; no universal threshold is drawn from them.
 
     In every case the toast ended at rest and unheld.
     - **The difference from D1:** at 45° D1 recorded a cancel and a scroll. Here the library dropped the candidate, since 45° fails its 1.5 dominance, and Chromium neither cancelled nor scrolled. At exactly 45° the browser's own arbitration is at its boundary.
@@ -5055,8 +5070,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **After a programmatic dismissal:** `lostpointercapture` on the root. The next `pointermove`s and the `pointerup` go to the position's list, because the exiting toast is inert. One dismissal, `programmatic`.
     - **Status:** an observed order, not a required one beyond the documented contract.
   - **CF-35, the one-frame hold** (exit slowed to 600 ms; Chromium trusted, Firefox and WebKit synthetic; every frame read with its own `performance.now()`):
-    - **The control, with no reposition:** there are held frames in the first 4 to 17 ms after the release, where the transform transition starts (in one WebKit run, none). Those are the start of the transition, not a hold caused by repositioning: the clock artifact the control separates out.
-    - **With an insertion during the fly-out:** a further held frame right after the insertion in Chromium (at 125 ms, the insertion at 110 to 111 ms) and Firefox (at 119 to 141 ms, the insertion at 115 to 125 ms), in both runs. None in WebKit in either run.
+    - **The control, with no reposition:** there are held frames in the first 4 to 17 ms after the release, where the transform transition starts (in three WebKit runs, none). Those are the start of the transition, not a hold caused by repositioning: the clock artifact the control separates out.
+    - **With an insertion during the fly-out:** a further held frame right after the insertion in Chromium (at 109 to 125 ms, the insertion at 106 to 111 ms) and Firefox (at 119 to 141 ms, the insertion at 115 to 125 ms), in all five runs (S5.3 and S5.4). None after the insertion in WebKit in any run.
 
     This is the accepted cosmetic hold (P-21 S3). It is not required behaviour, and its appearance stays MC-8.
 
