@@ -248,9 +248,33 @@ const insertMeasured = (page: Page, id: string): Promise<Measured> =>
     return { before, after };
   }, id);
 
-/** X kept across the insertion: no more change than the settle's own speed explains. */
-function expectXKept(measured: Measured, samples: readonly Sample[]): void {
-  const allowance = PX + speedOf(samples, 'x') * (measured.after.time - measured.before.time);
+/**
+ * X kept across the insertion: no more change than the settle's own speed explains over the task.
+ * Chromium and Firefox hold animation time within a task, so their window is the task itself.
+ * WebKit advances it, and its `after` read can already show motion that the next frame would
+ * otherwise show (P-22 S6.2 diagnostic): its window runs to the first frame sampled after the
+ * task, and its speed leaves out the frame interval that spans the insertion, so a jump there
+ * cannot raise its own allowance. Without such a frame the measurement is not judged.
+ */
+function expectXKept(measured: Measured, samples: readonly Sample[], browserName: string): void {
+  let end = measured.after.time;
+  let speed = speedOf(samples, 'x');
+  if (browserName === 'webkit') {
+    const next = samples.find(sample => sample.time >= measured.after.time);
+    expect(next, 'precondition: a frame sampled after the insertion task').toBeDefined();
+    end = next!.time;
+    speed = Math.max(
+      speedOf(
+        samples.filter(sample => sample.time <= measured.before.time),
+        'x'
+      ),
+      speedOf(
+        samples.filter(sample => sample.time >= measured.after.time),
+        'x'
+      )
+    );
+  }
+  const allowance = PX + speed * (end - measured.before.time);
   expect(
     Math.abs(measured.after.x - measured.before.x),
     'X across the insertion'
@@ -399,7 +423,8 @@ test.describe('CF-35: swipe and repositioning compose with no jump', () => {
     expect(measured.before.x, 'precondition: inserted during the snap-back').toBeGreaterThan(5);
     expectXKept(
       measured,
-      settling.filter(sample => !sample.mutation)
+      settling.filter(sample => !sample.mutation),
+      browserName
     );
     expectInterpolatedMove(
       settling.map(sample => sample.x),
@@ -434,7 +459,8 @@ test.describe('CF-35: swipe and repositioning compose with no jump', () => {
     expect(measured.before.x, 'precondition: inserted during the fly-out').toBeGreaterThan(100);
     expectXKept(
       measured,
-      flying.filter(sample => !sample.mutation)
+      flying.filter(sample => !sample.mutation),
+      browserName
     );
     // X never goes back toward rest (a one-frame hold is the accepted limitation), and travels on.
     flying.forEach((sample, index) => {
