@@ -31,8 +31,10 @@ const POSITIONS: readonly ToastPosition[] = [
 const THEMES: readonly ToastTheme[] = ['system', 'light', 'dark'];
 const KINDS = ['default', 'success', 'error', 'warning', 'info', 'loading', 'custom'] as const;
 type Kind = (typeof KINDS)[number];
-type DurationMode = 'toaster' | 'timed' | 'persistent';
+// `ten-minutes` is the long progress preset's only, for MC-5's and MC-1's background cases.
+type DurationMode = 'toaster' | 'timed' | 'persistent' | 'ten-minutes';
 const TIMED_MS = 8000;
+const TEN_MINUTES_MS = 600_000;
 const SCHEDULED_DISMISS_MS = 2000;
 const MAX_ENTRIES = 2000;
 const SHOWN_ENTRIES = 150;
@@ -421,12 +423,21 @@ function CustomContent({ id }: { readonly id: string }) {
   );
 }
 
-function create(settings: Settings, overrides: Partial<Settings> = {}): void {
+/** A toast's text: `label` when given, else its type; then its ID. */
+type Overrides = Partial<Settings> & { readonly label?: string };
+
+function create(settings: Settings, overrides: Overrides = {}): void {
   const s = { ...settings, ...overrides };
   created += 1;
   const id = `t${created}`;
   const duration =
-    s.duration === 'persistent' ? Infinity : s.duration === 'timed' ? TIMED_MS : undefined;
+    s.duration === 'persistent'
+      ? Infinity
+      : s.duration === 'timed'
+        ? TIMED_MS
+        : s.duration === 'ten-minutes'
+          ? TEN_MINUTES_MS
+          : undefined;
   const common = {
     id,
     className: `${ID_PREFIX}${id}`,
@@ -449,7 +460,7 @@ function create(settings: Settings, overrides: Partial<Settings> = {}): void {
       : {}),
     ...(s.action ? { action: { label: 'Undo', onClick: () => log('action-click', { id }) } } : {}),
   };
-  const content: ReactNode = `${s.kind[0]!.toUpperCase()}${s.kind.slice(1)} ${id}`;
+  const content: ReactNode = `${s.label ?? `${s.kind[0]!.toUpperCase()}${s.kind.slice(1)}`} ${id}`;
   if (s.kind === 'default') toast(content, options);
   else toast[s.kind](content, options);
 }
@@ -521,7 +532,7 @@ function Panel() {
 
   const status = readStatus();
   const shown = entries.slice(-SHOWN_ENTRIES).reverse();
-  const preset = (overrides: Partial<Settings>) => () => create(settings, overrides);
+  const preset = (overrides: Overrides) => () => create(settings, overrides);
 
   return (
     <div className="mq-panel">
@@ -709,6 +720,20 @@ function Panel() {
         <div className="mq-row">
           <button
             type="button"
+            data-qa="preset-ten-minutes"
+            onClick={preset({
+              kind: 'info',
+              duration: 'ten-minutes',
+              description: false,
+              action: false,
+              progress: true,
+              label: '10-minute progress',
+            })}
+          >
+            10-minute progress — background/visibility test
+          </button>
+          <button
+            type="button"
             data-qa="preset-swipe"
             onClick={preset({
               kind: 'default',
@@ -754,6 +779,12 @@ function Panel() {
             Custom 280 × 96
           </button>
         </div>
+        <p className="mq-note">
+          10-minute progress (MC-5, MC-1): an info toast that runs for 600 000 ms with its progress
+          bar, long enough to switch windows or apps, hide the tab or minimise for more than five
+          minutes, and come back to the same toast. Watch its phase, paused and progress values in
+          Status, and export the log after each case.
+        </p>
         <p className="mq-note">
           Swipe a toast horizontally (past half its width, or a short flick), release early to
           spring back, drag vertically from a toast to scroll, try diagonals, and pinch-zoom on a

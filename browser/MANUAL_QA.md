@@ -28,6 +28,21 @@ Windows. Stop the server with Ctrl+C.
    Files). **Show JSON** shows the same text to select by hand if a download is blocked.
 5. **Clear log** before the next case, so each export holds one case.
 
+### The 10-minute progress preset (MC-5, MC-1)
+
+**10-minute progress — background/visibility test** (first under **Presets**) adds an info toast
+that runs for 600 000 ms with its progress bar. That is long enough to switch windows or apps, hide
+the tab, minimise, or stay hidden for more than five minutes, and still return to the same toast.
+
+1. **Clear log**, then add the toast. Move the pointer and focus away from it, unless the case
+   needs focus inside it (Alt+T, then Tab, for the focus-within case).
+2. Note its `phase`, `paused` and `progress` in **Status**.
+3. Leave and return as the case requires.
+4. Read the same values again, then **Download JSON**. The log holds the window focus and blur,
+   `visibilitychange`, focus and `data-paused` entries in order.
+
+The page gives no verdict: compare what you see with the checkpoint's expected result.
+
 Toasts sit above the page, so at a top or bottom position they can cover controls at that edge:
 scroll the controls toward the middle of the screen.
 
