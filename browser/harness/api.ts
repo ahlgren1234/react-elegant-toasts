@@ -185,6 +185,11 @@ export interface RetHarness {
    */
   focusFixture(mode: FocusFixtureMode): ReactElement;
   /**
+   * Custom toast content with a light-DOM button, `.h-light-target`, and a button,
+   * `.h-shadow-target`, inside the open shadow root of `.h-shadow-host` (CF-38).
+   */
+  shadowFixture(): ReactElement;
+  /**
    * Samples `read` now (frame 0) and then in each `requestAnimationFrame` callback, never mocking
    * it. To observe a change from its first frame (D2-12), call this and make the change in the same
    * task, in one `page.evaluate`: frame 0 is then the state before the change, and frame 1 the first

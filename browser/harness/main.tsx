@@ -256,6 +256,32 @@ function FocusFixture({ mode }: { readonly mode: FocusFixtureMode }) {
   );
 }
 
+/**
+ * Custom toast content for CF-38: a light-DOM button, `.h-light-target`, and a host,
+ * `.h-shadow-host`, whose open shadow root holds a button, `.h-shadow-target`.
+ */
+function ShadowFixture() {
+  const host = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const element = host.current;
+    if (!element || element.shadowRoot) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'h-shadow-target';
+    button.textContent = 'Shadow button';
+    element.attachShadow({ mode: 'open' }).append(button);
+  }, []);
+  return (
+    <p>
+      Shadow fixture{' '}
+      <button type="button" className="h-light-target">
+        Light button
+      </button>{' '}
+      <span ref={host} className="h-shadow-host" />
+    </p>
+  );
+}
+
 let scenarioStyle: HTMLStyleElement | null = null;
 
 const toastRoot = (label: string) =>
@@ -409,6 +435,7 @@ const harness: RetHarness = {
   progressState,
   focusState,
   focusFixture: mode => <FocusFixture mode={mode} />,
+  shadowFixture: () => <ShadowFixture />,
   sampleFrames,
 };
 

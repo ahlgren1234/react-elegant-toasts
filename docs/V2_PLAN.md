@@ -3704,7 +3704,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
-- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2, focus-within, `aria-keyshortcuts` and the focus rings, is done (recorded below). S4.3, the focus and environment evidence, is done (recorded below). S4.4, the S4 reconciliation, is done (recorded below): The maintainer accepted and closed S4. S5, swipe, is in progress: S5.1, the harness and cross-engine swipe logic, is done (recorded below). S5.2, trusted Chromium touch, scroll arbitration, capture and motion continuity, is done (recorded below). S5.3 is next, after review.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2, focus-within, `aria-keyshortcuts` and the focus rings, is done (recorded below). S4.3, the focus and environment evidence, is done (recorded below). S4.4, the S4 reconciliation, is done (recorded below): The maintainer accepted and closed S4. S5, swipe, is in progress: S5.1, the harness and cross-engine swipe logic, is done (recorded below). S5.2, trusted Chromium touch, scroll arbitration, capture and motion continuity, is done (recorded below). S5.3, the swipe browser evidence, is done (recorded below). S5.4 is next, after review.
 - Defects: none. Appendix A assigns no defect to P-22.
 - Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
 - **Starting point (the D0 review, at `1644671`):**
@@ -5016,6 +5016,88 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - CF-38's shadow root;
     - CF-39's press focus;
     - CF-33 (Class 4).
+- **S5.3 record: swipe browser evidence (done).** Every S5 evidence layer is recorded in `swipe.evidence.spec.ts`: CF-29's trusted velocity, CF-30's and CF-41's diagonals, CF-31, CF-32's capture mechanics, CF-35's one-frame hold, CF-36 and CF-40, CF-38, CF-39, and CF-33 as Class 4. Each is recorded, never asserted as the product contract, and no class changed. No blocking test was added or changed. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged. No D0-16 report was raised.
+  - **Spec added:** `browser/tests/swipe.evidence.spec.ts` (`@evidence`), 9 tests per engine; 4 are Chromium-only and skip in Firefox and WebKit naming MC-2, MC-3, MC-4 or MC-7.
+  - **Input provenance, named in every record:**
+    - `trusted`: Chromium CDP touch (`hasTouch`, 1280 × 720), which the browser turns into trusted `touch` pointer events;
+    - `protocol`: Chromium CDP pen (`pointerType: 'pen'`). The events are trusted, but CDP decides their properties, so they are never physical-stylus evidence (MC-7);
+    - `synthetic`: script-dispatched `PointerEvent`s, logic only.
+
+    A recorder logs the page's own pointer and capture events: `isTrusted`, `pointerType`, `pointerId`, the target, the innermost target through open shadow roots (`composedPath()[0]`), position and `timeStamp`.
+
+  - **Integrity (the S4.4 rule).** Each test asserts that its scenario genuinely occurred, never the observed values:
+    - **CF-29:** every event trusted `touch`, the release under the distance, and the D2 release velocity, recomputed from the trusted timestamps, at least twice the threshold;
+    - **CF-30, CF-31, CF-32, CF-39 and CF-33:** a trusted (or protocol) `pointerdown` of the intended type on the intended toast, the moves delivered, and the root's real capture where capture is the subject;
+    - **CF-35:** a fly-out actually under way, and the insertion landing during it;
+    - **CF-36 and CF-40:** a release below opacity 1, the snap-back or release state in the release frame, the exit reached, and the removal;
+    - **CF-38:** the contact beginning on the intended button (`composedPath()[0]`);
+    - **CF-33:** the swiped toast holding focus first, and the `swipe` dismissal.
+  - **CF-29, a trusted velocity commit (Chromium):** activation, then one move a delivered frame later, and an immediate lift, with an offset of 80 px against the 100 px distance. The D2 velocity, recomputed from the trusted timestamps, measured 1.13 to 1.16 px/ms over three runs, and the flick committed with `swipe` each time. An earlier shape, with two moves after activation, measured only 0.86 px/ms, too close to the precondition, and was replaced.
+    - **Limitation:** Chromium delivers touch moves once per frame, so a velocity scenario needs moves at least a frame apart; moves sent within one frame coalesce, and the activation and the last position can then share an event, leaving no offset to commit. That is why the trusted velocity commit stays Class 2.
+  - **CF-30 and CF-41, diagonals (Chromium trusted):** 150 px drags from a toast's title on the long page at `scrollY` 1000, at angles from horizontal.
+
+    | Angle | Swipe activated | Browser `pointercancel` | Page scrolled | Dismissed    |
+    | ----- | --------------- | ----------------------- | ------------- | ------------ |
+    | 20°   | yes             | no                      | 0             | yes, `swipe` |
+    | 30°   | yes             | no                      | 0             | yes, `swipe` |
+    | 45°   | no              | no                      | 0             | no           |
+    | 60°   | no              | yes                     | 130–135 px    | no           |
+
+    In every case the toast ended at rest and unheld.
+    - **The difference from D1:** at 45° D1 recorded a cancel and a scroll. Here the library dropped the candidate, since 45° fails its 1.5 dominance, and Chromium neither cancelled nor scrolled. At exactly 45° the browser's own arbitration is at its boundary.
+    - **Not a contract:** this is the browser's arbitration, not the product contract.
+
+  - **CF-31, protocol pen (Chromium):**
+    - **Horizontal:** a 140 px pen drag on a toast is trusted `pen` throughout. The root takes capture, the swipe activates, and it commits with `swipe`.
+    - **Vertical:** a pen drag scrolled nothing, neither from a toast nor from the page, and no `pointercancel` came. So in this set-up Chromium does not pan for protocol pen input at all: a pen drag here is never handed to scrolling, whatever `touch-action` says. Real pens and their `touch-action` stay MC-7.
+  - **CF-32, capture mechanics (Chromium trusted):**
+    - **Before the dismissal:** `pointerdown` on the title; `gotpointercapture` on the title (touch's implicit capture); `lostpointercapture` on the title as the root takes capture; `gotpointercapture` on the root.
+    - **After a programmatic dismissal:** `lostpointercapture` on the root. The next `pointermove`s and the `pointerup` go to the position's list, because the exiting toast is inert. One dismissal, `programmatic`.
+    - **Status:** an observed order, not a required one beyond the documented contract.
+  - **CF-35, the one-frame hold** (exit slowed to 600 ms; Chromium trusted, Firefox and WebKit synthetic; every frame read with its own `performance.now()`):
+    - **The control, with no reposition:** there are held frames in the first 4 to 17 ms after the release, where the transform transition starts (in one WebKit run, none). Those are the start of the transition, not a hold caused by repositioning: the clock artifact the control separates out.
+    - **With an insertion during the fly-out:** a further held frame right after the insertion in Chromium (at 125 ms, the insertion at 110 to 111 ms) and Firefox (at 119 to 141 ms, the insertion at 115 to 125 ms), in both runs. None in WebKit in either run.
+
+    This is the accepted cosmetic hold (P-21 S3). It is not required behaviour, and its appearance stays MC-8.
+
+  - **CF-36 and CF-40, opacity (synthetic, all three):**
+    - **Method:** a release at opacity 0.878 below the distance (the snap-back), then a programmatic dismissal 0, 16, 50 or 100 ms later; and a commit by distance at 0.696. Sampling starts in the release's task. "At dismissal" is the last frame before the exit.
+    - **Chromium:** the exit starts from 1 whatever the snap-back value: a first step of +0.122 at 0 ms, +0.11 at 16 ms, +0.048 at 50 ms and +0.015 at 100 ms, then monotone.
+    - **Firefox:** no first step, with one rise of +0.03 over one frame at 16 ms.
+    - **WebKit:** first steps of at most +0.035, then monotone.
+    - **A commit:** no rise in any engine. The exit fades from the swipe opacity, so no running opacity transition overrides P-18's exit fade (CF-40). Every case completed its exit, and was removed with its own reason.
+
+    These match D1b and D2-7's accepted cosmetic difference. WebKit's +0.035 at 16 ms is a little more than D1b's +0.010; it is a single frame. The optional human observation of Chromium's step stays MC-8.
+
+  - **CF-38, Shadow DOM** (Chromium trusted; Firefox and WebKit synthetic composed events; custom content from the new harness fixture):
+    - **A drag from a button inside an open shadow root,** in all three engines: `composedPath()[0]` is the shadow button, while `pointerdown` reaches the toast retargeted to its host. The swipe activates and commits with `swipe`.
+    - **The light-DOM button beside it** never activates.
+
+    This is the confirmed D2-2 limitation, for P-26 and §37: `protectedTarget()` sees the host. No `composedPath()` change was made.
+
+  - **CF-39, press focus:**
+    - **A trusted mouse press on the toast's body** focuses the root (`tabindex="-1"`) in all three engines, and the toast is held.
+    - **In Chromium:**
+      - a trusted touch tap leaves `<body>` focused during the contact and focuses the root after the lift (the compatibility mouse events);
+      - a held trusted touch drag focuses nothing, during it or after;
+      - a protocol pen press focuses the root at once, like a mouse.
+    - **Status:** existing pointer-focus behaviour, not a contract. Touch and pen on real devices stay MC-2, MC-3 and MC-7.
+  - **CF-33, focus after a swipe dismissal of the focused toast (Class 4):** with the first toast focused by Alt+T and swiped away (Chromium trusted; Firefox and WebKit synthetic), focus goes to the next toast's root (§18), which matches `:focus-visible` after the keyboard's Alt+T and is held by focus-within, in all three engines. A swipe after pointer use, where `:focus-visible` would not match (S4.3's CF-12 result), was not recorded here. The pointer-triggered restoration question (D0-2) goes to P-29 with CF-8.
+  - **Harness change:** `shadowFixture()`, custom content with a light-DOM button and a button in an open shadow root (CF-38). Observation only.
+  - **Commands:** unchanged. `npm run test:browser:evidence` lists 29 per engine, 87 in all: 67 pass and 20 skip (the earlier 12, and this spec's 4 Chromium-only tests in Firefox and WebKit). `npm run test:browser` is unchanged: 274 passed, 20 named skips.
+  - **Validation:**
+    - the new spec passes, or skips with its named reason, in all three engines, in two full runs and two further runs of its CF-29 and CF-36 tests. The outcomes agree, and timings that varied are given as ranges;
+    - the full `@evidence` run under `CI=1`: 67 passed, 20 skipped;
+    - the full blocking suite under `CI=1`: 274 passed, 20 named skips;
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Remaining manual checkpoints (S6):**
+    - MC-2, MC-3 and MC-4 for real touch, scrolling, diagonals and `pointercancel` (AC-SW-1's layer C), and pinch-zoom (CF-34, CF-42);
+    - MC-7 for real pens (CF-31, CF-37) and pen press focus (CF-39);
+    - MC-8 for the one-frame hold's appearance (CF-35) and, optionally, Chromium's opacity step (CF-36).
+  - **Carried forward to S5.4:**
+    - reconcile AC-SW-1's layers: A (C F W, S5.1), B (C, S5.2), and C (MC-2, MC-3, MC-4, pending);
+    - the S5 coverage matrix;
+    - carry-forwards: CF-38 to P-26 and §37; CF-33 to P-29; CF-31 and CF-37 to MC-7; CF-34 and CF-42 to MC-2, MC-3 and MC-4.
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
