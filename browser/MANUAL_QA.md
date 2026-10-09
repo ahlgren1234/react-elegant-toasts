@@ -43,6 +43,38 @@ the tab, minimise, or stay hidden for more than five minutes, and still return t
 
 The page gives no verdict: compare what you see with the checkpoint's expected result.
 
+### The custom close ring (MC-8, CF-12)
+
+Custom toasts have no close button unless **Close button on custom toasts** (under **Next toast**)
+is ticked. It applies to custom toasts only, including the **Custom 280 × 96** preset.
+
+1. Tick **Close button on custom toasts**, then add **Custom 280 × 96**.
+2. Using only the keyboard, Tab from **Before the region** to the custom toast's close button.
+3. Expected: the close button shows a ring in the content's text colour (`currentColor`), clearly
+   visible and not clipped. Check it in the light and dark themes. Record what you see.
+
+### An insertion during a swipe fly-out (MC-8, CF-35; needs touch)
+
+**Add one in 2 s** adds one toast, with the **Next toast** settings, about 2 seconds after the
+click. The log records `add-scheduled` at the click; when it fires, the new toast's `create` entry
+and then `add-scheduled-fired` with its ID. The button stays disabled until the toast is added, so
+only one insertion is ever pending, and settings changed meanwhile do not affect it.
+
+1. Tick **Slow motion**. The fly-out then takes 1.2 s. **Slow motion does not slow the 200 ms
+   stack reposition**: that is fixed in the stylesheet and is not a token.
+2. Add a **Persistent swipe target** at a top position.
+3. Tap **Add one in 2 s**, then swipe the toast past the threshold about 1.5 seconds later, so
+   that the new toast arrives, and the stack repositions, while the swiped toast is flying out.
+4. Expected: the swiped toast keeps travelling sideways while the stack moves, with no visible jump
+   or stutter. The automated evidence (P-22 S5.3) found at most one held frame in some engines; it
+   is accepted as cosmetic.
+5. Record what you saw by eye, and whether the insertion landed during the fly-out. The log shows
+   the order: the swiped toast's `toast-attribute` entry for `data-phase` `exiting`, then
+   `add-scheduled-fired`, then its `dismiss` with reason `swipe` when it is removed. A visual check
+   cannot confirm or rule out a single held frame; do not record one as measured.
+
+A mouse drag never swipes, so this needs a touch device.
+
 Toasts sit above the page, so at a top or bottom position they can cover controls at that edge:
 scroll the controls toward the middle of the screen.
 

@@ -36,6 +36,7 @@ type DurationMode = 'toaster' | 'timed' | 'persistent' | 'ten-minutes';
 const TIMED_MS = 8000;
 const TEN_MINUTES_MS = 600_000;
 const SCHEDULED_DISMISS_MS = 2000;
+const SCHEDULED_ADD_MS = 2000;
 const MAX_ENTRIES = 2000;
 const SHOWN_ENTRIES = 150;
 const MOVE_INTERVAL_MS = 100;
@@ -389,6 +390,8 @@ interface Settings {
   action: boolean;
   duration: DurationMode;
   progress: boolean;
+  /** `closeButton: true` on custom toasts (CF-12's custom close); off keeps them chrome-less. */
+  customClose: boolean;
 }
 
 const INITIAL: Settings = {
@@ -402,6 +405,7 @@ const INITIAL: Settings = {
   action: false,
   duration: 'persistent',
   progress: false,
+  customClose: false,
 };
 
 let created = 0;
@@ -426,7 +430,7 @@ function CustomContent({ id }: { readonly id: string }) {
 /** A toast's text: `label` when given, else its type; then its ID. */
 type Overrides = Partial<Settings> & { readonly label?: string };
 
-function create(settings: Settings, overrides: Overrides = {}): void {
+function create(settings: Settings, overrides: Overrides = {}): string {
   const s = { ...settings, ...overrides };
   created += 1;
   const id = `t${created}`;
@@ -447,10 +451,20 @@ function create(settings: Settings, overrides: Overrides = {}): void {
     onAutoClose: (snapshot: ToastSnapshot) => log('auto-close', { id: snapshot.id }),
   };
   live.push(id);
-  log('create', { id, kind: s.kind, duration: s.duration, position: s.position });
+  const customClose = s.kind === 'custom' && s.customClose;
+  log('create', {
+    id,
+    kind: s.kind,
+    duration: s.duration,
+    position: s.position,
+    ...(customClose ? { closeButton: true } : {}),
+  });
   if (s.kind === 'custom') {
-    toast.custom(<CustomContent id={id} />, common);
-    return;
+    toast.custom(
+      <CustomContent id={id} />,
+      customClose ? { ...common, closeButton: true } : common
+    );
+    return id;
   }
   const options: ToastOptions = {
     ...common,
@@ -463,6 +477,7 @@ function create(settings: Settings, overrides: Overrides = {}): void {
   const content: ReactNode = `${s.label ?? `${s.kind[0]!.toUpperCase()}${s.kind.slice(1)}`} ${id}`;
   if (s.kind === 'default') toast(content, options);
   else toast[s.kind](content, options);
+  return id;
 }
 
 // --- Panel -------------------------------------------------------------------------------------
@@ -521,6 +536,7 @@ function Panel() {
   const [, setTick] = useState(0);
   const [label, setLabel] = useState('');
   const [json, setJson] = useState<string | null>(null);
+  const [addPending, setAddPending] = useState(false);
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setSettings(current => ({ ...current, [key]: value }));
 
@@ -673,6 +689,15 @@ function Panel() {
             />{' '}
             Progress
           </label>
+          <label>
+            <input
+              type="checkbox"
+              data-qa="custom-close"
+              checked={settings.customClose}
+              onChange={event => set('customClose', event.target.checked)}
+            />{' '}
+            Close button on custom toasts
+          </label>
         </div>
         <div className="mq-row">
           <button type="button" data-qa="add-one" onClick={() => create(settings)}>
@@ -686,6 +711,24 @@ function Panel() {
             }}
           >
             Add three
+          </button>
+          <button
+            type="button"
+            data-qa="add-one-later"
+            disabled={addPending}
+            onClick={() => {
+              // One pending insertion at a time, with the settings of the click (CF-35: an
+              // insertion during a swipe fly-out).
+              const at = settings;
+              setAddPending(true);
+              log('add-scheduled', { inMs: SCHEDULED_ADD_MS });
+              setTimeout(() => {
+                setAddPending(false);
+                log('add-scheduled-fired', { id: create(at) });
+              }, SCHEDULED_ADD_MS);
+            }}
+          >
+            {addPending ? 'Add one in 2 s (pending)' : 'Add one in 2 s'}
           </button>
           <button
             type="button"
