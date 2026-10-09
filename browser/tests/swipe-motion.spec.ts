@@ -292,9 +292,20 @@ test.describe('CF-35: swipe and repositioning compose with no jump', () => {
     expect(activation!.before.transformY, 'precondition: activated mid-reposition').toBeLessThan(
       -PX
     );
-    const moving = samples.filter(
-      sample => sample.time < activation!.before.time && !sample.mutation
-    );
+    // The speed includes the activating move's own `before` read: activation lands early in the
+    // reposition, whose first frames are the ease's slow start, and WebKit advances the motion
+    // between `before` and `after` within the task (S6 preflight).
+    const moving = [
+      ...samples.filter(sample => sample.time < activation!.before.time && !sample.mutation),
+      {
+        time: activation!.before.time,
+        mutation: false,
+        top: activation!.before.top,
+        x: 0,
+        swiping: null,
+        connected: true,
+      },
+    ];
     const allowance =
       PX + speedOf(moving, 'top') * (activation!.after.time - activation!.before.time);
     expect(
