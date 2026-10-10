@@ -2526,7 +2526,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - Scope: progress off by default, CSS-driven, kept in sync with `remaining` and the pause state, RTL origin, still depleting under reduced motion.
 - Defects: D-10, D-11.
-- **Status: complete.** D0, D1 and S1 to S5 are done, the final reconciliation and validation passed, and every checkpoint is recorded. Progress ships as candidate B, synchronised by T1, with two public tokens (30 in all) and the `data-paused` hook. The publication review is next. What P-20 leaves open is listed in the S5 record and in the P-22, P-26 and P-29 entries.
+- **Status: complete.** D0, D1 and S1 to S5 are done, the final reconciliation and validation passed, and every checkpoint is recorded. Progress ships as candidate B, synchronised by T1, with two public tokens (30 in all) and the `data-paused` hook. It was merged into `v2` through PR #14 (`6dd1bc9`). What P-20 leaves open is listed in the S5 record and in the P-22, P-26 and P-29 entries.
 - **Already decided, not reopened here:**
   - `ToastOptions.progress` and `ToasterProps.progress`, off by default, resolved toast, then Toaster, then `false` (§6.3, §6.5, P-14);
   - custom toasts reject progress, in the types and at runtime (§6.4, P-12, AC-API-10);
@@ -3175,7 +3175,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - Stack repositioning seeds an inverse vertical offset on the toast root through inline `transform` and carries it back with the stylesheet's `transition: transform`. At rest the root computes to `transform: none`.
   - Swipe composes with this without wrappers, without DOM reordering, and without replacing P-18's individual properties.
   - The expected direction is one library-owned root `transform` built from internal components for the horizontal swipe offset and the vertical reposition offset, with the transition turned off while a direct pointer drag is active. P-21 decides the exact contract, including what a drag does to a reposition already running.
-- **Status: in progress.** D0, D1 and D2 are done: the architecture (D0), the prototype with its machine evidence and the maintainer's required iPhone Safari and Android Chrome sign-off (D1), and the prototype-derived constants and composition contract (D2), all recorded below. The implementation slices S1 to S5 are complete and recorded under the sequence: the gesture helpers, drag and cancel, commit with the P-19 composition, hardening, and the final reconciliation with the prototype removed. The maintainer approved the production S3 dismissal on iPhone Safari and Android Chrome. What remains is the focused publication review, then the PR into `v2`, CI and a merge commit.
+- **Status: complete.** D0, D1 and D2 are done: the architecture (D0), the prototype with its machine evidence and the maintainer's required iPhone Safari and Android Chrome sign-off (D1), and the prototype-derived constants and composition contract (D2), all recorded below. The implementation slices S1 to S5 are complete and recorded under the sequence: the gesture helpers, drag and cancel, commit with the P-19 composition, hardening, and the final reconciliation with the prototype removed. The maintainer approved the production S3 dismissal on iPhone Safari and Android Chrome. After the publication review and its pre-publication correction, it was merged into `v2` through PR #15 with a merge commit (`1644671`).
 - Defects: none. Appendix A assigns no defect to P-21.
 - Acceptance: AC-SW-1 is P-21's. AC-LC-1 to AC-LC-3, AC-TM-2, AC-NT-3, AC-CB-2, AC-Q-3, AC-MO-1 to AC-MO-3, AC-PR-1, AC-RTL-1, AC-A11Y-4, AC-KB-1, AC-CSS-1 and the §32 render counts must not regress. As with AC-MO-1 and AC-MO-2, the real-browser proof of AC-SW-1 ("touch swipe (thresholds, cancel, scrolling, no mouse drag)", §26) is P-22's, including that vertical scrolling still works.
 - **Already decided, not reopened here:**
@@ -3704,6 +3704,1951 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-22 Browser test suite**
 
 - Scope: Playwright on Chromium, WebKit and Firefox covering §26. Wired into the blocking `browser` job.
+- **Status: in progress, the current phase.** D0 (the decision record) and D1 (the capability spike, recorded below) are done, on `feat/p22-browser-qa` from `v2` at `1644671`. D1 raised one D0-16 report; the maintainer approved its fix as hardening slice H1, which is done (recorded below). D1b, the evidence completion before D2, is done (recorded below). D2, the final evidence matrix and implementation plan, is done (recorded below). S1, the infrastructure and the harness, is done (recorded below). S2, lifecycle, motion and reflow, is done (recorded below). S3, layout, RTL, progress and forced colours, is done (recorded below). S4 is in progress: S4.1 raised a D0-16 report before its tests were written; the maintainer approved its fix as hardening slice S4-H2, which is done (recorded below). S4.1, focus restoration and `inert`, is done (recorded below). S4.2, focus-within, `aria-keyshortcuts` and the focus rings, is done (recorded below). S4.3, the focus and environment evidence, is done (recorded below). S4.4, the S4 reconciliation, is done (recorded below): The maintainer accepted and closed S4. S5, swipe, is in progress: S5.1, the harness and cross-engine swipe logic, is done (recorded below). S5.2, trusted Chromium touch, scroll arbitration, capture and motion continuity, is done (recorded below). S5.3, the swipe browser evidence, is done (recorded below). S5.4, the S5 reconciliation, is done (recorded below): The maintainer accepted and closed S5. AC-SW-1's layers A and B are blocking; layer C is S6's device checkpoints (MC-2, MC-3 and MC-4, below). S6's preflight found a WebKit failure in a CF-35 test; the maintainer accepted its test-only correction (`6599f24`, the S6 preflight record, below). The maintainer accepted S6.1, the manual QA page (`a73bff8`), after opening it in Windows Chrome, and S6.1a, its 10-minute progress preset (`51290fb`). MC-5 was first recorded in part (the MC-5 record, below); with every case reported, the maintainer accepted it: **MC-5 passed** on the maintainer's visual evidence, with its limitations recorded (the MC-5 final record, below). MC-5 does not complete AC-PR-1's manual layer. MC-6 passed, accepted on the maintainer's real-browser observations under Windows High Contrast (the MC-6 record, below). MC-2, MC-3 and MC-4 passed on real phones (their records, below), so AC-SW-1's real-device layer (layer C) passed. MC-1 (macOS Safari) and MC-7 (real pen hardware) are unverified gaps, carried forward; MC-8 has its final status, with its real Safari parts unverified (the S6.3c record, below). The maintainer approved the MC-8 checklist and S6.1b, the page's additions for it (`44f5338`). MC-8's Windows desktop portion passed (the MC-8 Windows record, below), and its WebKit-engine CF-12 and CF-13 checks passed in headed Playwright WebKit (S6.3-0, in the S6.3a record). S6.2's first local soak did not pass: one WebKit CF-35 failure led to a test-only correction of the CF-35 X assertion (the S6.2 record, below). **S6.2 is complete:** the rerun local soak and the formal `@evidence` rerun passed (the S6.2 record, below), and three CI `browser` runs passed (the S6.3c record, below). **S6.3 is done:** S6.3a, the reconciliation (`2797648`); S6.3b, the carry-forwards into P-26, P-29 and §37 (`c2d71bf`); and S6.3c, the final reconciliation (recorded below). Next: the maintainer's acceptance of S6, then the publication review and the PR into `v2`.
+- Defects: none. Appendix A assigns no defect to P-22.
+- Acceptance: P-22 provides the real-browser proof (§26) of AC-MO-1, AC-MO-2, AC-MO-3, AC-LC-2, AC-PR-1, AC-RTL-1 and AC-SW-1, and adds the blocking `browser` gate to AC-CI-1 (§28). Every other criterion must not regress. D0 weakens no criterion: where D1 shows that part of one cannot be verified by Playwright in an engine, D2 records the gap and the manual checkpoint that covers it. The criterion's wording, and the three-engine requirement of §26, change only by a separate decision recorded in this plan.
+- **Starting point (the D0 review, at `1644671`):**
+  - No Playwright, browser binaries, browser harness or `browser` job exist. CI has four blocking jobs on Node 24 (P-06).
+  - The repository tests with React 18.2. P-23 owns React 19.
+  - The demo is the P-17 review harness: without `?production-css` its prototype stylesheet masks the production stylesheet, and P-25 replaces it.
+  - ESLint uses `projectService`, so every linted TypeScript file must belong to a tsconfig project, and `typecheck` checks the library, test and tooling projects separately.
+  - `protectedTarget` (P-21) walks from the retargeted `event.target` with `contains` and `parentElement`, neither of which crosses a shadow boundary. The swipe tests have no shadow-root case.
+  - The P-15 to P-21 checks that jsdom cannot make are listed below, per phase, and indexed as CF-1 to CF-43 at the end of this entry.
+- **Decisions locked before implementation (D0).** They govern how P-22 gathers and classifies evidence. They reopen no P-16 to P-21 decision: where they mention earlier behaviour, they describe evidence to gather, not a change.
+  1. **D0-1, evidence classes.** P-22 uses four:
+     1. **Blocking automated:** a normative product or browser contract that Playwright can verify reliably. A failure blocks the `browser` gate.
+     2. **Automated evidence:** browser behaviour that can be collected automatically but is not frozen into a normative CI assertion.
+     3. **Manual recorded checkpoint:** behaviour that needs real browsers, devices, operating-system features or hardware that the automated matrix cannot faithfully reproduce.
+     4. **Evidence-only observation:** browser behaviour gathered to inform a later decision, without declaring the observed browser quirk to be the product contract.
+
+     A browser quirk never becomes a normative assertion merely because it is observable. Each CF item gets its final class at D2, once D1 has established what Playwright can actually do. The index below records only the constraints D0 already places on some items.
+
+  2. **D0-2, pointer-triggered focus restoration.** P-22 gathers browser evidence for a pointer-triggered close and for a swipe dismissal of a toast that holds focus (CF-8, CF-33). It does not change the §10 and §18 contract on browser evidence alone: the final contract decision waits for P-29's assistive-technology evidence. Unexpected browser behaviour is recorded, not fixed opportunistically.
+  3. **D0-3, Shadow DOM and `composedPath()`** (CF-38, P-21 MINOR-1):
+     - P-22 first reproduces and characterises P-21's protected-target behaviour for interactive elements inside shadow roots in custom content, in real browsers.
+     - `protectedTarget()` is not changed to `composedPath()` pre-emptively.
+     - If the evidence shows a material defect, P-22 stops and reports it under D0-16 before any production change. Only a separate maintainer decision may then authorise a narrowly scoped hardening fix.
+     - Without an approved production change, P-22 supplies the evidence for the Shadow DOM boundary P-26 documents.
+  4. **D0-4, pen pointer-ID reuse and the stale pending candidate** (CF-37):
+     - Whether a same-ID `pointerdown` re-bases a stale pending candidate is not decided yet. The decision waits for real pen hardware evidence.
+     - P-22 records: implicit pointer capture; `buttons` during contact and hover; barrel-button behaviour where available; pointer-ID reuse across contacts; and the stale pending candidate's behaviour.
+     - D0 authorises no production change.
+  5. **D0-5, Playwright touch and pen capability.** Nothing is assumed about what Playwright provides in Chromium, WebKit or Firefox. D1 establishes empirically, per engine:
+     - trusted touch input;
+     - touch dragging;
+     - real scroll arbitration;
+     - `pointercancel`;
+     - pointer capture;
+     - pen input;
+     - mouse input;
+     - the relevant limitations of synthetic events.
+
+     The automated and manual split for CF-29 to CF-37 is finalised only at D2, after D1. D0 does not silently weaken the three-engine coverage that §26 and AC-SW-1 require.
+
+  6. **D0-6, blur, visibility and hidden documents.** D1 determines empirically which engines can provide genuine, or sufficiently representative, window `blur` and `focus`, document visibility changes, hidden-document behaviour, and the return and resynchronisation after it (CF-1, CF-5, CF-25, CF-26). Faked browser state is never described as genuine browser lifecycle evidence. Reliable capabilities may become blocking automation; unsupported cases become manual checkpoints or evidence.
+  7. **D0-7, WebKit versus real Safari:**
+     - The blocking automated matrix is Playwright's Chromium, Firefox and WebKit.
+     - Playwright WebKit is not treated as equivalent to complete Safari validation, and its results are never reported as Safari results.
+     - Real Safari is a separate manual checkpoint wherever P-22 needs Safari-specific evidence, for example click without focus (CF-7). Real iOS Safari is a separate real-device checkpoint where relevant.
+     - No macOS CI is added solely to present Playwright WebKit coverage as Safari coverage.
+  8. **D0-8, forced colours and Windows High Contrast:**
+     - Automated coverage uses Chromium's `forced-colors` emulation where applicable (§26).
+     - Real Windows High Contrast is a manual recorded P-22 checkpoint. It covers the carry-forwards assigned to it (CF-14, CF-28): the card edge, the action border, the focus rings, the region ring, the recognisability of each type by its icon, and the progress fill with no track.
+     - P-26's support documentation must later distinguish emulated forced-colours evidence from real Windows High Contrast evidence.
+  9. **D0-9, React version:**
+     - P-22 uses the repository's current React 18.2 baseline. React 19 is not introduced solely for browser testing.
+     - **Reconciliation with §26,** which says the browser suite runs on the latest React. Throughout P-22 the suite runs on React 18.2. This is a recorded, temporary reading of §26, not a silent change, and §26 itself is unchanged.
+     - P-23 owns the React 18/19 compatibility work and the React 19 upgrade and matrix. When P-23 changes the supported React test matrix, it may update the P-22 browser harness.
+  10. **D0-10, browser test target:**
+      - P-22 uses a dedicated, deterministic browser-test harness that exercises the real production implementation and the production stylesheet.
+      - The demo is not the primary target. It carries P-17 review infrastructure, its prototype stylesheet can mask the production one, and P-25 owns its redesign.
+      - The packed npm tarball is not the primary target either. Package consumption stays §27's (P-07, P-23).
+      - When S1 implements the harness, it is deliberately covered by the repository's lint and typecheck structure, not left as an untyped or unlinted test island.
+      - D1 may use disposable spike infrastructure before the permanent S1 harness exists.
+  11. **D0-11, timing:**
+      - P-22 uses real browser timing.
+      - Actual lifecycle events, observable state conditions and bounded tolerances are preferred to arbitrary fixed sleeps.
+      - The harness may override the public motion tokens to slow an animation or transition on purpose, for deterministic observation.
+      - `requestAnimationFrame` may be used inside the page as an observer and frame sampler. It is never mocked to make timing tests pass (§26).
+      - Implementation timing quirks are not frozen into assertions unless they are normative.
+  12. **D0-12, CI shape:**
+      - One blocking `browser` job with three Playwright projects: Chromium, Firefox and WebKit.
+      - The existing hygiene is kept (§28): least-privilege permissions, actions pinned to full commit SHAs, the npm cache, and no permanent debug steps.
+      - Failure artifacts and traces are allowed, produced only where they help with failures.
+      - The blocking gate uses zero retries. Before merge, separate repeat-run (soak) validation looks for flakiness, rather than masking it with CI retries.
+      - D1 and D2 may refine the installation and caching mechanics from measured runtime and Playwright's requirements, but never the three-engine blocking intent.
+  13. **D0-13, visual evidence:**
+      - P-22 adds no visual-regression suite (§26).
+      - Screenshots may be diagnostic artifacts or evidence for manual review. They never become golden-image or pixel-diff assertions.
+      - Items that need human visual judgement (for example CF-23, CF-35, and the appearance in CF-13 and CF-27) stay explicit manual checkpoints or evidence.
+  14. **D0-14, pinch-zoom and `touch-action`** (CF-34, CF-42):
+      - P-21's `touch-action: pan-y` (P-21 D0, decision 16) is kept while evidence is gathered.
+      - P-22 records real-browser and real-device pinch-zoom behaviour.
+      - The value is not changed to `pan-y pinch-zoom`, or to anything else, merely because engines differ.
+      - If evidence shows a material accessibility or UX defect, P-22 stops and raises a separate recorded decision before changing the contract or the production CSS.
+      - P-26 later documents the verified boundary.
+  15. **D0-15, stale status text.** D0 corrects only clearly stale, factual phase-status metadata in this plan: P-20 and P-21 are merged, and P-22 is the current phase. Historical decisions, closure evidence and completed-phase architecture are not rewritten. Corrected at D0: the P-20 and P-21 status lines.
+  16. **D0-16, production defects found by P-22.** P-22 is evidence-first. When browser testing exposes a real production defect, P-22 stops before changing `src/` or the production stylesheet. It reports:
+      - the affected browser, engine or device;
+      - an exact reproduction;
+      - the violated contract or acceptance criterion;
+      - the observed and the expected behaviour;
+      - the evidence;
+      - the likely subsystem or root cause, if known;
+      - the smallest plausible fix scope;
+      - the regression risk.
+
+      The maintainer's approval is required first. A production fix is then an explicit, separately authorised P-22 hardening slice, with focused regression tests. No opportunistic production fix is allowed.
+
+  17. **D0-17, Node version:**
+      - P-22 stays on the repository's current Node 24 baseline.
+      - The planned Node 24 → 26 transition (P-06) is not combined with P-22. It stays separate, on its own schedule.
+      - If the calendar reaches that transition while P-22 is still active, P-22 stops and asks for a maintainer decision rather than changing Node itself.
+- **Sequence.** Each step stops for review:
+  - **D0, decision record (done):** this entry. Documentation only.
+  - **D1, capability and evidence spike (done, recorded below):** not implementation.
+    - It establishes the capability matrix of D0-5 and D0-6 per engine. It also covers what the other decisions depend on:
+      - WebKit's click-to-focus;
+      - forced-colours and reduced-motion emulation per engine;
+      - in-page frame sampling;
+      - the first characterisation of shadow-root targets (D0-3);
+      - installation, caching and runtime measurements for D0-12.
+    - It uses disposable spike infrastructure (D0-10). Nothing from it reaches `src/`, the tests, CI or the package output, and S1 does not inherit it unreviewed.
+    - Any production defect it exposes follows D0-16.
+  - **D2, lock (documentation only, before S1; done, recorded below):**
+    - the final capability matrix;
+    - the final evidence class of every CF item (D0-1);
+    - the harness design;
+    - the timing approach;
+    - the CI mechanics;
+    - the list of manual checkpoints, with their browsers, devices and hardware;
+    - the S slices.
+  - **S1 to Sn:** the implementation, defined at D2 and not before (D2 locked S1 to S6, recorded below). Indicatively:
+    - infrastructure and the `browser` job;
+    - lifecycle, motion and reflow;
+    - layout, RTL, progress and forced colours;
+    - focus, `inert` and the environment;
+    - swipe;
+    - the manual checkpoints and the final reconciliation.
+  - **Then:** a focused publication review, the PR into `v2`, CI and a merge commit.
+- **Boundaries:**
+  - **P-23:** React 19, the React 18/19 matrix and the Next.js fixture's Playwright check (§27). P-23 may move the browser harness to the matrix it sets (D0-9).
+  - **P-25:** the demo.
+  - **P-26:** the documentation of every boundary P-22 verifies: Shadow DOM (D0-3), `touch-action` and pinch-zoom (D0-14), and forced colours, distinguishing emulation from real Windows High Contrast (D0-8).
+  - **P-29:** assistive technology; the operating system's own reduced-motion setting; the assistive-technology evidence and the final decision on pointer-triggered restoration (D0-2).
+- **D1 record: capability and evidence spike.** Capability discovery, not product validation. Nothing here closes a CF item; D2 locks the classification.
+  - **Infrastructure (disposable, removed before this record was committed):**
+    - A spike directory in the session's scratch space, outside the repository, with its own `package.json` and `@playwright/test` 1.63.0. Browsers were downloaded into the spike directory.
+    - The harness page was bundled with the repository's own esbuild from the real `src/` (React 18.2), and loaded a byte-identical copy of `src/styles.css`. It had an event log, an in-page `requestAnimationFrame` sampler and a capture probe.
+    - The root `package.json`, the lockfile, `src/`, the tests, CI, the demo, fixtures and scripts were untouched. No production code was changed to make an experiment succeed.
+  - **Environment:** Windows WSL2, Ubuntu 26.04.1, Node 24.21.0, WSLg for headed runs.
+    - Engines: Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6, all from Playwright 1.63.0.
+    - Playwright did not validate this distribution. Without root, the missing system libraries (Chromium needed NSS; WebKit needed GTK 4, GStreamer and ICU) were extracted from the distribution's packages into the spike directory.
+    - WebKit's bundled launcher overwrites `LD_LIBRARY_PATH`, so it ran through a spike-local wrapper (`executablePath`). The browser files were not modified.
+    - These workarounds are local. CI on `ubuntu-latest` would install dependencies normally; D2 decides how.
+  - **Input kinds.** Every result below names the kind of input used:
+    - **Trusted Playwright input:** `page.mouse`, `page.keyboard` and `page.touchscreen.tap`.
+    - **Trusted protocol input:** Chromium only, through `newCDPSession`: `Input.dispatchTouchEvent` and `Input.dispatchMouseEvent` with `pointerType: 'pen'`.
+    - **Synthetic:** script-dispatched `PointerEvent`s, with `isTrusted` false.
+  - **Capability matrix.**
+
+    | Capability                                     | Chromium                                                                                                                                                                                                                                                                      | Firefox                                                            | WebKit                                                                                                  | Input kind            | Implication for P-22                                                                                                                                        |
+    | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | Mouse pointer and drag                         | Yes; trusted `mouse`, `buttons` 1 while pressed, capture works                                                                                                                                                                                                                | Same                                                               | Same                                                                                                    | Playwright, trusted   | "A mouse drag never dismisses" is automatable in all three. The library ignored a 200 px mouse drag in every engine.                                        |
+    | Touch tap                                      | `touchscreen.tap()`: trusted `touch`, implicit capture, new `pointerId` per tap                                                                                                                                                                                               | Trusted `touch`, but `pointerId` 0 on every tap (as for the mouse) | Trusted `touch`, the same `pointerId` on every tap; the following `click` reports `mouse`               | Playwright, trusted   | Taps are automatable everywhere. Pointer-ID values and reuse are engine-specific: never assert them.                                                        |
+    | Touch drag                                     | Yes, via CDP touch events: trusted pointer and touch events with real capture                                                                                                                                                                                                 | **No.** Playwright's `touchscreen` has `tap()` only                | **No**                                                                                                  | Protocol / none       | Trusted touch swipes are automatable only in Chromium.                                                                                                      |
+    | Synthetic `PointerEvent` drag                  | Drives the library's swipe: commits past distance, springs back below it, clamps a forbidden direction. `setPointerCapture` throws `NotFoundError`                                                                                                                            | Same; `setPointerCapture` throws                                   | Same; `setPointerCapture` throws                                                                        | Synthetic             | Gesture **logic** is automatable in all three. It never exercises capture, `touch-action`, scrolling or `pointercancel`, and must be labelled synthetic.    |
+    | Vertical scroll from a `pan-y` element         | Yes: trusted `pointercancel`, then real page scroll (0 → 235 px; 325 px from a toast, with no dismissal)                                                                                                                                                                      | Not reproducible                                                   | Not reproducible                                                                                        | Protocol / none       | Scroll arbitration is automatable in Chromium; Firefox and WebKit need real devices.                                                                        |
+    | Diagonals                                      | 20° and 30° from horizontal: no scroll, the gesture continues; 45° and 60°: `pointercancel` and scroll (matches P-21 D1)                                                                                                                                                      | Not reproducible                                                   | Not reproducible                                                                                        | Protocol              | The 45° dead zone is observable in Chromium only.                                                                                                           |
+    | Pointer capture / `lostpointercapture`         | Real: implicit capture on the touched descendant, then explicit capture on the root; both losses observed                                                                                                                                                                     | Real for mouse and tap; never for synthetic events                 | Real for mouse and tap; never for synthetic events                                                      | Trusted               | Capture behaviour mid-gesture (CF-32) is automatable only in Chromium.                                                                                      |
+    | Pen                                            | CDP `pointerType: 'pen'`: trusted `pen` events, swipe commits; hover `buttons` 0; the same `pointerId` on every contact; `buttons` 2 when sent                                                                                                                                | No pen input                                                       | No pen input                                                                                            | Protocol (Chromium)   | Protocol pen is **not** real pen evidence: CDP decides the ID and the buttons. Real pen hardware stays manual (D0-4).                                       |
+    | Pinch-zoom                                     | `Input.synthesizePinchGesture` with mobile emulation zoomed nothing, on a toast or on the page                                                                                                                                                                                | No API                                                             | No API                                                                                                  | Protocol / none       | Not reproducible. Real devices only (D0-14).                                                                                                                |
+    | Window focus and blur                          | Playwright emulates focus: `hasFocus()` stays true and switching pages or contexts fires nothing. With CDP focus emulation off, minimising the window through CDP gives a **genuine** trusted `blur` and `focus`, headless too, and the library sets and clears `data-paused` | Emulated; switching pages fires nothing                            | Emulated; switching pages fires nothing                                                                 | Playwright / protocol | Genuine blur is automatable in Chromium only.                                                                                                               |
+    | Document visibility and hidden documents       | Never `hidden`: not by minimising, a background tab in the same window, or a new page, headless or headed                                                                                                                                                                     | Never `hidden`                                                     | Never `hidden`                                                                                          | —                     | Genuine hidden-document behaviour and T1 resynchronisation are not automatable here. Manual (D0-6). Dispatching `visibilitychange` would be faked evidence. |
+    | Mouse click focus                              | A clicked button takes focus (plain and close)                                                                                                                                                                                                                                | Same                                                               | **Same. Unlike what P-16 records for Safari**                                                           | Playwright, trusted   | Playwright WebKit cannot show Safari's click-without-focus. Real Safari stays manual (D0-7).                                                                |
+    | `:focus-visible` after the Alt+T hotkey        | `false` on the focused toast root                                                                                                                                                                                                                                             | `true`                                                             | `false`                                                                                                 | Playwright, trusted   | Engines differ. It also seems to differ from P-17 S5's manual Chromium review, which saw the rings; see the D2 decisions.                                   |
+    | `:focus-visible` after mouse-close restoration | `false`                                                                                                                                                                                                                                                                       | `false`                                                            | `false`                                                                                                 | Playwright, trusted   | Evidence for the pointer-triggered close question (CF-8). It is not a contract (D0-2).                                                                      |
+    | `prefers-reduced-motion` emulation             | Works: no enter motion, a static spinner, instant reflow                                                                                                                                                                                                                      | Works, the same                                                    | Works, the same                                                                                         | Playwright            | Blocking automation in all three.                                                                                                                           |
+    | `forced-colors` emulation                      | Works: `(forced-colors: active)` matches and system colours resolve (border `rgb(0, 0, 0)`)                                                                                                                                                                                   | **Works**                                                          | **Works**                                                                                               | Playwright            | Wider than §26's "(Chromium)". Real Windows High Contrast stays manual (D0-8).                                                                              |
+    | `prefers-color-scheme` emulation               | Works                                                                                                                                                                                                                                                                         | Works                                                              | Works                                                                                                   | Playwright            | Theme coverage is automatable.                                                                                                                              |
+    | RTL                                            | `:dir(rtl)` matches, the progress fill's origin is at the right (358 px), the close button sits at the left                                                                                                                                                                   | Same                                                               | Same                                                                                                    | DOM                   | AC-RTL-1 is automatable in all three.                                                                                                                       |
+    | CSS animation and `animationend`               | Trusted `animationstart` and `animationend` on the root with the expected `ret-enter-*` and `ret-exit-*` names                                                                                                                                                                | Same                                                               | Same                                                                                                    | Real                  | AC-MO-1 and AC-LC-1 are automatable in all three.                                                                                                           |
+    | Individual properties per frame                | `translate`, `scale`, `opacity` and the spinner's `rotate` interpolate (about 110 distinct values over a slowed 1.8 s enter)                                                                                                                                                  | Same                                                               | Same                                                                                                    | Real                  | Continuity and settled-state assertions are feasible. Left positions settle at `none`, and the exit holds its last frame until removal.                     |
+    | Transition and `transform` interpolation       | Reflow `transitionrun`, `transitionstart` and `transitionend`; the matrix interpolates (largest step about 20 px per frame) to `none`; `offsetParent` is the list                                                                                                             | Same                                                               | Same, **when the trigger and the sampler start in one page task**                                       | Real                  | AC-MO-2 is automatable in all three, under the sampling rule below.                                                                                         |
+    | In-page `requestAnimationFrame` sampling       | Works, not mocked                                                                                                                                                                                                                                                             | Works                                                              | Works                                                                                                   | Real                  | D0-11's observer approach is viable.                                                                                                                        |
+    | Token slowing                                  | Overriding `--ret-enter-duration` and `--ret-exit-duration` on `.ret-toaster` slows the motion, and the lifecycle follows it                                                                                                                                                  | Same                                                               | Same                                                                                                    | Harness CSS           | Deterministic observation without fixed sleeps is feasible (D0-11).                                                                                         |
+    | Browser identity                               | Chromium 153                                                                                                                                                                                                                                                                  | Firefox 155                                                        | WebKit 26.6, the Linux WPE (headless) and GTK (headed) ports, with a **macOS Safari user-agent string** | —                     | See the identity boundary below.                                                                                                                            |
+
+  - **Browser identity boundary (D0-7).**
+    - **What Playwright WebKit proves:** the behaviour of the WebKit engine as Playwright builds it for Linux: layout, CSS animations, transitions, individual transform properties, `:dir()`, media emulation, events and DOM focus.
+    - **What it does not prove about real Safari on macOS or iOS:** Safari's UI-level focus policy (it focused clicked buttons, which P-16 records Safari may not do); iOS touch, scrolling, pinch-zoom and `touch-action`; the platform's compositing and graphics paths; the system's real reduced-motion and contrast settings; Safari's tab and window lifecycle.
+    - Its user-agent string claims macOS Safari, so a user-agent check never identifies Safari in this suite.
+  - **Harness rules learnt in D1:**
+    - **Sampling race.** Starting a frame sampler in one `page.evaluate` call and triggering the change in another missed WebKit's whole 200 ms reflow transition: it looked like no transition at all. Reduced to a pure-DOM FLIP page and re-instrumented on the library, WebKit ran `transitionrun`, `transitionstart` and `transitionend` with full interpolation in three trials, headless and headed. The trigger and its sampler must start in the same page task.
+    - **Not observable from the harness:** CDP-dispatched flicks have coarse timing. A 45 px flick over three moves did not commit by velocity, as P-21 D1 recorded for CDP cadence. Velocity tests need explicit event timing with a margin.
+    - **Headed focus:** in headed mode the window manager (here WSLg) decides real focus, so headed results depend on the host.
+  - **Product evidence gathered on the way.** These are classified provisionally below. None is a verdict.
+    - **MINOR-1 reproduced (D0-3, CF-38).** In a custom toast, a trusted Chromium touch drag that starts on a button inside an open shadow root commits a swipe with reason `swipe`, and the button gets no `click`. The same drag from a light-DOM button never starts one. Synthetic composed events show the same retargeting in Firefox and WebKit. Whether this is material is a D2 decision; no production change was made.
+    - **A dismissal during the snap-back (CF-36, CF-40), synthetic, exit slowed to 900 ms.** P-18's exit animation runs in all three engines and fades to low opacity. In Firefox and WebKit the opacity briefly rises at the start (about 0.92 → 0.97, and 0.93 → 0.94) before falling, while the `settle` transition is still listed. In Chromium it falls from 1. This is evidence for D2, not a finding of an override.
+    - **`inert` with capture (CF-32), Chromium, trusted.** A programmatic dismissal mid-drag: the root loses capture, becomes `inert`, and the next `pointerup` goes to the list.
+  - **D0-16 report: removal restoration scrolls the page.** Disposition: the maintainer approved a fix as P-22 H1, recorded below. The report stands as written at D1.
+    - **Engines:** Chromium 153, Firefox 155, WebKit 26.6 (Playwright, headless).
+    - **Reproduction:**
+      - a page with 4000 px of content, then the `<Toaster />` (`top-right`);
+      - one persistent toast; the page scrolled to the top;
+      - activate its close button, by mouse click or by Alt+T, Tab and Enter.
+
+      The same happens when a toast holding focus is dismissed programmatically.
+
+    - **Observed:** focus goes to the region (§18 step 3), and the page scrolls to the region's position in the document flow: `scrollY` 0 → 3400 in all three engines.
+    - **Expected:** restoration keeps focus in the region (§17.4, §18). Nothing in the plan expects the page to scroll, and a keyboard user loses their place in the page.
+    - **Contract:** §18 and §17.4 do not state that the page must not move; arguably it is implied by "never left on `<body>`". It is related to AC-KB-1, which does not cover it. Whether it violates the contract is the maintainer's call.
+    - **Likely cause:** `restoreFocusFrom` calls `focus()` without `preventScroll` (`src/react/focus.ts`, `tryFocus`) on the region `<section>`, which is `position: static` with zero height. Isolated: a plain `focus()` on the section scrolls in Chromium and Firefox (0 → 3400); `focus({ preventScroll: true })` does not, in any engine. WebKit did not scroll for the isolated plain call, though it did through restoration: an engine detail still to characterise. The neighbouring toasts are `position: fixed`, so focusing them does not scroll.
+    - **Smallest plausible fix:** `preventScroll` on restoration's focus calls, and possibly the hotkey's and Escape's (`useHotkey.ts`). It needs its own regression tests and a check that real browsers still scroll nothing else.
+    - **Regression risk:** low; focus targets are unchanged. Any fix waits for the maintainer and a separately authorised hardening slice (D0-16).
+  - **H1, focus restoration without scrolling (done).** This is the hardening slice authorised by the maintainer after the D1 review, for the D0-16 report above only. It is not D2 and not S1.
+    - **Invariant:** focus restoration caused by a toast's removal or dismissal (§18) never scrolls the surrounding document. This is not a general rule for every programmatic focus in the library.
+    - **Root cause:** `restoreFocusFrom` focused each candidate through `tryFocus`, a plain `focus()`. On the region, a static `<section>` with zero height that sits wherever `<Toaster />` is placed, browsers scroll the page to it.
+    - **Implementation:** one change in `src/react/focus.ts`. `tryFocus` now calls `focus({ preventScroll: true })`. `tryFocus` is module-private, and its only callers are the three steps of `restoreFocusFrom` (the next toast's equivalent control or the next toast, then the previous toast, then the region), which `ToastItem` calls only as a toast starts to exit. So every restoration step is covered, and no other path changes.
+    - **Scope:** restoration only. The hotkey (`useHotkey.ts`, focus entry into the region) and Escape (the return to the recorded element) call `focus()` themselves, not through `tryFocus`. They keep their plain `focus()`. The neighbouring toasts are `position: fixed`, so the change matters in practice for the region; it applies to every step because the invariant concerns restoration as a whole.
+    - **Unchanged:** the §18 target order and its verification, `inert` (still set after restoration in the same layout effect), the lifecycle, the pause reasons (§10), swipe, motion, the public API, and the 30 tokens. CF-12, CF-36 and CF-38 were not touched.
+    - **Regression tests:** `focus-restoration.test.tsx` gains five tests (46 in the file), under `no scrolling (P-22 H1)`. They record each `focus()` call with its element and options:
+      - the region is focused with `{ preventScroll: true }`;
+      - so is the next toast's equivalent control;
+      - with the next and previous toasts refusing focus, the calls are exactly next, previous, region, in that order and each with `preventScroll`;
+      - a clicked close button restores the same way;
+      - Alt+T and Escape still call `focus()` with no options.
+
+      jsdom has no layout or scrolling, so the tests check the request, not a scroll. D1's runs in Chromium, Firefox and WebKit are the browser-level reproduction and the evidence that `preventScroll` stops the scroll. P-22's browser suite reruns that check in S1 or later, as D2 decides.
+
+    - **Mutations:** 2, each detected and restored. With the fix reverted, the four restoration tests fail. With `preventScroll` added to the hotkey, the hotkey test fails. The 41 earlier restoration tests pass unchanged.
+    - **Validation:**
+      - the focused focus and accessibility suites pass (8 files, 426 tests);
+      - the full suite passes (40 files, 1,689 tests);
+      - `format:check`, `lint` with the stylesheet contract, `typecheck`, `typecheck:demo`, `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Provisional classification of CF-1 to CF-43 (D0-1).** Classes: **1** blocking automated, **2** automated evidence, **3** manual checkpoint, **4** evidence-only observation. "Synthetic" marks logic-only automation that is never reported as trusted input. **D2 locks this; it is not final.**
+
+    | ID    | Provisional class                                                                                                                                       |
+    | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | CF-1  | 2 for the blur part in Chromium (CDP minimise); 3 for Firefox, WebKit and genuine page or app switching                                                 |
+    | CF-2  | 1 for the library contract (the focus-within reason follows the DOM); 2 for each engine's focus outcome                                                 |
+    | CF-3  | 2                                                                                                                                                       |
+    | CF-4  | 2 (trusted mouse in all three)                                                                                                                          |
+    | CF-5  | 1 or 2 for blur in Chromium (D2 decides); 3 for blur in Firefox and WebKit, and for visibility in every engine                                          |
+    | CF-6  | 1 for restoration before `inert`, and pointer and click on an inert toast (trusted mouse, all three); 2 for each engine's own focus fix-up              |
+    | CF-7  | 4 in Playwright engines (all three focus on click); 3 in real macOS and iOS Safari                                                                      |
+    | CF-8  | 4, with assistive technology at P-29 (D0-2)                                                                                                             |
+    | CF-9  | 2                                                                                                                                                       |
+    | CF-10 | 2                                                                                                                                                       |
+    | CF-11 | 1 for the DOM attribute; 2 for the accessibility tree (not probed in D1); assistive technology at P-29                                                  |
+    | CF-12 | 1 for the ring styles while `:focus-visible` matches; 4 for when each engine matches it; 3 for appearance                                               |
+    | CF-13 | 1 for no pointer input and stacking (hit-testing); 3 for appearance                                                                                     |
+    | CF-14 | 1 for emulated forced colours (all three engines can); 3 for Windows High Contrast                                                                      |
+    | CF-15 | 1 for positions, narrow viewport and RTL; safe-area insets not probed in D1, likely 3 on devices                                                        |
+    | CF-16 | 1                                                                                                                                                       |
+    | CF-17 | 1, probably; not probed in D1                                                                                                                           |
+    | CF-18 | 1                                                                                                                                                       |
+    | CF-19 | 1                                                                                                                                                       |
+    | CF-20 | 1                                                                                                                                                       |
+    | CF-21 | 1 (with the sampling rule)                                                                                                                              |
+    | CF-22 | 1                                                                                                                                                       |
+    | CF-23 | 3, with 2 for screenshots (D0-13)                                                                                                                       |
+    | CF-24 | 1                                                                                                                                                       |
+    | CF-25 | 1 for hover and focus in all three; blur 1 or 2 in Chromium; 3 for blur in Firefox and WebKit                                                           |
+    | CF-26 | 3 in every engine                                                                                                                                       |
+    | CF-27 | 2 for the computed `clip-path`; 3 for appearance                                                                                                        |
+    | CF-28 | 3                                                                                                                                                       |
+    | CF-29 | 1 in Chromium (trusted); 1 (synthetic) for the logic in Firefox and WebKit; 1 for the mouse in all three; 3 for trusted touch on iOS Safari and Android |
+    | CF-30 | 1 in Chromium; 3 for Firefox and WebKit on real devices                                                                                                 |
+    | CF-31 | 2 in Chromium (protocol pen); 3 for real pen and `touch-action` with a pen                                                                              |
+    | CF-32 | 2 in Chromium; 3 elsewhere                                                                                                                              |
+    | CF-33 | 4, with assistive technology at P-29 (D0-2)                                                                                                             |
+    | CF-34 | 3                                                                                                                                                       |
+    | CF-35 | 1 for continuity in Chromium (trusted) and, synthetic, in Firefox and WebKit; 3 or 4 for the cosmetic one-frame hold                                    |
+    | CF-36 | 2 (observable in all three; D2 judges the Firefox and WebKit bump)                                                                                      |
+    | CF-37 | 3 (real pen hardware); Chromium's protocol pen is not evidence for it                                                                                   |
+    | CF-38 | 2 (reproduced); the next step is D2's materiality decision (D0-3)                                                                                       |
+    | CF-39 | 2 (a mouse press on the body focuses the root in all three)                                                                                             |
+    | CF-40 | 2, with CF-36                                                                                                                                           |
+    | CF-41 | as CF-30                                                                                                                                                |
+    | CF-42 | 4, for P-26                                                                                                                                             |
+    | CF-43 | Not a check: it governs the classification                                                                                                              |
+
+    **Automation gaps, recorded and not weakened:**
+    - AC-SW-1 in Firefox and WebKit: trusted touch, capture, scrolling and `pointercancel`.
+    - CF-5 and CF-26: visibility and hidden documents in every engine.
+    - CF-1, CF-5 and CF-25: blur in Firefox and WebKit.
+    - Real Safari (CF-7), Windows High Contrast (CF-14, CF-28), real pen (CF-31, CF-37) and pinch-zoom (CF-34).
+
+    Each needs its manual checkpoint, named at D2. Whether three-engine coverage of AC-SW-1 can rest on trusted Chromium plus synthetic Firefox and WebKit plus real devices is for D2 to decide, not D1.
+
+  - **D2 decisions required:**
+    1. The D0-16 report above: whether it is a defect, and whether to authorise a hardening slice. Resolved before D2: approved and fixed by H1.
+    2. MINOR-1's materiality (D0-3).
+    3. What counts as three-engine coverage for AC-SW-1, and for the scroll-arbitration part of CF-29 and CF-30, given the touch-drag gap.
+    4. Whether Chromium's CDP-minimise blur is blocking or evidence (CF-5, CF-25), and that visibility and hidden documents are manual.
+    5. Forced-colours emulation in all three engines or only Chromium, since §26 names Chromium but all three support it.
+    6. The CF-12 discrepancy: the Alt+T root does not match `:focus-visible` in Playwright Chromium and WebKit, against P-17 S5's manual Chromium review. Investigate before classifying.
+    7. CF-36: whether Firefox's and WebKit's opacity bump matters.
+    8. CI mechanics (D0-12):
+       - dependencies on `ubuntu-latest` (`playwright install --with-deps`);
+       - browser caching: the downloads were 393 MB Chromium, 261 MB headless shell, 306 MB Firefox and 269 MB WebKit;
+       - headless only;
+       - time: a three-engine motion run took about 46 s here.
+    9. The S1 harness, applying the sampling rule.
+    10. Who supplies each manual checkpoint's browser, device or hardware.
+    11. The probes D1 did not make: the accessibility tree for `aria-keyshortcuts` (CF-11), safe-area insets (CF-15), and fallbacks under `display: none` and overridden tokens (CF-17).
+- **D1b record: evidence completion before D2.** It closes D1's open probes (D2 decision 11), characterises CF-36, and checks H1 in real browsers. Evidence only: no production, test, package or CI change, no D2 classification, and the D1 matrix above is unchanged.
+  - **Infrastructure:** as in D1, and removed before this record was committed.
+    - A disposable spike outside the repository: its own `@playwright/test` 1.63.0, the same engines as D1 (Chromium 153.0.8010.12, Firefox 155.0, WebKit 26.6), locally extracted system libraries, and the WebKit launcher wrapper.
+    - The harness was bundled from the current `src/` (including H1) with a byte-identical copy of `src/styles.css`.
+    - All runs were headless. Where a probe overrode something, it did so in harness CSS only, through the public motion tokens or consumer-style rules, never in production code.
+  - **H1, real-browser check (passed in every engine).** D1's reproduction, re-run against the fixed code: 4000 px of content before `<Toaster />`, the page at the top.
+
+    | Case                                        | Chromium | Firefox | WebKit | Focus afterwards (all three)        |
+    | ------------------------------------------- | -------- | ------- | ------ | ----------------------------------- |
+    | Mouse click on the close button, one toast  | 0 → 0    | 0 → 0   | 0 → 0  | the region (§18 step 3)             |
+    | Alt+T, Tab, Enter on the close button       | 0 → 0    | 0 → 0   | 0 → 0  | the region                          |
+    | Body click, then a programmatic dismissal   | 0 → 0    | 0 → 0   | 0 → 0  | the region                          |
+    | Close of the first of two toasts            | 0 → 0    | 0 → 0   | 0 → 0  | the next toast's close (§18 step 1) |
+    | Programmatic dismissal with nothing focused | 0 → 0    | 0 → 0   | 0 → 0  | `<body>`; not restoration (control) |
+
+    The figures are `scrollY` before and after. Before H1 the region cases went 0 → 3400 (D1). H1 holds in real browsers and the §18 targets are unchanged.
+
+  - **CF-11, `aria-keyshortcuts`:**
+    - **A, the DOM attribute:** reliable in all three engines.
+      - The default gives `Alt+T`.
+      - `hotkey={["ctrlKey", "shiftKey", "KeyK"]}` gives `Control+Shift+K`, and `["F6"]` gives `F6`.
+      - A punctuation hotkey (`["altKey", "Comma"]`) and `hotkey={false}` give no attribute, as P-16 specifies.
+    - **B, the browser accessibility tree:**
+      - **Chromium only,** through CDP `Accessibility.getFullAXTree`: the region node (role `region`, name "Notifications") carries `keyshortcuts` with the same value in every case, and none when the attribute is absent.
+      - **Firefox and WebKit:** Playwright gives no access to their accessibility trees. `page.accessibility` no longer exists in 1.63.
+      - Playwright's `ariaSnapshot()` is computed by Playwright from the DOM, not read from the browser's tree, and it does not include key shortcuts. It is not B evidence.
+    - **C, assistive technology:** not observable through browser automation, and not claimed. P-29.
+    - **Recommended class:** 1 for A in all three; 2 for B in Chromium; B in Firefox and WebKit not automatable here; C at P-29.
+  - **CF-15, safe-area insets:**
+    - **Production rule:** each list's anchored edge is `--ret-offset` plus `env(safe-area-inset-<edge>, 0px)`, and its width is at most `100%` minus both offsets and both horizontal insets.
+    - **Normal contexts:** every `env(safe-area-inset-*)` resolved to `0px`, not to the fallback, in all three engines. That covers desktop, `hasTouch` at 412 px, Playwright's iPhone 15 Pro descriptor (Chromium and WebKit) and the Pixel 7 descriptor (Chromium), with or without `viewport-fit=cover`. The gutters were exactly `--ret-offset` (16 px).
+    - **Non-zero values:** only Chromium's CDP `Emulation.setSafeAreaInsetsOverride` produced them. With 47/20/34/20 px the production rule computed exactly: top 63 px, bottom 50 px, left and right 36 px, width 412 − 32 − 40 = 340 px.
+      - These are values injected through the browser's own `env()` mechanism, not ones provided by a device.
+      - They applied even without `viewport-fit=cover`, which real devices require, so the override does not model that gating. It is a synthetic approximation.
+    - **Firefox and WebKit:** no way to produce non-zero insets.
+    - **Still useful:** the zero-inset layout assertions (gutters, narrow-viewport width, the six positions, RTL), and Chromium's override as evidence of the `calc()` arithmetic.
+    - **Recommended class:** 1 for the zero-inset layout in all three; 2 for Chromium's override arithmetic; **3** for genuine notched-device safe areas (iOS Safari, Android Chrome, with `viewport-fit=cover`).
+  - **CF-17, lifecycle fallback.** Real production lifecycle and CSS, at about 60 frames per second. Times are from dismissal to `onDismiss` (removal from the store), except the "hidden only after" row, which is to the root's removal from the DOM.
+
+    | Scenario                                                                   | Chromium | Firefox | WebKit                         |
+    | -------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+    | Control: normal motion, trusted `animationend` (120 ms)                    | 132 ms   | 131 ms  | 127 ms                         |
+    | Paused by consumer CSS (`animation-play-state: paused`), no `animationend` | 222 ms   | 222 ms  | 222 ms                         |
+    | Paused, exit token 600 ms                                                  | 702 ms   | 704 ms  | 702 ms                         |
+    | `display: none` on the region (hidden before the toast was created)        | 221 ms   | 221 ms  | **about 1 ms**                 |
+    | `display: none`, exit token 1000 ms (enter token 600 ms)                   | 1102 ms  | 1102 ms | **about 1 ms** (enter: 718 ms) |
+    | Region hidden only after the toast was visible                             | 228 ms   | 228 ms  | 226 ms                         |
+    | Normal motion, exit token 600 ms                                           | 615 ms   | 596 ms  | 614 ms                         |
+    - **The fallback works and follows the computed timing:** duration plus the documented 100 ms margin (`LIFECYCLE_FALLBACK_MARGIN_MS`), within a frame. That holds for paused animations in all three engines, and for `display: none` in Chromium and Firefox. An overridden token moves it. Enter fallbacks under `display: none` follow the tokens in all three (about 293 ms; 718 ms with a 600 ms enter token).
+    - **Unrelated events never completed a toast** (paused, 600 ms token: completion still at about 702 ms in every engine):
+      - a trusted `animationend` from a descendant's own animation (three iterations, bubbling);
+      - a synthetic `animationend` with a wrong name on the root;
+      - a synthetic one with the library's name on a descendant.
+    - **WebKit difference, not reduced:**
+      - **Symptom:** when the region is already `display: none` before the toast is created, the exit's fallback read the root's computed style at `exiting` and got the stale `entering` value (`ret-enter-top`, 0.18 s; Chromium and Firefox read `ret-exit-top`, 0.12 s). So it found no exit animation, took the immediate path (§9 rule 3), and the toast was removed about 1 ms after dismissal. `onDismiss` still fired once.
+      - **Conditions:** reproduced twice. It does not happen when the region is hidden after the toast was visible.
+      - **Not reduced:** five pure-DOM reductions stayed correct in WebKit: parser- and script-created elements, production CSS on static markup, `inert`, and either way of reading the property. So whether it is a WebKit engine quirk or an interaction with the library's flow is **undetermined**.
+      - **Impact:** nothing is visible, since the toast is not displayed, and the lifecycle completes (AC-LC-2 holds). The exit's slot frees about 220 ms early. In this one case "the fallback follows an overridden token" (CF-17) does not hold in WebKit.
+      - **Disposition:** D0-16 was not invoked, because no user-visible effect or acceptance criterion is violated. It is flagged for D2: the maintainer decides whether it is accepted, needs more investigation, or is a defect.
+    - **Recommended class:** 1 for completion with no `animationend` (paused) and for token-following, in all three; 1 for completion under `display: none` in all three (AC-LC-2), with its timing 1 in Chromium and Firefox and 2 or 4 in WebKit pending D2; 1 for filtering unrelated events, trusted and synthetic.
+
+  - **CF-36 and CF-40, a dismissal during the snap-back:**
+    - **Method:** a synthetic below-threshold drag (released at opacity 0.898), then a programmatic dismissal 0, 16, 50, 100, 150 or 250 ms after release. Sampling started in the same task as the dismissal (D1's sampling rule). Production timing: a 200 ms settle and a 120 ms exit, so about 8 or 9 frames. `getAnimations()` showed the `opacity` and `transform` transitions and `ret-exit-top` running together.
+    - **Firefox at production timing:** the exit fades from the current value. Its one rise is +0.011 for one frame (dismissal at 16 ms). Otherwise it is monotone.
+    - **WebKit at production timing:** it starts within about 0.01 of the current value (+0.010 for one frame at 16 ms; otherwise slightly below) and is monotone after.
+    - **Chromium at production timing:** the exit starts from **1** on its first frame, whatever the snap-back value. That is a step of up to +0.10 for a dismissal right after release, shrinking as the settle completes: +0.04 at 50 ms, +0.02 at 100 ms, none from about 150 ms. The curve then equals a plain dismissal's exactly (1, 0.966, 0.881, … 0.044). This is what D1 recorded as "falls from 1".
+    - **With the exit slowed to 900 ms (diagnostic only):** Firefox rises +0.071 and WebKit +0.048, over about 200 ms, before fading. That is D1's "bump", and it is about as long as the settle. Chromium steps to 1, then fades.
+    - **Materiality:** at production timing the Firefox and WebKit deviations are at most about 1% opacity for one frame of a roughly 130 ms fade, unlikely to be human-visible. Chromium's step to 1 on the first frame of a dismissal that lands within about 100 ms of a cancelled swipe is a larger change, but brief, and it turns into an ordinary exit fade. The case needs a cancelled swipe followed, within the 200 ms settle, by a dismissal from elsewhere (a timeout cannot occur while the reason held the timer, so it is programmatic, another control, or dismiss-all).
+    - **Recommendation for the maintainer's decision: B,** an accepted cosmetic interpolation difference between engines, not a material defect. Optionally confirm Chromium's first-frame step with a human visual checkpoint on a device (C), since frame metrics cannot judge perceptibility. Not A: no production change is recommended.
+    - **Recommended class:** 2 (automated evidence in all three; never a blocking assertion of an engine's interpolation).
+  - **Remaining evidence gaps after D1b:**
+    - Firefox and WebKit accessibility trees (CF-11 B);
+    - genuine device safe areas (CF-15);
+    - the unreduced WebKit stale-style case (CF-17);
+    - the perceptibility of Chromium's CF-36 step (optional C);
+    - and every gap D1 recorded, which D1b did not address.
+- **D2 record: the final evidence matrix and implementation plan (locked).** Documentation only. D2 sits on top of the D0, D1, H1 and D1b records, which stay as written: where D2 differs from a provisional class or a recommendation above, D2 governs, and the earlier text remains the evidence it rests on. D2 changes no product contract, acceptance criterion, public API, token, or P-16 to P-21 decision.
+  - **Governing rule.** Automation limits decide the evidence method, never the requirement. Where Playwright cannot faithfully produce a behaviour in an engine, the requirement stays and a named manual checkpoint carries it. A criterion or CF item is met only when every layer recorded for it below has passed or been recorded.
+  - **Vocabulary** used below and in the S slices:
+    - **Normative contract:** what the plan requires of the product (§9 to §22, §36). D2 changes none.
+    - **Automated proof:** Class 1. A blocking assertion in the `browser` job.
+    - **Automated evidence:** Class 2. A committed, runnable evidence spec, tagged `@evidence`, that records its observations as attachments or annotations, asserts only that its scenario ran, and runs outside the blocking job (see the harness rules). Its results are recorded in this plan by the slice that adds it.
+    - **Manual proof:** Class 3. A recorded manual checkpoint (MC-1 to MC-8, below) on a named browser, device, operating-system feature or piece of hardware.
+    - **Known observation:** Class 4, or a Class 2 record, of browser behaviour that is not the product contract and is never asserted as one.
+    - **Deferred:** assistive-technology evidence (P-29) and documentation of a verified boundary (P-26).
+    - **Engines:** C, F and W are Playwright's Chromium, Firefox and WebKit. W is never reported as Safari (D0-7).
+    - **Input labels:** **trusted** is Playwright input, or Chromium CDP touch and mouse input, with `isTrusted` true; **protocol** is Chromium CDP input whose properties the protocol decides (pen IDs and buttons); **synthetic** is script-dispatched, with `isTrusted` false. A synthetic result is never reported as trusted, touch or device evidence.
+  - **Maintainer decisions D2-1 to D2-15** (approved by the maintainer after the D1b review):
+    1. **D2-1, H1 closed.** Removal restoration focuses through the restoration-only `tryFocus` with `focus({ preventScroll: true })`. The §18 target order, Alt+T and Escape are unchanged. Evidence: the H1 unit regression tests, full repository validation, and D1b's real-browser check (`scrollY` stayed 0 in Chromium, Firefox and WebKit for every reproduced restoration path). P-22 does not reopen H1 unless the permanent suite exposes a regression; S4 makes the D1b check a blocking regression test (H1-R).
+    2. **D2-2, CF-38 Shadow DOM: a confirmed, documented limitation.** A swipe that begins on an interactive element inside a shadow root in custom content is retargeted to the host, so `protectedTarget()` does not recognise the interactive descendant and the swipe can start. It is not fixed in P-22. `composedPath()` is not introduced at D2 or S1 for it. P-22 supplies the evidence (Class 2); P-26 documents the verified boundary; it is a candidate for post-v2 hardening (§37).
+    3. **D2-3, AC-SW-1 and three-engine swipe coverage.** The three-engine requirement of §26 and AC-SW-1 is not weakened. The suite distinguishes three layers:
+       - **A, swipe logic:** blocking automation in C, F and W. In F and W it uses synthetic pointer events and is labelled so.
+       - **B, trusted touch integration:** blocking automation in C only (CDP touch). C additionally provides real `pan-y` scroll arbitration, `pointercancel`, pointer capture and trusted diagonal and dead-zone evidence.
+       - **C, real device and browser integration:** manual checkpoints on real devices (MC-2, MC-3, MC-4) for what Playwright cannot produce in F and W, and for real-device Chromium.
+
+       Synthetic events in F and W verify library logic only and are never described as trusted touch integration. AC-SW-1 is met only when A, B and C have all passed.
+
+    4. **D2-4, blur and hidden documents.** Chromium's CDP minimise gives genuine window `blur` and `focus`: Class 2 evidence, not the sole blocking proof of a universal browser contract. Genuine blur in Firefox and Safari is manual. Genuinely hidden documents and the return and resynchronisation after them are Class 3 in every engine. A dispatched `visibilitychange` never substitutes for hidden-document evidence.
+    5. **D2-5, forced colours.** Emulated `forced-colors: active` works in all three engines (D1), so the testable normative CSS contract (§17.5) is blocking automation in C, F and W. This extends §26's "(Chromium)" and D0-8's Chromium-only expectation on measured capability; it weakens nothing. Real Windows High Contrast stays a Class 3 checkpoint (MC-6). P-26 distinguishes emulated evidence from real Windows High Contrast evidence.
+    6. **D2-6, the CF-12 focus-visible discrepancy.** Whether an engine matches `:focus-visible` after script focus (Alt+T, restoration) differs between engines (D1) and from P-17 S5's manual Chromium review. It is Class 2 automated evidence plus manual evidence. P-22 does not change production focus-ring behaviour to make engines agree, and no engine's heuristic becomes the product contract.
+    7. **D2-7, CF-36 and CF-40 opacity.** The snap-back → dismissal opacity behaviour is an accepted cosmetic interpolation difference: Class 2. At production timing the Firefox and WebKit deviations are about frame-level and negligible; Chromium can step toward opacity 1 on the first frame of a dismissal right after release; D1's larger bump came from deliberately slowed diagnostic timing. P-18 and P-21 motion code is not changed for it. An optional visual observation on a device may be recorded (MC-8); it is not a release-blocking defect on current evidence.
+    8. **D2-8, CF-11 `aria-keyshortcuts`.** The DOM attribute is Class 1 in C, F and W. Chromium's accessibility-tree exposure (CDP) is Class 2. Firefox's and WebKit's accessibility trees are not reachable with the established Playwright tooling: a recorded gap, not a pass. Screen-reader and assistive-technology discoverability is P-29's. DOM or Chromium-tree evidence never claims assistive-technology support.
+    9. **D2-9, CF-15 safe areas.** The zero-inset layout is Class 1. Chromium's CDP safe-area override arithmetic is Class 2, an approximation that is never described as notched-device evidence. Real non-zero safe areas on notched devices are Class 3 (MC-2, MC-3).
+    10. **D2-10, CF-17 lifecycle fallback.** The normal fallback contract is Class 1 in C, F and W: the lifecycle completes when the expected `animationend` is absent; the fallback follows the computed animation timing; an overridden public motion token moves it; unrelated animation events never complete a toast. D1b measured about 222 ms by default and about 702 ms with a 600 ms exit token: the computed duration plus the 100 ms margin.
+        - **WebKit `display: none` observation.** With the region already `display: none` before the toast is created, WebKit read a stale computed animation style and completed the exit fallback in about 1 ms. The lifecycle still completes and nothing is visible. Pure-DOM reductions did not reproduce it; the root cause is undetermined.
+        - **Disposition:** not a confirmed P-22 production defect; no production change; recorded as Class 2 evidence and a known WebKit observation; exact fallback timing in that hidden-before-creation case is never a blocking assertion. If the permanent suite shows a user-visible or lifecycle-correctness defect, D0-16 applies before any production change.
+    11. **D2-11, CI shape.** One blocking `browser` job with Playwright projects for Chromium, Firefox and WebKit; zero retries; least-privilege permissions, SHA-pinned actions, the npm cache and no permanent debug steps; traces and artifacts on failure only. D1's cost (about 1.2 GB of browser downloads; about 46 s for a representative three-engine motion run) is accepted. A separate repeat (soak) validation before merge looks for flakiness instead of hiding it with retries.
+    12. **D2-12, the sampling rule.** When the harness observes an animation or reflow from its first frame, the trigger and the frame sampler start in the same page task, never in separate round-trips. `requestAnimationFrame` is an observer only and is never mocked.
+    13. **D2-13, real browser and device boundaries.** The final evidence record separates Playwright automation from real-device and manual evidence. Manual categories include, where applicable: real macOS Safari; real iOS Safari; real Android Chrome; real non-zero safe areas on notched devices; real Windows High Contrast; real pen hardware; genuine hidden-document and background behaviour; Firefox and WebKit touch and scroll integration that Playwright cannot produce; and pinch-zoom. Playwright WebKit is never labelled Safari evidence.
+    14. **D2-14, React.** The permanent browser suite runs on the repository's React 18.2 baseline. P-23 owns React 18/19 compatibility, React 19 and the matrix, and may move the harness to it. React 19 is not added to P-22 to satisfy §26's "latest React" wording: as D0-9 records, this is a temporary P-22 reading of §26, and §26 is unchanged.
+    15. **D2-15, Node.** P-22 stays on Node 24 and is not combined with the Node 26 transition. P-06 records Node 26 becoming Active LTS on 2026-10-28, with the move after that date. If P-22 is still active on or after 2026-10-28, the next slice does not start until the maintainer decides (D0-17).
+  - **D1's "D2 decisions required", resolved:**
+    1. The D0-16 report: fixed by H1 (D2-1).
+    2. MINOR-1: a documented limitation, not fixed in P-22 (D2-2).
+    3. Three-engine swipe coverage: the A, B and C layers (D2-3).
+    4. Blur: Class 2 in Chromium; manual in Firefox and Safari; hidden documents manual everywhere (D2-4).
+    5. Forced colours: all three engines (D2-5).
+    6. CF-12: evidence, no product change (D2-6).
+    7. CF-36: accepted cosmetic difference (D2-7).
+    8. CI mechanics: D2-11 and the CI mechanics below.
+    9. The S1 harness: the harness design below, applying D2-12.
+    10. Manual checkpoint supply: the maintainer (manual checkpoints, below).
+    11. D1's unmade probes: completed by D1b and classified by D2-8, D2-9 and D2-10.
+  - **Manual checkpoints.** The maintainer supplies every browser, device, operating-system feature and piece of hardware below, and records: the device or machine, the operating-system and browser versions, the date, the case-by-case result, and any observation. S6 serves the harness to the device (S1's `browser:serve`). A checkpoint is fresh P-22 evidence: P-21's device approvals never satisfy one (CF-43), and neither does a Playwright run. If a device or browser is not available, the case is recorded as an **unverified gap** and reported to the maintainer before the PR; it is never passed silently.
+
+    | ID   | Environment                                                                                                                                                          | Covers                                                                                                                                                                                                                                   |
+    | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | MC-1 | Real macOS Safari, current stable                                                                                                                                    | CF-7 click without focus, reported apart from the keyboard path; CF-8's Safari path; CF-12 rings after Tab, Alt+T and restoration; CF-1, CF-5 and CF-25 genuine blur by window and app switching; CF-26 hidden documents                 |
+    | MC-2 | Real iOS Safari on a notched iPhone                                                                                                                                  | CF-29, CF-30 and CF-41 touch swipe, vertical scroll, diagonals and `pointercancel`; CF-32 where observable; CF-34 pinch-zoom; CF-15 safe areas with `viewport-fit=cover`; CF-7 tap without focus; CF-26 backgrounding; CF-39 touch press |
+    | MC-3 | Real Android Chrome on a device with a display cutout                                                                                                                | CF-29, CF-30 and CF-41; CF-34; CF-15 safe areas with `viewport-fit=cover`; CF-26 backgrounding; CF-39 touch press                                                                                                                        |
+    | MC-4 | Real Firefox for Android (Gecko) on a touch device                                                                                                                   | CF-29, CF-30 and CF-41, the Gecko touch-integration layer of AC-SW-1; CF-32 where observable; CF-34                                                                                                                                      |
+    | MC-5 | Real desktop Chrome and desktop Firefox in a normal operating-system session                                                                                         | CF-1, CF-5 and CF-25 genuine blur by window and app switching; CF-26 hidden tab, minimised window, hidden for more than about 5 minutes (intensive throttling) and occlusion-only hiding, where the platform produces them               |
+    | MC-6 | Real Windows High Contrast (a Windows contrast theme) in Edge or Chrome, and in Firefox                                                                              | CF-14 card edge, action border, `Highlight` rings, region ring, each type recognisable by its icon; CF-28 `CanvasText` fill with no track; CF-12 and CF-13 rings under it                                                                |
+    | MC-7 | Real pen hardware, in each engine the maintainer's hardware allows (for example a Windows pen device for Chromium and Firefox, and an iPad with a stylus for Safari) | CF-31 pen swipe and `touch-action` with a pen; CF-37 implicit capture, `buttons` on hover and with the barrel button, pointer-ID reuse, the stale pending candidate; CF-39 pen press. An engine without hardware is an unverified gap    |
+    | MC-8 | Human visual review in each engine, aided by screenshots and frame captures (D0-13); a Playwright build counts for its engine only, never for Safari                 | CF-12 and CF-13 ring appearance; CF-23 the `scale` × `transform` overlap; CF-27 the strip's corner and straight edge; CF-35 the one-frame fly-out hold; optional: CF-36 Chromium's first-frame step                                      |
+
+  - **Final classification of CF-1 to CF-43.** Classes as D0-1. Where a CF item has layers of different evidence quality, each layer has its own class. "H1-R" is the H1 browser regression, which is not a CF item. Every CF item stays traceable even where it shares evidence with another.
+
+    | ID    | Final classes, by layer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Slice  | Manual                 | Destination and overlap                                                                         |
+    | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------- | ----------------------------------------------------------------------------------------------- |
+    | CF-1  | **2** (C, CDP minimise): genuine window blur and return while a toast holds focus; `window-blur` sets and clears `data-paused` and the focus-within reason survives. **3:** genuine window and app switching in Firefox, Safari and desktop Chrome                                                                                                                                                                                                                                                                                                                                                                           | S4     | MC-1, MC-5             | Overlaps CF-5, CF-25                                                                            |
+    | CF-2  | **1** (C F W): when the focused node inside a toast is removed or re-keyed, the `focus-within` reason follows the DOM (P-15 reconciliation) and the toast does not stay paused. **2** (C F W): each engine's events and focus outcome when a focused control becomes disabled, hidden or `inert`                                                                                                                                                                                                                                                                                                                             | S4     | —                      | A toast left paused after focus has genuinely left is a D0-16 report. Overlaps CF-3, CF-6       |
+    | CF-3  | **2** (C F W): where each engine puts focus when a focused node is removed outside restoration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | S4     | —                      | The library's own restoration is CF-6 and H1-R                                                  |
+    | CF-4  | **2** (C F W, trusted mouse): whether and when `hover` sets when a stack appears under a stationary pointer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | S4     | —                      | Not a contract; never asserted                                                                  |
+    | CF-5  | Blur: **2** (C, CDP minimise); **3** in Firefox and Safari. Visibility and hidden documents: **3** in every engine; a dispatched `visibilitychange` is never evidence (D2-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                 | S4, S6 | MC-1, MC-2, MC-3, MC-5 | Overlaps CF-1, CF-25, CF-26                                                                     |
+    | CF-6  | **1** (C F W, trusted mouse and keyboard): restoration moves focus to the §18 target before the exiting toast is `inert`; focus stays there once `inert` applies (no browser fix-up contradicts it); a pointer press or click on an inert exiting toast dismisses and focuses nothing. **2** (C F W): each engine's handling when a focused element becomes `inert` without restoration                                                                                                                                                                                                                                      | S4     | —                      | With H1-R                                                                                       |
+    | CF-7  | **4** (C F W): all three Playwright engines focus a clicked button, so they cannot show click without focus; recorded, never asserted. **3:** real macOS Safari and iOS Safari, reported apart from the keyboard path                                                                                                                                                                                                                                                                                                                                                                                                        | S4, S6 | MC-1, MC-2             | Feeds CF-8 and P-29                                                                             |
+    | CF-8  | **4** (C F W): the restoration target and `:focus-visible` after a mouse close. The contract decision waits for P-29 (D0-2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | S4     | MC-1 (via CF-7)        | P-29. Overlaps CF-33                                                                            |
+    | CF-9  | **2** (C F W): whether a toast revived in the commit in which it was exiting briefly refuses focus                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | S4     | —                      | A user-visible refusal is a D0-16 report                                                        |
+    | CF-10 | **2** (C F W): the order of restoration, focus events, `inert` and the focus-within handover                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | S4     | —                      | Its outcome is asserted only through CF-6                                                       |
+    | CF-11 | **1** (C F W): the DOM attribute (default `Alt+T`; `Control+Shift+K`; `F6`; none for a punctuation hotkey or `hotkey={false}`). **2** (C): `keyshortcuts` in Chromium's accessibility tree. F and W trees: an unverified gap with the established tooling (D2-8)                                                                                                                                                                                                                                                                                                                                                             | S4     | —                      | Assistive technology: P-29                                                                      |
+    | CF-12 | **1** (C F W): the §17.4 ring styles apply while `:focus-visible` matches, reached by trusted keyboard Tab. **2** (C F W): whether each engine matches `:focus-visible` after Alt+T and after restoration (D2-6). **3:** ring appearance, real Safari and Windows High Contrast                                                                                                                                                                                                                                                                                                                                              | S4     | MC-1, MC-6, MC-8       | No production focus-ring change in P-22                                                         |
+    | CF-13 | **1** (C F W): while the region has focus, its ring takes no pointer input and stacks above the lists (hit-testing). **3:** appearance, and under Windows High Contrast                                                                                                                                                                                                                                                                                                                                                                                                                                                      | S4     | MC-6, MC-8             | Its emulated forced-colours styling is CF-14                                                    |
+    | CF-14 | **1** (C F W): under emulated `forced-colors: active`, the testable §17.5 rules: the card edge, the action border, the `Highlight` focus rings, the region ring, the type icons present, and the progress fill with no track (CF-28's emulated layer). **3:** real Windows High Contrast (D2-5)                                                                                                                                                                                                                                                                                                                              | S3     | MC-6                   | P-26 separates emulation from real Windows High Contrast                                        |
+    | CF-15 | **1** (C F W): the six positions, `--ret-offset` gutters with zero insets, narrow-viewport width without horizontal overflow, RTL mirroring with physical positions. **2** (C): CDP safe-area override arithmetic, an approximation. **3:** real notched-device safe areas with `viewport-fit=cover` (D2-9)                                                                                                                                                                                                                                                                                                                  | S3     | MC-2, MC-3             | AC-RTL-1, with CF-24                                                                            |
+    | CF-16 | **1** (C F W): AC-MO-1. Real `ret-enter-*` and `ret-exit-*` playback at all six positions; completion on the root's own trusted `animationend`; the exit holding its last frame until removal; left positions settling with no offset (D-14)                                                                                                                                                                                                                                                                                                                                                                                 | S2     | —                      | AC-MO-1                                                                                         |
+    | CF-17 | **1** (C F W): completion with no `animationend` (paused animation); fallback at the computed duration plus the 100 ms margin; an overridden exit token moves it; unrelated events (a descendant's trusted `animationend`, a wrong name on the root, the library's name on a descendant) never complete; completion under `display: none`, hidden before creation or after visibility; the timing when hidden after visibility. **2** (C F W): the timing when hidden before creation, with the known WebKit observation (D2-10)                                                                                             | S2     | —                      | AC-LC-2                                                                                         |
+    | CF-18 | **1** (C F W): under emulated `prefers-reduced-motion: reduce`, no translation, scale or fade, a static spinner, and a completed lifecycle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | S2     | —                      | AC-MO-3. The operating system's own setting: P-29                                               |
+    | CF-19 | **1** (C F W): the spinner rotates about its own centre, and its animation events never complete the toast                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | S2     | —                      | —                                                                                               |
+    | CF-20 | **1** (C F W): individual `translate`, `scale` and `rotate` interpolate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | S2     | —                      | Shares samples with CF-16, CF-19                                                                |
+    | CF-21 | **1** (C F W, under D2-12): AC-MO-2. Insertion, removal after the exit, and removal plus promotion at the six positions with mixed and custom heights; interruption continuing from the current position; `transform: none` at rest; the root's `offsetParent` is its list                                                                                                                                                                                                                                                                                                                                                   | S2     | —                      | AC-MO-2                                                                                         |
+    | CF-22 | **1** (C F W): reduced-motion reflow is instant, with no reposition transition, fade or scale, and the lifecycle completes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | S2     | —                      | AC-MO-3. The operating system's own setting: P-29                                               |
+    | CF-23 | **2** (C F W): frame metrics and screenshots of the overlapping `scale` × `transform` composition. **3:** human visual evaluation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | S2, S6 | MC-8                   | Only a material, human-visible problem reopens the P-18 and P-19 boundary                       |
+    | CF-24 | **1** (C F W): the fill is anchored at the inline start (left in LTR, right in RTL), depletes toward it, and the vacated space opens at the inline end                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | S3     | —                      | AC-RTL-1, D-11                                                                                  |
+    | CF-25 | **1** (C F W): AC-PR-1. The bar runs only while the toast is `visible` and not `data-paused`; hover and focus freeze it; resume continues from the held fraction without a reset. **2** (C): genuine blur by CDP minimise freezes and resumes it. **3:** genuine blur in Firefox and Safari                                                                                                                                                                                                                                                                                                                                  | S3     | MC-1, MC-5             | AC-PR-1. Overlaps CF-1, CF-5                                                                    |
+    | CF-26 | **3** in every engine: after a genuinely hidden tab or minimised window, the bar shows the store's held value without run-ahead (T1). No automated layer: a dispatched `visibilitychange` is not evidence (D2-4)                                                                                                                                                                                                                                                                                                                                                                                                             | S6     | MC-1, MC-2, MC-3, MC-5 | Overlaps CF-5                                                                                   |
+    | CF-27 | **2** (C F W): the computed `clip-path` at each fraction. **3:** the corner following the card's inner curve and the straight moving edge                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | S3, S6 | MC-8                   | —                                                                                               |
+    | CF-28 | Emulated: **1** (C F W), within CF-14. **3:** Windows High Contrast, the `CanvasText` fill with no track                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | S3, S6 | MC-6                   | With CF-14                                                                                      |
+    | CF-29 | **1** (C F W, synthetic; layer A): commit past the distance threshold; commit by velocity, with explicit event timing and a margin; spring-back below; both directions at centre positions; the forbidden direction clamped; reason `swipe`; no start from a light-DOM interactive descendant. **1** (C, trusted CDP touch; layer B): distance commit, spring-back, centre directions, forbidden clamp, interactive descendants. **2** (C): a trusted velocity commit, since CDP cadence is coarse (D1). **1** (C F W, trusted mouse): a mouse drag never moves or dismisses. **3** (layer C): trusted touch on real devices | S5, S6 | MC-2, MC-3, MC-4       | AC-SW-1 (D2-3). Shadow roots: CF-38                                                             |
+    | CF-30 | **1** (C, trusted CDP touch): vertical page scrolling that starts on a toast works under `pan-y` with no dismissal; `pointercancel` restores the toast with no dismissal. **2** (C): the angles at which Chromium hands a diagonal to scrolling (D1: 20° and 30° continue, 45° and 60° cancel), the browser's arbitration, not the product contract. **3:** scroll, diagonals and `pointercancel` on real devices                                                                                                                                                                                                            | S5, S6 | MC-2, MC-3, MC-4       | AC-SW-1 ("vertical scrolling still works"). Shares evidence with CF-41                          |
+    | CF-31 | **2** (C, protocol pen): pen swipe and pen `touch-action`, never reported as pen evidence. **3:** real pen hardware                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | S5, S6 | MC-7                   | —                                                                                               |
+    | CF-32 | **1** (C, trusted CDP touch): a programmatic dismissal mid-drag ends in exactly one dismissal, with the programmatic reason, and the toast `inert`; a genuine loss of capture mid-drag (`releasePointerCapture` from script) restores the toast with no dismissal (§19). **2** (C): the capture mechanics (`lostpointercapture`, where the next `pointerup` goes). **3:** on real touch devices where observable                                                                                                                                                                                                             | S5, S6 | MC-2, MC-4             | —                                                                                               |
+    | CF-33 | **4** (C trusted; F and W synthetic): the restoration target and `:focus-visible` after a swipe dismissal of a focused toast. The contract decision waits for P-29 (D0-2)                                                                                                                                                                                                                                                                                                                                                                                                                                                    | S5     | —                      | P-29. With CF-8                                                                                 |
+    | CF-34 | **3:** pinch-zoom starting on a toast and on the page, on real devices; not reproducible by automation (D1). `pan-y` is kept (D0-14)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | S6     | MC-2, MC-3, MC-4       | P-26, with CF-42                                                                                |
+    | CF-35 | **1** (C trusted; F and W synthetic): activation mid-reposition, Freeze Y, and repositions during a snap-back and a fly-out keep X with no jump. **2** (C F W): frame metrics of the one-frame fly-out hold. **3:** human judgement that the hold stays cosmetic                                                                                                                                                                                                                                                                                                                                                             | S5, S6 | MC-8                   | —                                                                                               |
+    | CF-36 | **2** (C F W): opacity of a dismissal during the snap-back at production timing, an accepted cosmetic difference (D2-7). **1** (C F W, synthetic): the toast still completes its exit and is removed. Optional **3:** Chromium's first-frame step, observed on a device (non-blocking)                                                                                                                                                                                                                                                                                                                                       | S5     | MC-8 (optional)        | With CF-40. No P-18 or P-21 motion change                                                       |
+    | CF-37 | **3:** real pen hardware: implicit capture, `buttons` on hover and with the barrel button, pointer-ID reuse across contacts, and the stale pending candidate. Chromium's protocol pen is not evidence for it                                                                                                                                                                                                                                                                                                                                                                                                                 | S6     | MC-7                   | D0-4: the re-base decision follows the evidence; no production change without D0-16             |
+    | CF-38 | **2** (C trusted touch; F and W synthetic composed events): a swipe from an interactive element inside an open shadow root starts and commits, while the light-DOM equivalent never does. Evidence of a confirmed limitation, never asserted as the contract (D2-2)                                                                                                                                                                                                                                                                                                                                                          | S5     | —                      | P-26 documents the boundary; post-v2 candidate (§37). The light-DOM rule is Class 1 under CF-29 |
+    | CF-39 | **2** (C F W, trusted mouse; C, trusted touch): a press on the toast body focuses the root (`tabindex="-1"`) and sets the focus-within reason. **3:** touch and pen presses on real devices                                                                                                                                                                                                                                                                                                                                                                                                                                  | S5, S6 | MC-2, MC-3, MC-7       | Existing pointer-focus behaviour, not a contract                                                |
+    | CF-40 | **2** (C F W): with CF-36, that no running opacity transition overrides P-18's exit fade (D2-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | S5     | —                      | Same specs as CF-36, tracked separately                                                         |
+    | CF-41 | As CF-30: **1** (C, trusted); **2** (C, diagonal angles); **3** on real devices                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | S5, S6 | MC-2, MC-3, MC-4       | Shares evidence with CF-30, tracked separately                                                  |
+    | CF-42 | **4:** the evidence on retaining `touch-action: pan-y`, assembled from CF-30, CF-34 and CF-41. No CSS change (D0-14)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | S6     | MC-2, MC-3, MC-4       | P-26                                                                                            |
+    | CF-43 | Not a check. A rule: P-21's iPhone Safari and Android Chrome feel approvals satisfy no CF item; every manual layer above is fresh, recorded P-22 evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | S6     | —                      | —                                                                                               |
+    | H1-R  | **1** (C F W): D1b's five H1 cases, with 4000 px before `<Toaster />`: `scrollY` unchanged, and focus on the §18 target (the control case stays on `<body>`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | S4     | —                      | AC-KB-1 must not regress                                                                        |
+
+    **Where D2 differs from D1's provisional table:**
+    - CF-12: the timing of `:focus-visible` is Class 2, not 4 (D2-6).
+    - CF-17: the timing when the region is hidden before creation is Class 2 in every engine, not 1 in Chromium and Firefox, so no blocking assertion depends on an engine's handling of that case (D2-10). The fallback-timing contract is proven by the paused-animation cases.
+    - CF-29: a trusted velocity commit in Chromium is Class 2; velocity is blocking in layer A.
+    - CF-30 and CF-41: the diagonal hand-over angles are Class 2, the browser's arbitration.
+    - CF-32: the library outcomes are Class 1 in Chromium, and the capture mechanics stay Class 2.
+    - CF-35: the one-frame hold is Class 2 evidence plus a Class 3 human judgement, instead of "3 or 4".
+    - CF-36: lifecycle completion after the dismissal is Class 1.
+    - CF-39: D1's evidence was a mouse press; the item asks about touch and pen, so the touch and pen layers are added.
+
+  - **Acceptance criteria covered by P-22.** Each is met only when every listed layer has passed. Wording unchanged.
+
+    | Criterion | Blocking automation (C F W unless stated)                                | Evidence and manual layers                                            |
+    | --------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+    | AC-MO-1   | CF-16, CF-20                                                             | —                                                                     |
+    | AC-MO-2   | CF-21                                                                    | CF-23 (MC-8)                                                          |
+    | AC-MO-3   | CF-18, CF-22                                                             | The operating-system setting: P-29                                    |
+    | AC-LC-2   | CF-17                                                                    | CF-17's Class 2 timing                                                |
+    | AC-PR-1   | CF-25                                                                    | CF-25 blur (Class 2 in C; MC-1, MC-5); CF-26 (MC-1, MC-2, MC-3, MC-5) |
+    | AC-RTL-1  | CF-15, CF-24                                                             | —                                                                     |
+    | AC-SW-1   | CF-29 layer A (C F W) and mouse (C F W); CF-29 layer B, CF-30, CF-41 (C) | CF-29, CF-30, CF-41 layer C (MC-2, MC-3, MC-4); CF-38 boundary (P-26) |
+    | AC-CI-1   | The blocking `browser` job (S1)                                          | —                                                                     |
+    | AC-KB-1   | Must not regress: H1-R, CF-6                                             | —                                                                     |
+
+  - **Harness design (locked for S1).**
+    - **Target:** a dedicated page under `browser/harness/` that mounts the real public entry, `src/index.ts`, with React 18.2, built in production mode, and loads `src/styles.css` byte for byte, served as a static file and never processed by a CSS pipeline. Not the demo, not its prototype stylesheet, and not the packed tarball (D0-10).
+    - **Build and serving:** Vite, already a direct dev dependency, through a dedicated config for the harness, started by Playwright's `webServer`. The only new dependency is `@playwright/test`.
+    - **No test hooks in `src/`.** The harness drives the library only through its public API, consumer-style CSS and the DOM.
+    - **Harness API (`window`):** mount `<Toaster />` with given props; create, replace and dismiss toasts; set `dir`; apply token overrides on `.ret-toaster` through harness CSS; a long-page fixture for H1-R; an event log (animation, transition, pointer, focus and `onDismiss` with its reason and time); and a helper that starts a trigger and its `requestAnimationFrame` sampler in the same task (D2-12). Scenarios are selected through the URL so each test starts from a fresh page.
+    - **Location and tooling:** `playwright.config.ts` at the root; specs in `browser/tests/`; a `tsconfig.browser.json` added to `typecheck` and the root references, so ESLint's `projectService` covers every file (D0-10); Prettier as for the rest of the repository. Vitest's include is `src/**/*.test.{ts,tsx}`, so the specs are already outside it; S1 confirms that and adds an exclusion only if needed.
+    - **Scripts:** `test:browser` (the blocking suite, `--grep-invert @evidence`), `test:browser:evidence` (the `@evidence` specs) and `browser:serve` (the harness for manual checkpoints, reachable from a device on the local network only when asked).
+    - **Evidence specs:** Class 2 and Class 4 specs carry the `@evidence` tag, never run in the blocking job, and assert only that their scenario ran. They are run by each slice that adds them and again at S6, and their observations are recorded in this plan.
+    - **Engine gating:** a test that needs one engine (Chromium CDP touch, pen, minimise, the accessibility tree, safe-area overrides) skips elsewhere with a reason naming the manual checkpoint or gap that covers it, so the report shows the gap.
+  - **Timing approach (locked):**
+    - Real browser timing (D0-11). Waits are on events, observable state or `expect.poll` with bounded timeouts, never fixed sleeps. A deliberate delay is allowed only where the scenario needs one (a dismissal some milliseconds after release), as a named constant.
+    - Token slowing through harness CSS is allowed for observation. Production timing is used wherever the contract is about production timing (CF-36, CF-40).
+    - Fallback timing (CF-17) is checked against the computed duration plus the 100 ms margin, with a strict lower bound (never earlier, less one frame) and a generous, named upper bound for CI noise, set in S2 from measurement and confirmed by the soak. Early completion is the defect; lateness is noise.
+    - Motion is asserted through settled states, event names, per-frame continuity with bounded steps, and monotonicity where the contract implies it. An engine's interpolation curve is never asserted.
+  - **CI mechanics (locked for S1):**
+    - A `browser` job in `ci.yml` on `ubuntu-latest`, with the existing triggers, `permissions: contents: read`, Node 24 (`NODE_VERSION`) and a timeout of 20 minutes.
+    - Steps: checkout and `setup-node` at the same pinned SHAs as the other jobs, with `persist-credentials: false` and the npm cache; `npm ci --ignore-scripts --no-audit --no-fund`; `npx playwright install --with-deps chromium firefox webkit`; `npm run test:browser`; on failure only, `actions/upload-artifact` pinned to a full commit SHA, uploading the report and traces with a short retention.
+    - Playwright: `retries: 0`, `forbidOnly` in CI, headless, one worker in CI to begin with (raised only if the soak shows timing stays deterministic), traces and screenshots retained on failure only.
+    - Browser binaries are not cached in S1. The cost is accepted (D2-11); caching is revisited only with measurement and a recorded decision.
+    - `@playwright/test` is pinned exactly. S1 records its version and the three engine versions. Dependabot updates pass through the blocking job like any other.
+  - **Rules for every S slice:**
+    - One slice at a time, each stopping for the maintainer's review, as D0 to D2 did.
+    - No change to `src/`, the production stylesheet, the public API, the 30 tokens, or a P-16 to P-21 contract. A Class 1 failure that exposes a production defect stops the slice under D0-16.
+    - A Class 1 item that proves unreliable in an engine is not retried, skipped, loosened or downgraded quietly. The slice stops and reports; a class changes only by a decision recorded in this plan.
+    - No disposable spike infrastructure; everything committed is the permanent suite.
+    - Each slice records in this plan what it added, the CF items and layers it covered, its `@evidence` observations, and its validation.
+    - Validation: `format:check`, `lint`, `typecheck`, `npm test`, `npm run test:browser` in all three engines, and `git diff --check`; with `validate:package`, `typecheck:demo` and `build:demo` whenever configuration or dependencies change.
+    - Nothing is pushed until the maintainer asks.
+  - **Implementation sequence (locked):**
+    1. **S1, infrastructure and the harness.**
+       - Entry: D2 committed and reviewed; a clean tree on `feat/p22-browser-qa`; P-22 not past 2026-10-28 without a maintainer decision (D2-15).
+       - Scope: `@playwright/test` pinned exactly; `playwright.config.ts` with the three projects and the settings above; the harness, its API and its tsconfig; lint and typecheck coverage; the scripts; `.gitignore` for the report, results and harness output; confirmation of the Vitest exclusion; the `browser` job; smoke specs (Class 1, C F W): the harness loads, the served stylesheet is byte-identical to `src/styles.css`, and a toast renders and closes by its close button with one `onDismiss`.
+       - Exit: the smoke specs pass in all three engines locally; full validation passes; the job is reviewed against the CI mechanics. Its first real CI run comes when the branch is pushed for the PR.
+       - Not in scope: any CF spec; retries; browser caching; React 19; Node 26; demo changes; production changes.
+    2. **S2, lifecycle, motion and reflow.**
+       - Entry: S1 reviewed.
+       - Scope: CF-16 to CF-22 at their Class 1 layers; CF-17's Class 2 timing (including the WebKit observation) and CF-23's frame metrics as `@evidence`; the fallback tolerance constants from measurement.
+       - Exit: AC-MO-1, AC-MO-2, AC-MO-3 and AC-LC-2 have their blocking automation in all three engines.
+       - Not in scope: a fix for the WebKit `display: none` observation; motion-code changes; swipe.
+    3. **S3, layout, RTL, progress and forced colours.**
+       - Entry: S2 reviewed.
+       - Scope: CF-14, CF-15, CF-24 and CF-25 at their Class 1 layers; CF-28's emulated layer; CF-15's CDP override, CF-25's CDP blur and CF-27's `clip-path` as `@evidence`. Forced-colours assertions compare against system colours resolved in the same page, not hard-coded values.
+       - Exit: AC-PR-1 and AC-RTL-1 have their blocking automation in all three engines; forced colours are blocking in all three.
+       - Not in scope: hidden documents; Windows High Contrast; CSS changes.
+    4. **S4, focus, `inert` and the environment.**
+       - Entry: S3 reviewed.
+       - Scope: H1-R; CF-2, CF-6, CF-11, CF-12 and CF-13 at their Class 1 layers; CF-1, CF-3, CF-4, CF-5 (blur), CF-9, CF-10, CF-11 (Chromium tree) and CF-12 (script focus) as `@evidence`; CF-7 and CF-8 as Class 4 `@evidence`. If trusted Tab does not produce `:focus-visible` in an engine, S4 stops and reports instead of forcing it.
+       - Exit: H1-R blocking in all three engines; the focus layers recorded.
+       - Not in scope: a change to restoration, the hotkey, Escape or the focus rings; a pointer-close contract change (D0-2); a dispatched `visibilitychange`.
+    5. **S5, swipe.**
+       - Entry: S4 reviewed.
+       - Scope: CF-29 layers A and B and the mouse; CF-30, CF-32 and CF-41 at their Chromium Class 1 layers; CF-35 continuity; CF-36's completion; CF-29's trusted velocity, CF-30's and CF-41's diagonals, CF-31, CF-32's capture mechanics, CF-35's hold, CF-36, CF-38, CF-39 and CF-40 as `@evidence`; CF-33 as Class 4 `@evidence`. Velocity uses explicit event timing with a margin.
+       - Exit: AC-SW-1's automated layers (A in all three engines; B in Chromium) are blocking.
+       - Not in scope: `composedPath()` or any Shadow DOM fix; a pen re-base change; a `touch-action` change; motion-code changes.
+    6. **S6, manual evidence, soak, reconciliation and release gate.**
+       - Entry: S5 reviewed.
+       - Scope:
+         - MC-1 to MC-8 recorded, or each missing environment recorded as an unverified gap and reported (CF-26, CF-34, CF-37, CF-42 and every Class 3 layer above);
+         - the `@evidence` specs run again and recorded;
+         - the soak: the blocking suite with `--repeat-each=20` locally in all three engines with no failure, and, once the branch is pushed for the PR, at least three further `browser` runs on it with no failure; a flake is fixed at its cause or reported, never retried;
+         - reconciliation of every CF item, H1-R and acceptance criterion against this record;
+         - carry-forwards written into the P-26 entry (the Shadow DOM boundary, `touch-action` and pinch-zoom, emulated versus real forced colours, and the browser-support evidence) and the P-29 entry (CF-7, CF-8, CF-11, CF-33 and the operating-system settings), and CF-38 into §37;
+         - the status lines; full validation.
+       - Exit: every CF item and AC layer is traced to its evidence or to a reported gap; validation passes; then the publication review and the PR into `v2` (merge commit), when the maintainer asks.
+       - Not in scope: a production change without D0-16; closing a CF item with P-21's approvals (CF-43).
+  - **Contradictions reconciled at D2.** None needs a change to an approved decision.
+    - **§19 and AC-SW-1 against CF-38.** §19 says a swipe never starts on interactive descendants, including inside custom content, and AC-SW-1 says it never starts on interactive elements. Shadow-root controls are the confirmed exception. D0-3 anticipated this outcome, and D2-2 accepts it as a documented boundary: the wording is unchanged, the light-DOM rule is blocking (CF-29), and P-26 documents the boundary. How AC-SW-1's sign-off treats it is P-29's judgement.
+    - **§26 "forced colours (Chromium)" and D0-8:** extended to all three engines on measured capability (D2-5).
+    - **§26 "the latest React":** read as React 18.2 during P-22 (D0-9, D2-14).
+    - **CF-12:** D1's Playwright evidence differs from P-17 S5's manual Chromium review. It is recorded as evidence, not reconciled by changing either (D2-6).
+    - **CF-17:** D1b recommended blocking timing under `display: none` in Chromium and Firefox; D2-10 keeps that hidden-before-creation timing out of the blocking gate in every engine.
+    - **P-20's carry-forward** names WebKit and Firefox for pause synchronisation; D2 makes it blocking in all three.
+  - **Open items that do not block S1:**
+    - The maintainer's access to the MC-1 to MC-7 environments, in particular Firefox for Android, pen hardware per engine, a Windows contrast theme and macOS Safari. Needed by S6.
+    - The Node 26 date (2026-10-28, D2-15).
+    - CF-37's re-base decision, after MC-7.
+    - The pointer-triggered restoration contract (CF-8, CF-33), after P-29.
+- **S1 record: infrastructure and the harness (done).** It follows the D2 harness design, timing approach and CI mechanics. No CF item is covered or classified: the smoke specs prove the infrastructure only. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged.
+  - **Dependency:** `@playwright/test` **1.63.0**, pinned exactly in `devDependencies`. It is the current release and the version D1 and D1b used, so the engines are the same: Chromium 153.0.8010.12 (with its headless shell), Firefox 155.0 and WebKit 26.6. The lockfile adds three packages, `@playwright/test`, `playwright` and `playwright-core`, all 1.63.0 and Apache-2.0, with no install scripts and no other dependencies. Nothing else was added.
+  - **React:** the harness runs the repository's React, the `^18.2.0` range the lockfile resolves to **18.3.1**, which is what "React 18.2" means throughout P-22 (D2-14). A smoke spec checks that the page runs exactly the installed version. Node stays 24.
+  - **Layout:**
+    - `playwright.config.ts`: the three projects and the run settings.
+    - `browser/vite.config.ts`: builds and serves the harness.
+    - `browser/harness/index.html`, `main.tsx` and `api.ts`: the harness page, its entry and the type of its control surface.
+    - `browser/tests/harness.ts` (shared helpers, `openHarness`) and `browser/tests/smoke.spec.ts`.
+    - `tsconfig.browser.json`: the TypeScript project for all of the above.
+    - Generated and ignored: `browser-dist/` (the built harness) and `browser-results/` (results, traces, screenshots and the CI report).
+  - **Projects:** `chromium`, `firefox` and `webkit`, each set by `browserName` with a 1280 × 720 viewport. No device descriptor is used, so no project name or descriptor says Safari. WebKit's own default user-agent string still claims Safari (D1), which is why a user-agent string never identifies Safari in this suite.
+  - **Run settings:** headless; `retries: 0`; `forbidOnly` and one worker under `CI`; traces retained on failure and screenshots only on failure; the `list` reporter, plus an HTML report under `CI` that is uploaded only on failure. No project has an exemption or a skip.
+  - **Harness:**
+    - **Build:** Vite (already a direct dev dependency) with `@vitejs/plugin-react` builds `browser/harness` in production mode from the real public entry, `src/index.ts`: React's production build, no test hooks in `src/`. Playwright's `webServer` runs `npm run browser:serve`, which builds and starts `vite preview` on `127.0.0.1:4180` (`strictPort`; an existing server is never reused, so every run tests a fresh build).
+    - **Production stylesheet:** never imported through Vite's CSS pipeline. A small Vite plugin in `browser/vite.config.ts` reads `src/styles.css` at build time, emits it unchanged as `/styles.css` and links it from the page after Vite has processed the HTML. The guard is a smoke spec, not discipline: the served bytes must equal `src/styles.css`, and it must be the page's only stylesheet. A mutation that appended one byte made that spec fail. The demo, its prototype stylesheet and the packed tarball are not used.
+    - **Control surface (`window.__retHarness`, typed in `api.ts`):** `reactVersion`; the public `toast` facade, unchanged; `mount(props)`, which renders `<Toaster {...props} />` and commits synchronously (`flushSync`); `unmount()`; and an event log (`events`, `log(type, detail)`, timed with `performance.now()`). The page sets it only after the stylesheet has loaded and the default `<Toaster />` is mounted, and `openHarness` waits for it. Each test opens a fresh page. Scenarios drive the library through this surface and the DOM, never through demo UI. Nothing in `browser/` is part of the package (`files` is `dist` only, and `npm pack --dry-run` lists no harness file).
+    - **Sampling rule (D2-12):** a spec that observes from the first frame runs its trigger and its `requestAnimationFrame` sampler inside one `page.evaluate` callback, which is one page task. Because the harness exposes the public facade in the page, the trigger can be any library call made there. S2 adds the sampler helper to the harness surface when its first motion spec needs it. `requestAnimationFrame` is never mocked.
+  - **Tooling separation:**
+    - `tsconfig.browser.json` (DOM and Node types) covers `browser/` and `playwright.config.ts`. It is referenced from the root `tsconfig.json`, so ESLint's `projectService` resolves every browser file, and `npm run typecheck` checks it as its fourth project.
+    - ESLint lints `browser/` and `playwright.config.ts` with type information. The harness gets the same React, hooks and `jsx-a11y` rules as `src/`. Only the generated `browser-dist/` and `browser-results/` are ignored, by ESLint, Prettier and Git.
+    - Vitest's include stays `src/**/*.test.{ts,tsx}`: it lists the same 40 files, all under `src/`, so no exclusion was needed. Playwright's `testDir` is `browser/tests` with `testMatch` `**/*.spec.ts`: it lists 9 tests (3 specs × 3 projects) in one file and nothing from `src/`.
+  - **Scripts:**
+    - `npm run test:browser`: the blocking suite (`playwright test --grep-invert @evidence`). One engine: `npm run test:browser -- --project=webkit`.
+    - `npm run browser:serve`: builds and serves the harness on `127.0.0.1:4180`; `npm run browser:serve -- --host` exposes it on the local network for a manual checkpoint.
+    - `npm run typecheck` now includes the browser project; there is no separate command.
+    - `test:browser:evidence`, which D2 lists, is deferred to S2, the first slice with an `@evidence` spec, rather than added with nothing to run.
+    - First local run: `npx playwright install chromium firefox webkit` (with `--with-deps` where the host allows `apt`).
+  - **CI:** a `browser` job in `ci.yml`, blocking like every job, on the existing triggers and the workflow's `permissions: contents: read`:
+    - checkout (`persist-credentials: false`) and `setup-node` at the same pinned SHAs as the other jobs, with Node 24 and the npm cache;
+    - `npm ci --ignore-scripts --no-audit --no-fund`;
+    - `npx playwright install --with-deps chromium firefox webkit`, Playwright's documented install for Ubuntu runners;
+    - `npm run test:browser`;
+    - on failure only, `actions/upload-artifact` v7.0.1 pinned to `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a`, uploading `browser-results/` with a 7-day retention.
+
+    A timeout of 20 minutes. No browser cache (D2-11), no macOS runner, no debug step. Its first real run comes when the branch is pushed for the PR.
+
+  - **Smoke coverage (Class 1 in C, F and W; the same three specs in every engine):**
+    - the harness loads the real library on the installed React, and the region (`Notifications`) is in the page;
+    - `/styles.css` is byte-identical to `src/styles.css` and is the only stylesheet;
+    - a success toast renders with its class and text, reaches `data-phase="visible"`, sits in a `position: fixed` list at `top-right` with `--ret-offset` resolving to `16px` (values only the production stylesheet sets), and its close button removes it with exactly one `onDismiss`, reason `close-button`.
+
+    It does not exercise motion, reflow, progress, focus, swipe or forced colours.
+
+  - **Security and supply chain:**
+    - **Dependency:** exactly the three Playwright packages, with exact versions and registry integrity hashes in the lockfile. None has an install script, and CI still runs `npm ci --ignore-scripts`.
+    - **Browser installation:** the browsers are downloaded only by the explicit `playwright install` step, from Playwright's CDN, at the builds pinned by 1.63.0. `--with-deps` installs Ubuntu packages with `sudo apt-get` on the runner.
+    - **Workflow:** the job adds no permission (`contents: read` for the workflow). Checkout keeps no credentials. Every action is pinned to a full commit SHA with its version comment. The only new action is GitHub's own `actions/upload-artifact`: it is needed to return failure diagnostics, and it needs no token permission.
+    - **Artifacts:** only on failure, only `browser-results/` (hidden files excluded by default), kept 7 days. They hold the HTML report, traces (DOM snapshots, screenshots, console output and the network log of the harness on loopback) and screenshots. The harness renders only test text from the specs, and the job has no secrets, so no sensitive data can reach them. In a public repository they can be downloaded by other GitHub users.
+  - **Local environment (not permanent tooling).** This Windows WSL2 host has no root, so the local runs used Playwright's own browsers with their missing system packages extracted into the session's scratch space. They were found with `playwright install-deps --dry-run`, fetched with `apt-get download` and unpacked with `dpkg -x`. The runs set `PLAYWRIGHT_BROWSERS_PATH` (a scratch tree linking the browsers, with the WebKit MiniBrowser's `sys/lib` pointing at the extracted libraries), `LD_LIBRARY_PATH` and `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS`. None of it is in the repository, the config or CI. CI installs dependencies normally.
+  - **Validation:**
+    - Focused: `tsc -p tsconfig.browser.json` and ESLint on the new files pass. The smoke specs pass in Chromium (3), Firefox (3) and WebKit (3).
+    - Full blocking suite under `CI=1` (one worker): 9 passed in about 8.5 s, including the harness build. Locally (three workers): about 8.8 s. A repeat run (`--repeat-each=5`, one worker): 45 passed in about 40 s. The real soak stays in S6.
+    - Browser downloads: Chromium 393 MB, the headless shell 261 MB, Firefox 306 MB, WebKit 269 MB and ffmpeg 5 MB; about 25 s to download here.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,689 tests), `validate:package`, `build:demo` and `git diff --check` all pass. The workflow parses, with jobs `quality`, `test`, `build-package`, `browser` and `demo`.
+  - **Carried forward to S2:**
+    - the `requestAnimationFrame` sampler helper on the harness surface (D2-12);
+    - `test:browser:evidence` with the first `@evidence` spec;
+    - the fallback tolerance constants (the D2 timing approach);
+    - harness additions as their slices need them: `dir` (S3), token overrides through harness CSS (S2), and the long-page fixture for H1-R (S4).
+- **S2 record: lifecycle, motion and reflow (done).** CF-16 to CF-22 at their Class 1 layers are blocking in Chromium, Firefox and WebKit, and CF-17's and CF-23's Class 2 layers are recorded as evidence. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified.
+  - **React baseline (clarified at S2).** P-22 uses the repository's existing React 18 baseline: the unchanged `^18.2.0` range, currently resolved by the lockfile to **React 18.3.1**. Where D0-9, D2-14 and the S1 record say "React 18.2", they mean this baseline. React is not pinned or downgraded to 18.2.0. P-23 owns React-version compatibility and React 19. This is a clarification, not a dependency change.
+  - **Specs added** (`browser/tests/`; 31 blocking tests per engine, 93 in all with the S1 smoke, and 2 evidence tests per engine):
+    - `motion.spec.ts` (12 per engine):
+      - enter and exit at all six positions with the public motion tokens slowed (enter 600 ms, exit 400 ms, diagnostic). Each checks the edge's trusted `ret-enter-*`/`ret-exit-*` playback, the off-edge start and the frame-by-frame interpolation of `translate`, `scale` and `opacity`, `transform` untouched, completion on the root's own `animationend`, the exit's last frame held at it, removal, and a clean rest at the stack's gutters (left positions at the gutter, D-14);
+      - the same at production timing (180 ms and 120 ms) at `top-right` and `bottom-left`, without frame-count or interpolation checks;
+      - the spinner turning about its own centre, its `rotate` interpolating and its events never completing the toast (the enter held and slowed to 1.5 s, diagnostic);
+      - reduced motion at `top-right` and `bottom-left`: no translation, scale or fade in any frame, no root animation, the lifecycle completing with one `onDismiss`; and a still spinner.
+    - `lifecycle.spec.ts` (6 per engine), with the root's animation held by consumer CSS (`animation-play-state: paused`) or the region hidden:
+      - the enter and the exit completing at the computed fallback;
+      - an overridden `--ret-exit-duration` (600 ms) moving it;
+      - a descendant's trusted `animationend`, a wrong name on the root and the library's name on a descendant (both synthetic) never completing the exit;
+      - completion and timing with the region hidden after the toast is shown;
+      - completion, without timing, with the region hidden before creation (D2-10).
+    - `reflow.spec.ts` (10 per engine):
+      - at all six positions, with mixed heights (a described toast, a 96 px custom toast and a plain one) and `maxVisible: 2`: an insertion, a removal with promotion (the queued toast promoted in the removal's commit), and a removal after the exit, ending at the gutter;
+      - an interrupted move at `top-right` and `bottom-right`;
+      - reduced-motion repositioning at `top-right` and `bottom-left`.
+    - `motion.evidence.spec.ts` (`@evidence`, 2 per engine): CF-17's fallback timings and CF-23's composition offset.
+  - **CF and AC mapping:**
+    - **CF-16, AC-MO-1:** `motion.spec.ts`, enter and exit, at all six positions.
+    - **CF-17, AC-LC-2:** `lifecycle.spec.ts` (Class 1); the hidden-before-creation timing in `motion.evidence.spec.ts` (Class 2).
+    - **CF-18, AC-MO-3:** the reduced-motion tests in `motion.spec.ts`.
+    - **CF-19:** the spinner tests.
+    - **CF-20:** the `translate`, `scale`, `opacity` and `rotate` interpolation checks.
+    - **CF-21, AC-MO-2:** `reflow.spec.ts`, stack repositioning and the interrupted move.
+    - **CF-22, AC-MO-3:** `reflow.spec.ts`, reduced-motion repositioning.
+    - **CF-23:** `motion.evidence.spec.ts` (Class 2). Its human visual evaluation stays MC-8, in S6.
+  - **Harness extensions** (`browser/harness/`; observation only: it never completes, times or moves a toast):
+    - **`sampleFrames(read, options)`:** reads `read()` synchronously as frame 0, then in each `requestAnimationFrame` callback, which is never mocked.
+      - `onFrame(n)` runs in frame n's callback after its read, so a second trigger acts in that frame's task.
+      - `until` stops the sampling.
+      - `atToastMutations` also reads in a MutationObserver callback whenever toast roots are added or removed: after the renderer's commit and layout effects and before the next frame. That read is the seeded position itself.
+    - **The event recorder:** from page load, animation and transition events inside toasts (captured on the document before the library sees them), each toast root's `phase` change, and roots `added` and `removed`, including roots that leave inside their list. Each entry has a label, `root`, the animation or property name and `isTrusted`. Specs label a toast with the class `h-<label>`.
+    - **`toastState(label)`:** the bounding rectangle, the layout box, the computed `transform` (and its Y), the individual `translate` and `scale` (and their Y parts), opacity, `animation-name`, `data-phase`, and whether the offset parent is the list.
+    - **`toastRoot(label)`** and **`setStyle(css)`:** consumer-style CSS in one harness `<style>` after the production stylesheet, for token slowing and test markup only. The production stylesheet is untouched. The S1 smoke still checks that a fresh page has no other stylesheet.
+    - **Shared spec helpers (`browser/tests/harness.ts`):** `openReducedMotionHarness` (Playwright's `prefers-reduced-motion: reduce` emulation, with the media query checked as a precondition only); `expectInterpolatedMove`, which requires a move with no reversal and at least one value strictly between its ends; `timeToken`, `showToast` and `timeDismissal`.
+  - **Sampling (D2-12).** Every first-frame observation starts its sampler and its trigger in one `page.evaluate`. Frame 0 is the pre-trigger state, and for repositioning the commit-time read is the seeded state; later frames are the interpolation, and the last is the rest.
+  - **Timing and tolerances:**
+    - **Fallback timing:** checked against the computed token plus the documented 100 ms margin. The margin is written in the spec, not imported, so a change to the implementation's constant fails. The lower bound is the fallback less one frame (16.7 ms), because early completion is the defect. The upper bound is the fallback plus `LATE_TOLERANCE_MS` (150 ms), because lateness is scheduling noise. Measured lateness was 1 to 3 ms in every engine, once 33 ms (Firefox). Both constants are in `browser/tests/harness.ts` and are not product constants.
+    - **Completion on the animation event:** within 50 ms of the root's `animationend` (the fallback would come 100 ms after the nominal end). The completion is logged in the same task as the event, so load does not widen that gap.
+    - **Positions:** half a pixel. Scale and opacity have their own tolerances (0.001 and 0.005).
+    - **Frame-by-frame interpolation** is checked with slowed tokens, because a 120 ms exit can fall between two frames of a loaded machine. Production timing is used where the contract is about it: completion, the held frame, the fallback and every reflow. No test asserts a frame count or an engine's curve.
+  - **Harness lessons (not product observations):**
+    - **WebKit advances running motion with the clock inside a task.** Chromium and Firefox hold a frame's animation time for the whole task. Measured: two reads 20 ms apart in one task differed by 6 to 8 px of motion in WebKit and by 0 elsewhere. So a read after a commit and a read before it differ by the motion in between: 1.1 px over React's commit, and up to 6.8 px when the next frame read came well after a commit made between frames. The reflow checks therefore read the seed at the commit (`atToastMutations`). The interrupted move compares reads just before and just after the commit, allowing only the motion the elapsed time explains at the sampled speed. Neither loosens the contract: a seed that ignored the toast's current position jumped 30 to 42 px.
+    - **CPU headroom.** Eight parallel workers on the 7 GB WSL host starved a page for longer than the 100 ms margin, and Chromium then completed an exit on its fallback, as designed, before `animationend` arrived. Local runs are capped at three workers; CI uses one.
+  - **Mutation checks**, each a temporary edit reverted at once (`git status` clean):
+    - margin 0: 5 of 6 lifecycle tests fail;
+    - completing on any `animationend`: the unrelated-events test fails;
+    - ignoring the root's own `animationend`: 6 motion tests fail;
+    - a seed that ignores the toast's current translation: both interrupted-move tests fail in every engine;
+    - no seeding: every non-reduced reflow test fails (24), and the reduced-motion ones, which need no seed, pass.
+  - **Class 2 evidence** (`npm run test:browser:evidence`; elapsed from the dismissal to `onDismiss`, against the computed fallback):
+
+    | Scenario                                                                   | Expected | Chromium | Firefox    | WebKit     |
+    | -------------------------------------------------------------------------- | -------- | -------- | ---------- | ---------- |
+    | Held animation, default exit                                               | 220 ms   | 222 ms   | 223 ms     | 222 ms     |
+    | Held animation, exit token 600 ms                                          | 700 ms   | 702 ms   | 703 ms     | 703 ms     |
+    | Hidden after shown                                                         | 220 ms   | 221 ms   | 222 ms     | 222 ms     |
+    | Hidden before creation, dismissed once visible                             | 220 ms   | 221 ms   | 221–222 ms | 221–222 ms |
+    | Hidden before creation, dismissed once visible, exit token 600 ms          | 700 ms   | 701 ms   | 702–733 ms | 701–702 ms |
+    | Hidden before creation, dismissed while entering (a frame after rendering) | 220 ms   | 221 ms   | 222 ms     | **1–2 ms** |
+    | The same, exit token 600 ms                                                | 700 ms   | 701 ms   | 701–702 ms | **1 ms**   |
+    - **The WebKit observation (D2-10), narrowed.** It reproduces only when a toast in a region hidden before creation is dismissed **while still entering**. Once the toast has completed its enter (on its fallback, since nothing renders), WebKit follows the computed timing like the other engines. That fits D1b's stale `entering` style: the change from `entering` to `exiting` happens with nothing rendered. Nothing is visible, and the lifecycle completes with one `onDismiss`. It stays a known WebKit observation (Class 2): no blocking timing assertion and no production change. D0-16 was not invoked.
+    - **CF-23, the `scale` × `transform` composition** (production timing; a toast entering or exiting while a later insertion moves it): the rendered top departs from layout plus `translate`, `transform` and the scale's own centring by at most **0.62 px** in Chromium, **0.92 px** in Firefox and **0.45 px** while entering, and about **0.2 px** while exiting in every engine. That is within the 1.79 px P-19 accepted. No new evidence reopens the boundary. The human visual evaluation stays MC-8 (S6).
+
+  - **Commands:**
+    - `npm run test:browser`: the blocking suite (93 tests);
+    - `npm run test:browser -- --project=<engine>`: one engine;
+    - `npm run test:browser:evidence`: the `@evidence` specs only. Added now that evidence specs exist. Its tests assert only that their scenarios ran and never join the blocking gate (`test:browser` excludes `@evidence`).
+  - **Validation:**
+    - Focused: `npm run test:browser -- --project=<engine>` passes 31 of 31 in Chromium (about 16 s), Firefox (about 21 s) and WebKit (about 18 s).
+    - Full blocking suite under `CI=1` (one worker): 93 of 93 in about 1.6 minutes, including the harness build. The `@evidence` run: 6 of 6.
+    - **Soak:** the blocking suite with `--repeat-each=10` under `CI=1` (one worker, zero retries): **930 of 930** passed in 16 minutes. Before that, `--repeat-each=5` with the local three workers: 465 of 465.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,689 tests, still only `src/`), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S3:** `dir` on the harness when the RTL specs need it; the evidence specs' pattern for CF-15's and CF-25's Chromium layers and CF-27.
+    - **S6:** CF-23's human visual evaluation (MC-8); rerunning the `@evidence` specs; the soak of the final suite.
+- **S3 record: layout, RTL, progress and forced colours (done).** CF-14, CF-15, CF-24 and CF-25 at their Class 1 layers, and CF-28's emulated layer, are blocking in Chromium, Firefox and WebKit. CF-15's CDP override, CF-25's CDP blur and CF-27's clip are recorded as evidence. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified.
+  - **Specs added** (`browser/tests/`; 13 blocking tests per engine, so the blocking suite is now 44 per engine and 132 in all; 3 evidence tests):
+    - `layout.spec.ts` (7 per engine):
+      - at each of the six positions, one described toast, read three ways: in LTR at 1280 × 720, in RTL (`dir="rtl"` on the document), and in a 320 × 640 viewport;
+      - the zero-inset test.
+    - `progress.spec.ts` (4 per engine): off by default; the depletion, hover pause and timeout; the focus pause; the direction in LTR and RTL.
+    - `forced-colors.spec.ts` (2 per engine): the card edge, the action border, the fill, the strip and the icons; and the `Highlight` rings.
+    - `layout.evidence.spec.ts` (`@evidence`): CF-15 and CF-25 in Chromium only (skipped elsewhere with a reason naming MC-2 and MC-3, or MC-5 and MC-1), and CF-27 in all three.
+  - **Layout and RTL strategy (CF-15's zero-inset layer; AC-RTL-1 with CF-24).** Expected geometry comes from the public tokens read in the page (`--ret-offset` 16 px, `--ret-width` 360 px), compared within about a pixel. Bounding rectangles and the document's `scrollWidth` are checked; no CSS declaration is inspected for placement.
+    - **Every position:** the stack is `min(--ret-width, viewport − 2 × --ret-offset)` wide and sits `--ret-offset` from its physical edges (centre stacks centred). The toast fills the stack, nothing crosses a gutter, and nothing overflows horizontally.
+    - **RTL:** every stack keeps the left edge it has in LTR, so positions stay physical. Inside the card, the icon moves to the right and the close to the left, with their insets mirrored exactly.
+    - **Narrow (320 px):** the stack is 288 px wide at the same position.
+    - **Zero insets:** with `viewport-fit=cover`, each `env(safe-area-inset-*)` resolves to `0px` (not the fallback), and the gutters stay at `--ret-offset`.
+  - **Progress strategy (AC-PR-1, CF-25; AC-RTL-1, CF-24).** The fill is the production CSS animation. The spec never drives it, and never computes anything from production code.
+    - **What is read:** the harness's `progressState(label)`, which is the fill's horizontal scale from its computed `transform`, its play state, and the fill and strip rectangles. Each is read with the page time of the same frame. The toast's `visible` time comes from the harness recorder.
+    - **The expectation, from the contract:** the fill shows the share of the duration still to run, `1 − running time / duration`, within 0.05 of the duration (200 ms of a 4 s toast).
+    - **Off by default:** a default toast has no strip. A finite normal toast with `progress: true` has one, and so does one inheriting the Toaster's `progress`. A persistent toast, a loading toast and a custom toast have none.
+    - **Hover:** a trusted pointer over the stack sets `data-paused`. The fill's play state is `paused`, and it holds within 0.002 for 600 ms. When the pointer leaves, the fill resumes from the held fraction (never above it, within 0.05) and depletes again. The timeout then comes when the remaining time has run: at the visible time plus the duration plus the pause, not a full duration after the resume (D-08). `onDismiss` reports `timeout`.
+    - **Focus:** DOM focus on the close button (`locator.focus()`, the narrowest mechanism) pauses it by focus-within, with the same hold and resume. How focus arrives is S4's.
+    - **Direction:** the fill's visible width is its scale times the strip's width. In LTR its left edge stays on the strip's left and its right edge comes in; in RTL its right edge stays on the strip's right and its left edge comes in.
+    - **Pause through blur** is Chromium-only Class 2 evidence (below), and genuine blur in Firefox and Safari stays MC-5 and MC-1.
+  - **Forced-colours strategy (CF-14, with CF-28's emulated layer).** Playwright's `forced-colors: active` emulation, with the media query checked as a precondition. System colours (`CanvasText`, `Canvas`, `Highlight`, `ButtonText`) are resolved by a probe in the same page, never hard-coded, since each engine resolves them differently (for example, `Highlight` is `rgba(5, 0, 73, 0.8)` in Chromium, `rgb(51, 153, 255)` in Firefox and `rgb(52, 132, 228)` in WebKit).
+    - **Asserted:** the card's 1 px solid `CanvasText` edge on every side; the action's 1 px solid `ButtonText` border; the fill in `CanvasText`, with a visible box; a transparent strip, so no track; and the type icon present.
+    - **The rings:** `Highlight` outlines on the action, the close and the toast root, and the region's `::after` ring (`Highlight` border, `Canvas` outline), each while `:focus-visible` matches. Those states are reached only by trusted keyboard paths: Tab to the action and the close; then Alt+T for the root; then Tab, Tab and Enter, which closes the only toast and leaves focus on the region by restoration (§18). S3 asserts only the styles; focus behaviour is S4's.
+    - This is emulation, not Windows High Contrast, which stays MC-6 (S6).
+  - **Observations (not product contracts):**
+    - **Emulation differs between engines.** The library's own forced-colours rules apply in all three. The engines differ in what their emulation forces beyond them:
+      - Chromium forces outline colours to `Highlight` and border colours to `CanvasText` by itself, and Firefox forces border colours;
+      - WebKit's emulation matches the media query but forces no author colour at all: the text keeps `rgb(24, 24, 27)` and the success icon stays green.
+
+      So the library's `border-color: CanvasText` rule is proven only by WebKit, and its `Highlight` ring rule only by Firefox and WebKit (see the mutation checks). The blocking suite needs all three engines for exactly that reason. P-26 should distinguish emulated from real forced colours with this in mind (D2-5).
+
+    - **`:focus-visible` after script focus, for S4 (CF-12).** Starting from a keyboard-focused control, Alt+T focused the root and the region took focus by restoration, and both matched `:focus-visible` in all three engines. D1 measured Alt+T with no earlier keyboard focus, and only Firefox matched. This is a new data point for S4's Class 2 record, not a reclassification.
+  - **Class 2 evidence** (`npm run test:browser:evidence`):
+    - **CF-15, Chromium's safe-area override (an approximation, not notched-device evidence).** At 412 × 915 with insets 47/20/34/20 px, the production rule measured top 63 px, left 36 px, bottom 50 px, right 36 px and width 340 px, exactly the expected `--ret-offset` plus inset arithmetic. The override is injected through the browser's own `env()` values, without the device's `viewport-fit` gating. Real notched devices stay MC-2 and MC-3 (S6).
+    - **CF-25, genuine blur in Chromium (CDP minimise).**
+      - **Method:** Playwright emulates focus and re-applies that on navigation, so the spec turns focus emulation off after loading and brings the page to the front. The first attempt, which turned it off before navigation, produced no blur.
+      - **Result:** minimising fired a trusted `blur`, `document.hasFocus()` became false and the toast got `data-paused`. The fill held at 0.897 for 0.5 s. Restoring fired a trusted `focus` and cleared `data-paused`, and the fill resumed from 0.897 with no reset, at 0.832 half a second later.
+    - **CF-27, the strip.** In all three engines the strip's computed clip is `inset(-10px 0px 0px round 0px 0px 9px 9px)`: the card radius (10 px) less its 1 px border, with the negative top inset P-20 uses to keep the radii unclamped. It is the same at fractions 0.9, 0.5 and 0.1, because the strip never moves. The fill is a `matrix(s, 0, 0, 1, 0, 0)` box anchored at the strip's left, so its moving edge is straight. Its appearance stays MC-8 (S6).
+  - **Harness changes:** `progressState(label)`, a read of the fill's computed scale and play state and of the fill and strip rectangles, with its `Box` and `ProgressState` types. No other addition: RTL sets `dir` on the document from the spec, so no harness `dir` API was needed.
+  - **Mutation checks**, each a temporary edit to the production stylesheet or renderer, reverted at once (`git status` clean):
+    - **Physical `left` made logical (`inset-inline-start`), so left stacks mirror in RTL:** 6 layout failures.
+    - **Progress restarting on resume** (the fill's delay forced to `0ms`): 6 progress failures, the hover and focus tests in every engine.
+    - **The `:dir(rtl)` fill-origin rule removed:** the direction test fails in all three.
+    - **The forced-colours fill rule removed:** fails in all three.
+    - **The forced-colours card-edge rule removed:** fails in WebKit only, since Chromium's and Firefox's emulation force border colours themselves.
+    - **The forced-colours `Highlight` ring rule removed:** fails in Firefox and WebKit; Chromium forces it itself.
+    - **The top safe-area inset ignored:** the blocking suite passes, as it must with zero insets. Chromium's override evidence shows it, with top 16 px against the expected 63 px: the D2-9 split at work.
+  - **Commands:** unchanged. `npm run test:browser` (132 tests); `npm run test:browser:evidence` (5 per engine, 4 of them skipped outside Chromium, 15 in all).
+  - **Validation:**
+    - **Focused:** the 13 S3 tests pass in Chromium (about 15 s), Firefox (about 17 s) and WebKit (about 15 s).
+    - **Full blocking suite** under `CI=1` (one worker): 132 of 132 in about 2.6 minutes. The `@evidence` run: 11 passed, 4 skipped (the Chromium-only tests in Firefox and WebKit).
+    - **S3 soak:** the 13 new blocking tests, `--repeat-each=10` under `CI=1` (one worker, zero retries): **390 of 390** passed in 10.3 minutes. S2's suite was not soaked again: nothing it covers changed, and its 930-run soak stands.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects, the browser one included), `typecheck:demo`, the full Vitest suite (40 files, 1,689 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S4:** the `:focus-visible` observation above, for CF-12's Class 2 record.
+    - **S6:**
+      - real notched-device safe areas (MC-2, MC-3);
+      - real Windows High Contrast for CF-14 and CF-28 (MC-6);
+      - genuine blur in Firefox and Safari for CF-25 (MC-5, MC-1);
+      - CF-26's hidden documents (MC-1, MC-2, MC-3, MC-5);
+      - CF-27's appearance (MC-8);
+      - rerunning the evidence specs.
+    - **P-26:** the emulation differences above, when documenting forced colours.
+- **S4.1 D0-16 report: a press on an exiting toast moves focus to the region.** Raised while S4.1 probed CF-6 Class 1, before any S4.1 test was written. The report stands as written.
+  - **Engines:** Playwright Chromium 153, Firefox 155 and WebKit 26.6, headless; React 18.3.1. The same in all three.
+  - **Reproduction (trusted mouse, production timing):** two persistent toasts, `b` then `a`, at `top-right`; a double-click on `a`'s close button. The first click focuses `a`'s close and dismisses `a`; restoration moves focus to `b`'s close (§18 step 1); `inert` is set on `a` with focus already there. The second press passes through the inert `a` to the `<ol>`, and the browser focuses the nearest focusable ancestor, the region (`tabindex="-1"`): focus goes from `b`'s close to the region, and `b` loses its focus-within pause. `onDismiss` fires once; `scrollY` stays 0; `:focus-visible` stays false.
+  - **Not specific to `inert`:** a press on the 10 px gap between two visible toasts, with an outside button focused, also lands on the `<ol>` and moves focus to the region in all three engines. A press with nothing focused does the same.
+  - **Held:** the press dismisses nothing; nothing in the inert toast takes focus or the click; focus never reaches `<body>`.
+  - **Contract:** CF-6 Class 1 (D2): "a pointer press or click on an inert exiting toast dismisses and focuses nothing".
+  - **Cause:** the browser's click focus on a non-focusable target focuses its nearest focusable ancestor, which the region's `tabindex="-1"` (needed for §18 step 3) makes it. Restoration, `inert` and the hotkey are not involved.
+- **S4-H2, inert pointer focus hardening (done).** The hardening slice the maintainer authorised for the report above, and for it only. CF-6 is not narrowed: a pointer press on an inert exiting toast must not undo the focus restoration §18 established. It is not S4.1.
+  - **Invariant:** a press whose target is a position's `<ol>` itself (a gap between toasts, or the list beneath an exiting toast, which is inert and so never the target) never moves focus.
+  - **Event analysis (before any production change):**
+    - **Targets:** the press on an inert toast and on a gap both target the `<ol>` (`elementFromPoint` and the `pointerdown`, `mousedown` and `click` targets, in all three engines). The section has no box of its own, so it is not pressed in practice. A press on a toast, its content or its controls targets that element, never the list.
+    - **Phase and event:** focus is the default action of `mousedown`; preventing it keeps focus where it was and still dispatches `click`. `pointerdown` was not used: preventing it suppresses the compatibility mouse events instead, and P-21's swipe listens to pointer events on the toast root. A touch tap and a pen press focus through the same compatibility `mousedown`, so they are covered too.
+    - **Narrowest condition:** `event.target === list`, on the list's own listener: never a toast, its content, its controls or a list inside custom content. No `stopPropagation()`.
+    - **Validated in real browsers before the change,** with a page-level stand-in (the same condition, from a harness listener): the double-click kept `b`'s close; a gap press kept the outside button; a press on the body still focused the root (CF-39); a drag inside a toast's text still selected it; hover over the gap still set `data-paused` on the stack.
+    - **Trade-offs:** a text selection can no longer start on the bare list (a gap of `--ret-gap`): before the change, the double-click also selected a word in Chromium and WebKit. A non-primary press there loses its default action too, for example autoscroll where a platform offers it (not tested). Toast content is unaffected.
+    - **Touch (Playwright `touchscreen.tap`, with the stand-in):** in Chromium and WebKit a tap on a gap is adjusted to the nearest toast and focuses its root, with and without the stand-in (existing behaviour, CF-39). In Firefox it targets the list: the region took focus without the stand-in, and the outside button kept it with it. Protocol pen in Chromium (CDP `pointerType: 'pen'`) behaved like the mouse. Real touch and pen devices stay with S6's checkpoints.
+  - **Implementation:** one change in `src/react/Toaster.tsx`. `StackList`'s effect, which already holds the list's `pointerenter` and `pointerleave` listeners, adds a native `mousedown` listener that calls `preventDefault()` when the target is the list itself, and removes it in the same cleanup. The region keeps `tabindex="-1"`.
+  - **Unchanged:** the §18 restoration algorithm and H1's `preventScroll`, the hotkey, Escape, `inert`, the focus-within and hover pause reasons, swipe (P-21), the lifecycle, motion, progress, the public API, and the 30 tokens.
+  - **Regression tests:** `focus-restoration.test.tsx` gains six (52 in the file), under `a press on the list (P-22 H2)`. jsdom neither focuses on a press nor skips inert targets, so they check the request and that nothing else changes; the browser runs below are the evidence:
+    - a press on the list is prevented, and focus stays on an outside button;
+    - with `b` exiting and inert after restoration, a press on the list is prevented and `a`'s close keeps focus and its focus-within pause;
+    - presses on a toast, its title, its action and its close are not prevented, and the close still dismisses;
+    - a list inside custom content, and its item, are not prevented;
+    - the press and the click that follows still reach the document (no stopped propagation), and the click dismisses nothing;
+    - the region still takes focus from script and from restoration.
+  - **Mutations,** each a temporary edit reverted at once: a no-op handler fails 3 of the new tests; preventing every press on the list fails 2 (toast and custom-content presses); adding `stopPropagation()` fails 1.
+  - **Browser verification** (a temporary spec on the S4.1 harness, not committed; trusted Playwright input unless stated):
+    - **A:** a double-click on `a`'s close with `b` present: `a` dismissed once (`close-button`); focus on `b`'s close; no `focusin` on the region; with the pointer away from the stack, `b` keeps `data-paused` (focus-within). The same with the exit slowed to 3 s, for a press and a click on the exiting `a`'s close and body.
+    - **B:** a gap click with the outside button focused: focus stays on it; nothing dismissed.
+    - **C:** the action and close still work (reasons `action` and `close-button`); a body click focuses the root; a drag across a two-line title selects all of it.
+    - **D:** the region takes focus from script and, after a keyboard close of the last toast, from restoration, with `scrollY` 0; Alt+T and Escape work as before.
+    - **E:** hover over the gap pauses both toasts; a press there keeps the pause; leaving clears it.
+    - **F:** a trusted mouse drag never moves or dismisses; a trusted CDP touch swipe commits with `swipe` (Chromium); a synthetic touch drag commits with `swipe` in all three (logic only, not trusted-input evidence).
+    - **Results:** all pass in Chromium, Firefox and WebKit. With the fix reverted, A, the slowed A and B fail in every engine (focus on the region). Repeat run under `CI=1`, `--repeat-each=5`: 120 passed, 10 skipped (the Chromium-only touch swipe elsewhere), no failure.
+  - **Validation:** `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` pass. The blocking browser suite passes (132 of 132 under `CI=1`), and the `@evidence` run gives 11 passed, 4 skipped.
+  - **Carried forward to S4.1:** CF-6 Class 1's press and click on an inert exiting toast, as permanent blocking tests in all three engines, asserting that focus does not move, alongside H1-R and the rest of CF-6.
+- **S4.1 record: focus restoration and `inert` (done).** H1-R, CF-6 at its Class 1 layer, and S4-H2's regression are blocking in Chromium, Firefox and WebKit, with trusted Playwright input only. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified. S4.1 is the first of S4's four reviewed parts (S4.1 to S4.4, from the S4 orientation); CF-2, CF-11, CF-12 and CF-13 are S4.2's, and S4's evidence specs S4.3's.
+  - **Maintainer decisions for S4 (at the S4 orientation review):**
+    - **CF-12:** Class 1 ring assertions may use a keyboard-established path beginning with trusted Tab; script focus with no earlier keyboard input stays Class 2. No engine's `:focus-visible` heuristic is the product contract.
+    - **H1-R:** D1b's body-click case is kept as written, with its focus precondition asserted.
+    - **CF-13:** S4.2 may add a separate diagnostic stacking probe that overrides `pointer-events: auto` through consumer CSS. It never replaces the production-CSS hit-testing assertions, and it is reported as diagnostic.
+    - **CF-2 and CF-6:** both have blocking and evidence layers, as D2 classifies them; only CF-6 Class 1 is S4.1's.
+  - **Specs added** (`browser/tests/`; 11 blocking tests per engine, so the blocking suite is now 55 per engine and 165 in all; 4 evidence tests per engine):
+    - `focus.spec.ts`:
+      - **H1-R** (5 per engine), on the long page. Its preconditions: the page is at the top, can scroll more than 3000 px, and the region lies more than 3000 px below the viewport. Each case checks `scrollY` (0) and the §18 target:
+        - a mouse close of the only toast: the region;
+        - Tab to the outside button, Alt+T, Tab and Enter: the region, never the element focused before the hotkey;
+        - a click on the toast's body, then a programmatic dismissal: the region;
+        - a mouse close of the first of two toasts: the next toast's close;
+        - control: a programmatic dismissal with nothing focused leaves focus on `<body>`. The only focus entry is the `inert` one, with `<body>` active.
+      - **CF-6, restoration before `inert`** (3 per engine), one per §18 step, each reached by trusted Tab and closed with Enter: the next toast's close (step 1), the previous toast (step 2) and the region (step 3).
+      - **H2's regression** (3 per engine):
+        - with the public exit token slowed to 3 s (D0-11), a trusted press, then a click on the inert exiting toast's close, then a click on its body: focus stays on the next toast's close, no focus event follows the restoration, nothing else is dismissed, and, with the pointer away from the stack, the remaining toast keeps `data-paused` (its focus-within reason);
+        - a double-click on a close button at production timing: exactly two `focusin`s, the clicked close and then the next toast's close, one `close-button` dismissal, and the remaining toast's focus-within pause kept;
+        - a click on the gap between two toasts with the outside button focused: focus stays on it, no focus event, nothing dismissed, no scroll.
+    - `focus.evidence.spec.ts` (`@evidence`): the mouse-button follow-up below.
+  - **Preconditions, asserted and never assumed:** that a clicked close button takes focus (its trusted `focusin` comes first in the log); that a click on the body focuses the root (CF-39); each Tab and the Alt+T step; that nothing is focused in the control case; for H2, that the pressed points lie on the exiting toast only, never on its neighbour, and that a gap separates the two toasts. A precondition that fails in an engine fails the test.
+  - **How the CF-6 ordering is observed.** From records made as it happens, never inferred from a later snapshot:
+    - the `focusout` leaving the exiting toast and the `focusin` at the target are logged synchronously, as they are dispatched, with whether their target was inside an `inert` subtree at that moment. Both must report `targetInert: false`, and the `focusout`'s `relatedTarget` must be the target;
+    - the `inert` entry comes later in the log, and its observer callback read the target as the active element;
+    - no focus event follows it, so no browser fix-up and no second restoration moved focus;
+    - a frame sampler, started and confirmed running before Enter is pressed, reads the active element, the phase and `inert` in every frame until 5 frames after removal. Frame 0 shows the pre-press state. From the first frame after the press to the end, focus is on the target, including every frame in which the toast is `inert` and after it is removed.
+  - **Harness extensions** (`browser/harness/`; observation only):
+    - **`?scenario=long-page`:** a focusable `outside` button at the top, then 4000 px of content, then the Toaster's container, so a focused region would scroll the page (H1). `openHarness(page, 'long-page')` opens it.
+    - **Focus recorder:** `focusin` and `focusout`, captured on the document, and the window's own `focus` and `blur` (`focus:window`, `blur:window`). Each records the target and `relatedTarget` named for the specs (`body`, `region`, `toast:<label>`, `close:<label>`, `action:<label>`, `content:<label>`, `outside`), `isTrusted`, and `targetInert`. The detail has no `label` and no type starts with `window-`, so S2's per-toast entries and S3's window-event filter are unaffected.
+    - **A separate `inert` observer:** an `inert` entry when a toast root gains or loses the attribute, with the active element read in the observer's callback. S2's phase recorder is unchanged.
+    - **`focusState()`:** the active element, whether it matches `:focus-visible`, `scrollY`, `document.hasFocus()` and `visibilityState`.
+  - **Browser differences:** none in the blocking outcomes. In all three engines a trusted mouse click focuses the clicked close button, and a click on the body focuses the root. The event order is the same in each: the `focusout` from the exiting toast, the `focusin` at the target, then `inert`.
+  - **Mutation checks**, each a temporary edit reverted at once (`git status` clean for `src/`):
+    - **H1's `preventScroll` removed from restoration:** the three H1-R cases that restore to the region fail in every engine (9). The next-toast case passes, as it must: toasts are `position: fixed`, so focusing one scrolls nothing.
+    - **`inert` applied before restoration** (the two lines of `ToastItem`'s layout effect swapped): the three CF-6 tests fail in every engine (9), on `targetInert: true` for the `focusout` leaving the exiting toast. The H1-R outcomes still pass: no engine blurs synchronously when `inert` is set, so the ordering assertion is what detects it.
+    - **H2's guard removed:** the three H2 tests fail in every engine (9), with focus on the region.
+  - **Mouse-button evidence (`@evidence`; the S4-H2 follow-up, no production change).** Two toasts with an outside button focused, then a press on the gap between them. A pure-DOM control in the same engine, without the library: a `tabindex="-1"` section around a fixed `<ol>` with a box.
+    - **With H2's guard, all three engines:** the primary, middle and secondary buttons each have their `mousedown` prevented on the list, and the outside button keeps focus. `click`, `auxclick` and `contextmenu` still follow, and `contextmenu` is not prevented, so the context menu still opens.
+    - **The pure-DOM control, all three engines:** the primary, **middle and secondary** presses each focus the section.
+    - **Touch (Playwright `touchscreen.tap`):** the compatibility `mousedown` has `button` 0. In Chromium and WebKit the tap is adjusted to the nearest toast and focuses its root (CF-39, outside H2). In Firefox it targets the list, is prevented, and the outside button keeps focus.
+    - **Pen (Chromium protocol pen, not pen evidence):** the tip (`button` 0) and the barrel (`button` 2) are both prevented, and focus is kept; the barrel still gets `contextmenu`. Real pens stay with MC-7. Firefox and WebKit skip, naming it.
+    - **Conclusion:** restricting the guard to `event.button === 0` would bring H2's defect back for middle and secondary presses, including a pen's barrel button, in every engine. A narrowing follow-up is not justified. What the guard costs a non-primary press on a bare gap is that press's own default, such as autoscroll where a platform offers it; that is not observable headless and stays untested.
+  - **Commands:** unchanged. `npm run test:browser` (165 tests); `npm run test:browser:evidence` (9 per engine; 27 in all, 6 of them skipped: 4 S3 tests and the protocol pen outside Chromium).
+  - **Validation:**
+    - **Focused:** `focus.spec.ts` passes 33 of 33 (11 per engine).
+    - **Repeat run:** `focus.spec.ts` with `--repeat-each=5` under `CI=1` (one worker, zero retries): **165 of 165**. S1 to S3 were not soaked again: nothing they cover changed.
+    - **Full blocking suite** under `CI=1`: 165 of 165 in about 3.2 minutes. The `@evidence` run: 21 passed, 6 skipped.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects, the browser one included), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S4.2:**
+      - CF-2 Class 1: removal and re-keying of the focused node;
+      - CF-11 A: the `aria-keyshortcuts` attribute;
+      - CF-12 Class 1: the ring styles, on the Tab-established path;
+      - CF-13 Class 1: hit-testing, with the separate diagnostic stacking probe;
+      - S3's `:focus-visible` observation, for CF-12's Class 2 record (S4.3).
+    - **S4.3 (evidence):** CF-1, CF-2 and CF-6 Class 2, CF-3, CF-4, CF-5 (blur), CF-9, CF-10, CF-11 B and CF-12 (script focus); CF-7 and CF-8 as Class 4. The focus recorder and the `inert` observer are their instruments.
+    - **S6:** rerun the evidence specs, this one included; real pens for the barrel-button case (MC-7).
+- **S4.2 record: focus-within, `aria-keyshortcuts` and the focus rings (done).** CF-2, CF-11, CF-12 and CF-13 at their Class 1 layers are blocking in Chromium, Firefox and WebKit, with trusted Playwright input wherever focus or the pointer matters. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified. No D0-16 report was raised.
+  - **Specs added** (`browser/tests/`; 11 blocking tests per engine, so the blocking suite is now 66 per engine and 198 in all; no evidence test):
+    - `focus-within.spec.ts` (CF-2, 3 per engine);
+    - `focus-ring.spec.ts`: CF-11 A (1 per engine), CF-12 (4) and CF-13 (3).
+  - **CF-2 (Class 1), the focus-within reason follows the DOM.**
+    - **Method:** a custom toast whose content is the harness fixture: a button whose activation changes the content's own React state, either unmounting it (`remove`) or replacing it under a new key (`rekey`).
+    - **Sequence:** the toast runs 400 ms; trusted Tab focuses the button, which sets `data-paused`; the toast is held for a full duration (1.5 s), a deliberate span, because outliving its duration while paused is the property; trusted Enter activates the button.
+    - **Preconditions, asserted:** Tab focuses the fixture button; the focused node has left the DOM (`isConnected` false) and, when re-keyed, its replacement is a new, unfocused element; nothing inside the toast holds focus.
+    - **Asserted:**
+      - `data-paused` clears for the removed and the re-keyed button;
+      - the toast's held state changes exactly twice, held then released, recorded as it happens by a `data-paused` observer;
+      - the timeout comes when the time left at the pause has run after the release: never earlier, less two frames of recorder latency, and no later than `LATE_TOLERANCE_MS` (150 ms). The remaining time is computed from the recorder's visible, held and released times, and it differs from the full duration by the 400 ms run;
+      - the reason is `timeout`.
+    - **Another reason is kept:** with the pointer on the toast (hover, §10), removing the focused button leaves the toast held through a further full duration. Only moving the pointer away releases it, and the timeout then follows the remaining time.
+    - **Not in this layer:** a focused control that becomes disabled, hidden or `inert` (attribute changes). It is CF-2's Class 2 layer, S4.3.
+    - **Browser difference** (observed with a temporary probe on the same fixture; not asserted): when the focused node is removed or re-keyed, Chromium dispatches a trusted `focusout` with a null `relatedTarget`; Firefox and WebKit dispatch no focus event at all. In all three, `document.activeElement` is then `<body>`. So in Firefox and WebKit, P-15's `MutationObserver` reconciliation is the only thing that releases the toast (see the mutation checks).
+  - **CF-11 A, the DOM attribute.** On one page, re-rendering the Toaster through the harness's `mount(props)`, the region's `aria-keyshortcuts` is:
+    - `Alt+T` by default;
+    - `Control+Shift+K` for `["ctrlKey", "shiftKey", "KeyK"]`, and also for `["shiftKey", "ctrlKey", "KeyK"]`, since ARIA's modifier order is written whatever order is given (§17.2);
+    - `F6` for `["F6"]`;
+    - absent for `["altKey", "Comma"]` (punctuation, not advertised) and for `hotkey={false}`;
+    - `Alt+T` again once the props are back to the default.
+
+    Only the DOM attribute: the accessibility tree is CF-11 B (Class 2, S4.3), and assistive technology is P-29's.
+
+  - **CF-12 (Class 1), the rings.** Every state is reached by trusted keyboard input, and keyboard modality is established by Tab first.
+    - **Colours:** `--ret-focus` and `--ret-surface` are read on the focused element itself and resolved to colours in the page. Nothing is hard-coded, so the check holds in any theme.
+    - **Each ring:** `:focus-visible` must match, then the computed outline is checked.
+      - **Action and close,** by Tab: a 2px solid `--ret-focus` outline at an offset of 2px.
+      - **Toast root,** by Tab to the action, then Alt+T: 2px solid `--ret-focus`, offset −1px (inside the card's edge).
+      - **Custom toast:** its close, by Tab, has a 2px solid ring at 2px in `currentColor`. A consumer class gives the toast the colour `rgb(170, 20, 90)`, and the ring must equal it, not `--ret-focus`. Its root, by Alt+T, has the `--ret-focus` ring at +2px (outside the toast).
+      - **Region,** after Tab to the only toast's close and Enter, so restoration focuses the region (§18 step 3): the section's own outline is `none`. Its `::after` is fixed at an inset of 4px, with a 3px solid `--ret-focus` border on every side, a 12px radius, and a 2px solid `--ret-surface` outline.
+    - **Focus-visible preconditions:** for the root and the region, which take focus from script only, the match after earlier Tab input is asserted as a precondition, as the S4 CF-12 decision allows. It matched in all three engines, as S3 also saw. The path with no earlier keyboard input stays Class 2 (S4.3); no engine's heuristic is the contract.
+  - **CF-13 (Class 1), the region ring.** The region is focused by keyboard close and restoration; two finite toasts are then shown. The preconditions, asserted: the toasts took no focus, the region still matches `:focus-visible`, and its `::after` is drawn.
+    - **Production proof (the production stylesheet only):**
+      - the ring's computed `pointer-events` is `none`;
+      - `elementFromPoint` at each toast's centre hits that toast, and at a point away from the stacks, or on the ring's own band, never hits the region;
+      - a trusted pointer over a toast sets the stack's hover pause on both toasts, and moving away clears it;
+      - a trusted click on a toast's close dismisses it (`close-button`);
+      - on the long page, a trusted click on the outside button, which lies inside the ring's box, gives the button its trusted `click` and focus;
+      - stacking, read from computed styles: the ring is `position: fixed` at `--ret-z-index` (9999), and every list is a fixed child of the region at the same z-index. So the ring, the region's `::after`, comes after the lists in tree order and paints above them.
+    - **Diagnostic (consumer CSS, not production):** a separate test adds `.ret-toaster:focus-visible::after { pointer-events: auto; }` through the harness style, which makes the ring hit-testable. Hit-testing follows the painting order, and it then finds the region at both toasts' centres and away from them, so the ring's box lies above the lists. Removing the override restores the production result: `pointer-events: none`, and the toasts are hit again. This observes stacking only and is never the proof that the ring takes no pointer input. The stacking result needs the override: hit-testing cannot see a non-hit-testable box. It is blocking because CF-13's stacking layer is Class 1, and it is named as diagnostic in the report.
+  - **Harness extension:** `focusFixture(mode)`, the CF-2 fixture component (`FocusFixtureMode`: `remove` or `rekey`). Nothing else: the S4.1 recorders and `focusState()` are reused, and the `data-paused` observer is spec-local.
+  - **Mutation checks**, each a temporary edit reverted at once (`git status` clean for `src/`):
+    - **CF-2:**
+      - the reconciliation `MutationObserver` never connected: the three CF-2 tests fail in Firefox and WebKit (6) and pass in Chromium, whose own `focusout` releases the toast. This is the browser difference above;
+      - the reason never cleared (`setToastPause` called only on entry): all 9 fail;
+      - resuming with the full duration instead of the remaining time: all 9 fail, on "when the remaining time has run".
+    - **CF-11:**
+      - ARIA's modifier order broken: the CF-11 test fails in every engine (`Shift+Control+K`);
+      - the raw `code` advertised for an unnameable key: fails in every engine (`Comma`).
+    - **CF-12** (stylesheet), each failing in every engine only the tests that cover that rule:
+      - the root ring's −1px offset removed: the root test (3);
+      - the custom close's `currentColor` rule removed: the custom-toast test (3);
+      - the region ring's border in `--ret-surface`: the region test (3);
+      - the action and close ring at 1px: the action-and-close and custom-toast tests (6).
+    - **CF-13:**
+      - the ring's `pointer-events: none` removed: all three CF-13 tests fail in every engine (9). The production hit-test finds the region, the outside click lands on the region, and the diagnostic's restored-production check reads `auto`;
+      - the ring's `z-index` removed: the production stacking assertion fails (`auto` against `9999`), and the diagnostic hit-test finds the toast above the ring, in every engine (6). The outside-click test passes, as it should.
+  - **Commands:** unchanged. `npm run test:browser` (198 tests); `npm run test:browser:evidence` (unchanged: 21 passed, 6 skipped).
+  - **Validation:**
+    - **Focused:** `focus-within.spec.ts` 9 of 9 and `focus-ring.spec.ts` 24 of 24, across the three engines.
+    - **Repeat run:** both with `--repeat-each=5` under `CI=1` (one worker, zero retries): **165 of 165** in 5.1 minutes. Earlier slices were not soaked again: nothing they cover changed.
+    - **Full blocking suite** under `CI=1`: 198 of 198 in about 4.4 minutes. The `@evidence` run: 21 passed, 6 skipped.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S4.3 (evidence):**
+      - CF-2's Class 2 layer (a focused control disabled, hidden or `inert`), including whether any engine leaves the toast paused after focus has genuinely left, which would be a D0-16 report;
+      - CF-3, where focus goes on removal outside restoration, starting from the event difference above;
+      - CF-11 B, Chromium's accessibility tree;
+      - CF-12, `:focus-visible` after script focus with no earlier keyboard input, and S3's data point;
+      - with CF-1, CF-4, CF-5 (blur), CF-6 Class 2, CF-9 and CF-10, and CF-7 and CF-8 as Class 4.
+    - **S6:**
+      - MC-1 for CF-12's rings in real Safari, including its Tab-to-buttons setting;
+      - MC-6 for CF-12's and CF-13's rings under Windows High Contrast;
+      - MC-8 for their appearance.
+    - **P-29:** CF-11's assistive-technology discoverability; the Firefox and WebKit accessibility trees stay an unverified gap.
+- **S4.3 record: focus and environment evidence (done).** Every S4 evidence layer is recorded. CF-1, CF-2 Class 2, CF-3, CF-4, CF-5 (blur), CF-6 Class 2, CF-9, CF-10, CF-11 B and CF-12 Class 2 are Class 2 `@evidence`; CF-7 and CF-8 are Class 4 `@evidence`. Each is recorded, never asserted as the product contract, and no class changed. No blocking test was added or changed. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged. No D0-16 report was raised.
+  - **Specs added** (`browser/tests/`, all `@evidence`, run by `npm run test:browser:evidence` only):
+    - `focus-dom.evidence.spec.ts` (7 per engine): CF-2 Class 2, CF-3, CF-6 Class 2, CF-9, CF-10, CF-12 Class 2, and CF-7 with CF-8;
+    - `environment.evidence.spec.ts` (4 per engine): CF-1 and CF-5 (Chromium), CF-4 (all three), CF-11 B (Chromium).
+
+    The tests assert that their scenario genuinely ran, never the observed values themselves. A Chromium-only test skips in Firefox and WebKit with a reason naming the manual checkpoint or gap, so the report shows the gap instead of a pass. What each enforces, as corrected at S4.4 (the strengthening there is recorded in the S4.4 record):
+    - **CF-2 Class 2 and CF-3 (removal and re-keying):** before the change, the fixture button holds focus and the toast is held.
+    - **CF-3 (Toaster unmount):** a toast's close holds focus before the unmount.
+    - **CF-6 Class 2 (container inert):** a toast's close holds focus and the toast is held before the container becomes inert.
+    - **CF-9:** the toast is exiting and `inert` before each revival is attempted.
+    - **CF-10:** `a`'s close holds focus before each close, and `a` is removed.
+    - **CF-12 Class 2:** in each of the 10 scenarios, focus reached the intended element: the root, the close, the action, the next toast's close or the region. Whether `:focus-visible` matched is recorded only.
+    - **CF-7 and CF-8:**
+      - **Mouse path:** a trusted `pointerdown` and `click` on `a`'s close, and that close taking focus after the press.
+      - **Keyboard path:** Tab reaching `a`'s close, and no pointer press on any close.
+      - **Both:** a later restoration `focusin` on `b`'s close, `a` dismissed once with `close-button`, and focus on `b`'s close with the pointer away from every stack when the observation is made. `:focus-visible`, `b`'s pause and its progress are recorded only (Class 4).
+    - **CF-1 and CF-5 (Chromium):**
+      - a trusted window `blur` followed by a trusted window `focus`;
+      - each observation made in the state it describes: while minimised, `document.hasFocus()` false and the toast held; after restoring, `hasFocus()` true, with CF-1's close still focused and CF-5's toast running again; and, for CF-1, the toast running again once Escape has moved focus out of it.
+
+      Visibility is recorded only.
+
+    - **CF-4:** the pointer lies over the new toast; every `pointermove` from the placement to the 1 px move is at the placed point, so the pointer did not move; the list received a `pointerenter` with `isTrusted` true; and the stack is held. The delay is recorded only.
+    - **CF-11 B (Chromium):** the region node was found in the accessibility tree for every configuration.
+
+    Until S4.4, the CF-12 and CF-7/CF-8 tests asserted only that their results existed; CF-1 and CF-5 counted the window `blur` without checking `isTrusted`; and CF-4 checked neither the pointer's placement nor its stillness, and its record dropped `isTrusted`. The observations recorded below were correct in every run, but those tests did not enforce them.
+
+  - **Harness change:** the CF-2 fixture (`focusFixture`) gains `disable`, `hide` and `inert` modes, which keep the focused element and only change an attribute through the content's own React state: `disabled`, `hidden`, or `inert` on a wrapper, set in a layout effect because React 18 has no `inert` prop. The button now sits in that wrapper in every mode. The S4.2 `remove` and `rekey` tests pass unchanged. The `held` (`data-paused`) and activation recorders are spec-local, and every other record comes from the S4.1 focus recorder and `inert` observer.
+  - **Two evidence runs** (`CI=1`) agree on every outcome below, and so do the two at S4.4 (one before and one after the strengthening). Timings that varied between runs are given as ranges.
+  - **CF-2 Class 2, a focused control disabled, hidden or made inert (the D0-16 trigger): no defect.** A finite custom toast. Trusted Tab focuses the fixture button, which holds focus and pauses the toast (both asserted), and trusted Enter applies the change.
+    - **The same outcome in all three engines, for each of `disabled`, `hidden` and `inert`:**
+      - the engine dispatches a trusted `focusout` from the button, with a null `relatedTarget`;
+      - `document.activeElement` becomes `<body>`;
+      - the toast is released within 0 to 2 ms of that `focusout`, through P-15's `focusout` reconciliation, and then times out normally (`timeout`).
+
+      Focus never left while the toast stayed held.
+
+    - **Focus move against an unusable `activeElement`:** the fix-up is either synchronous with the state change or deferred to the next rendering update, 5 to 15 ms later. Until then the disabled, hidden or inert button is still `document.activeElement` and still matches `:focus`, and the toast correctly stays held: focus has not left yet. Which modes were deferred varied between runs:
+      - WebKit deferred all three in the first run;
+      - Chromium deferred `inert` in one run and `disabled` in the other;
+      - Firefox deferred `hidden` in one run and `inert` in the other.
+    - **`targetInert`:** for `inert`, the `focusout` reports its target already inert, since the attribute came first; for `disabled` and `hidden` it does not.
+  - **CF-3, focus after a focused node is removed outside restoration:**
+    - **Content removed or re-keyed (S4.2's fixture):** Chromium dispatches a trusted `focusout` with a null `relatedTarget`; Firefox and WebKit dispatch no focus event. In all three, focus lands on `<body>`, and the toast is released within 2 ms of the activation.
+    - **The Toaster unmounted while a toast's close holds focus** (§18: an unmount restores nothing): `<body>` in all three. Chromium again dispatches a `focusout`; Firefox and WebKit dispatch nothing.
+  - **CF-6 Class 2, `inert` without restoration.** Covered by two scenarios:
+    - **The fixture's `inert` wrapper,** as in CF-2 above;
+    - **The page makes the Toaster's container (`#root`) inert** while a toast's close holds focus, the modal-dialog pattern. Every engine dispatches a trusted `focusout`, focus goes to `<body>`, and the toast is released 1 to 2 ms later. Chromium and Firefox do this at once; WebKit still reported the close as active, with the toast held, immediately after the attribute was set, and fixed it up within the next frames.
+  - **CF-9, revival of an exiting toast** (exit slowed to 2 s; `focus()` attempted on the root at each step, then released):
+    - while exiting, and in the same task as the reviving `toast()` call, before React commits: `inert` is set, the phase is `exiting`, and focus is refused;
+    - after a microtask (React's commit), and in the next task and the next frame: `inert` is gone, the phase is `entering`, and focus succeeds.
+
+    The same in all three engines. Alt+T right after a later revival focuses the toast, which is not inert. So `inert` refuses focus only until the revival commits; there is no window in which the committed, eligible toast refuses focus.
+
+  - **CF-10, the order of restoration, focus events, `inert` and the pause handover.** Two finite toasts. Focus is on `a`'s close by Tab, then `a` is closed by Enter, by a mouse click or programmatically. The same order in all three engines and on every path, within 0 to 12 ms of the trigger:
+    1. `focusout` from `a`'s close, with `relatedTarget` `b`'s close;
+    2. `focusin` on `b`'s close;
+    3. then, in one observer delivery, `a`'s `data-phase` `exiting`, `inert` on `a` (with `b`'s close already active), `a` released and `b` held.
+
+    Focus events are logged synchronously as they are dispatched. Phase, `inert` and held entries are observer callbacks, delivered after the commit, so their position after the focus events is not their DOM-write order: the commit writes `data-phase` before the layout effect restores focus. The restoration-before-`inert` order is what S4.1 proves (`targetInert: false`). On the mouse path, `b` was already held by hover before the click.
+
+  - **CF-11 B, Chromium's accessibility tree** (CDP `Accessibility.getFullAXTree`): the region node (role `region`, name "Notifications") carries `keyshortcuts` exactly equal to the DOM attribute in all five configurations: `Alt+T`, `Control+Shift+K`, `F6`, none for `["altKey", "Comma"]`, and none for `hotkey={false}`.
+    - **Firefox and WebKit:** their accessibility trees are not reachable with Playwright. This is an **unverified gap**, reported as a skip, never a pass.
+    - **Not used:** Playwright's `ariaSnapshot()`, which is computed from the DOM.
+    - **No screen-reader or assistive-technology claim:** that is P-29's.
+  - **CF-12 Class 2, `:focus-visible` after script focus.** Each case on a fresh page, without earlier input unless stated; the same in all three engines:
+
+    | Case                                                                                                     | Matches |
+    | -------------------------------------------------------------------------------------------------------- | ------- |
+    | Programmatic `focus()` on the root, or on the close, with no earlier input                               | yes     |
+    | Alt+T with no earlier input                                                                              | yes     |
+    | Tab to the action; Alt+T after it                                                                        | yes     |
+    | A mouse click on the toast's body (CF-39)                                                                | no      |
+    | Alt+T after that body click                                                                              | **no**  |
+    | Restoration to the next toast's close, or to the region, after a keyboard close                          | yes     |
+    | Restoration to the region after a programmatic focus and a programmatic dismissal, with no earlier input | yes     |
+    | Restoration to the next toast's close after a mouse close (CF-8, below)                                  | no      |
+    - **The heuristic follows the last input modality.** With no pointer input, script focus matches. After a pointer interaction it does not, and the Alt+T chord does not switch the modality back to keyboard.
+    - **This differs from D1,** which recorded Alt+T "with no earlier keyboard focus" as matching in Firefox only. D1's disposable harness is gone, so its input history cannot be re-checked. The table suggests that earlier pointer input there would explain D1's result, and the difference from P-17 S5's manual Chromium review. This is a reading of the evidence, not a reclassification.
+    - **For the maintainer and P-29:** a user who has used the pointer and then presses Alt+T gets the toast focused with **no visible ring, in every engine**. The §17.4 ring styles exist and apply whenever `:focus-visible` matches (S4.2), and D2-6 keeps engines' heuristics out of the contract, so this is not a D0-16 report. It is an accessibility observation for P-29, beside CF-8's pointer-close question. Any change, for example to how the hotkey shows focus, needs its own decision.
+
+  - **CF-7 and CF-8, a pointer close against a keyboard close (Class 4).** Two finite toasts with progress. The pointer leaves the stack after the close.
+    - **Mouse:** in all three engines `pointerdown`, then `mousedown`, then a `focusin` on the pressed close, then `click`, then restoration's `focusin` on `b`'s close.
+      - Playwright WebKit focuses a clicked button like the others. It cannot show Safari's click without focus, and this is never a Safari result (D0-7).
+      - Afterwards focus is on `b`'s close and does not match `:focus-visible`. `b` stays held by focus-within, its progress frozen (unchanged over 30 frames): it "looks stuck", with no ring, as P-18 S5 anticipated.
+    - **Keyboard:** the same target and the same held `b`, but `:focus-visible` matches, so the ring shows.
+    - **No contract change (D0-2).** The pointer-close question goes to P-29 with this evidence, and real Safari's click-without-focus stays MC-1 (and MC-2 for an iOS tap).
+  - **CF-1 and CF-5, genuine window blur (Chromium CDP minimise, D2-4).** Focus emulation is turned off after navigation, as in S3; the window is minimised and restored through CDP.
+    - **CF-1, a toast holding focus:**
+      - Minimising dispatches a trusted `focusout` from the focused close (null `relatedTarget`) and then the window's trusted `blur`. `document.hasFocus()` becomes false, `document.activeElement` stays the close, and the toast stays held: its focus-within reason reconciles to the still-active close, and `window-blur` joins it.
+      - The progress fill held at 0.967 for 0.5 s while minimised.
+      - Restoring dispatches the window's `focus` and a `focusin` on the same close. The toast stays held by focus-within alone, with the fill unchanged over another 0.5 s.
+      - After Escape releases focus (§18), the toast resumes from 0.966 with no reset, at 0.916 half a second later.
+    - **CF-5, nothing focused:** minimising holds the toast (`window-blur`) with the fill at 0.969; restoring releases it and the fill continues (0.967, then 0.916).
+    - **Visibility, in both:** `document.visibilityState` stayed `visible` and `document.hidden` false while minimised, and the browser dispatched no `visibilitychange`. The spec never dispatches one. Chromium's CDP minimise is genuine blur evidence for Chromium only. It is not hidden-document evidence and says nothing of Firefox, WebKit or Safari.
+  - **CF-4, a stack appearing under a stationary pointer.** The pointer is placed where the toast will appear, and the toast is created. With no pointer movement, every engine dispatches a trusted `pointerenter` to the list, at the pointer's own coordinates, and the stack's hover pause is set: after 7 to 21 ms in Chromium and Firefox, and 45 to 209 ms in WebKit, over four runs. (`isTrusted` was asserted, and kept in the record, only from S4.4.) A later 1 px move dispatches no second `pointerenter`. No synthetic boundary event is used, and nothing is asserted across engines.
+  - **Unverified gaps and their destinations:**
+    - genuine blur in Firefox and Safari: MC-5 and MC-1;
+    - genuinely hidden documents, backgrounding and resynchronisation in every engine (CF-5, CF-26): MC-1, MC-2, MC-3 and MC-5. A dispatched `visibilitychange` is never evidence (D2-4);
+    - the Firefox and WebKit accessibility trees (CF-11 B): no tooling here. Assistive technology is P-29's;
+    - real Safari's click without focus and its rings (CF-7, CF-12): MC-1, and MC-2 for iOS;
+    - CF-12 ring appearance: MC-8; and under Windows High Contrast: MC-6.
+  - **Commands:** unchanged. `npm run test:browser` (198 tests, unchanged); `npm run test:browser:evidence` (20 per engine, 60 in all: 48 passed and 12 skipped, the Chromium-only CDP tests in Firefox and WebKit).
+  - **Validation:**
+    - the new evidence specs pass (or skip, naming the gap) in all three engines, in two evidence runs;
+    - the full `@evidence` run: 48 passed, 12 skipped;
+    - the full blocking suite under `CI=1`: 198 of 198, the S4.2 tests included after the fixture change;
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward:**
+    - **S4.4:** S4's reconciliation of every S4 CF item, H1-R and S4-H2 against these records.
+    - **S6:** the manual checkpoints above; rerunning the evidence specs.
+    - **P-29:**
+      - CF-7, and CF-8 with CF-33: the pointer-close contract question, now with this evidence;
+      - CF-12: no visible ring after Alt+T following pointer use;
+      - CF-11's assistive-technology discoverability;
+      - the operating systems' own settings.
+- **S4.4 record: S4 reconciliation (done; S4 awaits the maintainer's acceptance).** A reconciliation of S4 (S4-H2, S4.1, S4.2, S4.3) against the D2 matrix. It is not an acceptance: S4 is ready for the maintainer to accept, and is not accepted by this record. No CF item was reclassified. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged since S4-H2's approved fix (`58148bf`).
+  - **Evidence-integrity stop and correction.** The reconciliation found that the S4.3 record claimed more than four evidence tests enforced: CF-12 Class 2, CF-7 and CF-8, CF-1 and CF-5, and CF-4. It stopped before committing and reported. The maintainer approved strengthening the assertions as well as correcting the wording. Both are done in `3a17f9f`, which the S4.3 record now describes test by test. Each strengthened test still asserts only that its scenario genuinely ran, never an observed value:
+    - **CF-12:** focus reached the intended element in all 10 scenarios.
+    - **CF-7 and CF-8:**
+      - **Mouse path:** a trusted press and click on `a`'s close, which took focus first.
+      - **Keyboard path:** Tab reached `a`'s close, and no pointer pressed a close.
+      - **Both:** restoration reached `b`'s close; `a` was dismissed once with `close-button`; and the observation was made with focus on `b`'s close and the pointer away from every stack.
+    - **CF-1 and CF-5:** a trusted window `blur`, then a trusted `focus`; `hasFocus()` and the held state in each observed phase.
+    - **CF-4:** the pointer lies over the new toast and never moved; a `pointerenter` on the list with `isTrusted` true; the stack held.
+
+    The strengthened tests passed in every applicable engine, and no earlier observation changed. The S4.1 count-only evidence tests (mouse buttons, tap, pen) are unchanged: the S4.1 record claims no more than they assert.
+
+  - **Totals:**
+    - **Blocking:** 198 tests, 66 per engine, the same 66 in Chromium, Firefox and WebKit. S4 contributes 22 per engine: `focus.spec.ts` 11, `focus-ring.spec.ts` 8 and `focus-within.spec.ts` 3.
+    - **Evidence:** 60 tests, 20 per engine. S4 contributes 15 per engine: `focus.evidence.spec.ts` 4, `focus-dom.evidence.spec.ts` 7 and `environment.evidence.spec.ts` 4. A full run gives 48 passed and 12 skipped; every skip is a Chromium-only CDP test in Firefox or WebKit, and its reason names the manual checkpoint or gap.
+  - **Blocking gate integrity:**
+    - CI's `browser` job runs `npm run test:browser`, which is `playwright test --grep-invert @evidence`. Its listing has 198 tests in the 10 blocking spec files and none from an `*.evidence.spec.ts`; the evidence listing has the 60 in the 5 evidence files.
+    - `retries: 0`, with `forbidOnly` under `CI`.
+    - No `test.skip`, `.only`, `.fixme` or `.fail` in a blocking spec. No S4 blocking test branches on the engine or returns early.
+  - **Coverage matrix.** "Pass" is the blocking result in C (Chromium), F (Firefox) and W (WebKit); "recorded" is Class 2 or 4 evidence, never a contract.
+
+    | Item  | Class (D2)              | Spec and tests                                                                                                                             | C              | F                | W                | Remaining limitation                                                                                           | Destination                    |
+    | ----- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+    | H1-R  | 1                       | `focus.spec.ts`, "H1-R: removal restoration never scrolls the page" (5)                                                                    | pass           | pass             | pass             | —                                                                                                              | AC-KB-1 (no regression)        |
+    | S4-H2 | 1                       | `focus.spec.ts`, "CF-6 and H2: presses on an exiting toast and the list keep focus" (3); unit tests in `focus-restoration.test.tsx` (6)    | pass           | pass             | pass             | a non-primary press on a bare gap loses its own default (untested)                                             | —                              |
+    | CF-1  | 2; 3                    | `environment.evidence.spec.ts`, "CF-1: a genuine window blur while a toast holds focus"                                                    | recorded       | skip (gap)       | skip (gap)       | genuine blur in Firefox and Safari; real window and app switching                                              | MC-1, MC-5                     |
+    | CF-2  | 1; 2                    | `focus-within.spec.ts`, "CF-2: the focus-within reason follows the DOM" (3); `focus-dom.evidence.spec.ts`, "CF-2 Class 2 and CF-6 Class 2" | pass; recorded | pass; recorded   | pass; recorded   | none: no engine left a toast held after focus left                                                             | —                              |
+    | CF-3  | 2                       | `focus-dom.evidence.spec.ts`, "CF-3: where focus goes …"                                                                                   | recorded       | recorded         | recorded         | —                                                                                                              | —                              |
+    | CF-4  | 2                       | `environment.evidence.spec.ts`, "CF-4: a stack appearing under a stationary pointer"                                                       | recorded       | recorded         | recorded         | never asserted across engines                                                                                  | —                              |
+    | CF-5  | blur 2 (C); 3; hidden 3 | `environment.evidence.spec.ts`, "CF-5: a genuine window blur with nothing focused, and visibility"                                         | recorded       | skip (gap)       | skip (gap)       | hidden documents in every engine: CDP minimise never hides a document, and no `visibilitychange` is dispatched | MC-1, MC-2, MC-3, MC-5         |
+    | CF-6  | 1; 2                    | `focus.spec.ts`, "CF-6: restoration before inert …" (3) and the H2 tests; `focus-dom.evidence.spec.ts`, "CF-6 Class 2 …" and the CF-2 test | pass; recorded | pass; recorded   | pass; recorded   | —                                                                                                              | —                              |
+    | CF-7  | 4; 3                    | `focus-dom.evidence.spec.ts`, "CF-7 and CF-8 (Class 4) …"                                                                                  | recorded       | recorded         | recorded         | Playwright WebKit focuses a clicked button: Safari's click without focus is not observable here                | MC-1, MC-2, P-29               |
+    | CF-8  | 4                       | the same test                                                                                                                              | recorded       | recorded         | recorded         | the pointer-close contract                                                                                     | P-29 (with CF-33)              |
+    | CF-9  | 2                       | `focus-dom.evidence.spec.ts`, "CF-9: reviving an exiting toast …"                                                                          | recorded       | recorded         | recorded         | —                                                                                                              | —                              |
+    | CF-10 | 2                       | `focus-dom.evidence.spec.ts`, "CF-10: the order of restoration …"                                                                          | recorded       | recorded         | recorded         | observer entries give delivery order, not DOM-write order; S4.1 proves restoration before `inert`              | —                              |
+    | CF-11 | A 1; B 2                | `focus-ring.spec.ts`, "CF-11 A: aria-keyshortcuts …"; `environment.evidence.spec.ts`, "CF-11 B …"                                          | pass; recorded | pass; skip (gap) | pass; skip (gap) | the Firefox and WebKit accessibility trees: an unverified gap                                                  | P-29 (assistive technology, C) |
+    | CF-12 | 1; 2; 3                 | `focus-ring.spec.ts`, "CF-12: focus rings while :focus-visible matches" (4); `focus-dom.evidence.spec.ts`, "CF-12 Class 2 …"               | pass; recorded | pass; recorded   | pass; recorded   | appearance; real Safari; Windows High Contrast; no ring after Alt+T following pointer use                      | MC-1, MC-6, MC-8, P-29         |
+    | CF-13 | 1; 3                    | `focus-ring.spec.ts`, "CF-13: the region ring takes no pointer input and stacks above the lists" (3, one of them the labelled diagnostic)  | pass           | pass             | pass             | appearance; Windows High Contrast                                                                              | MC-6, MC-8                     |
+
+  - **Evidence review.** Each point the reconciliation was asked to check holds in the specs and the records:
+    - Chromium's CDP minimise is genuine blur evidence for Chromium only, and is never presented as hidden-document evidence;
+    - the Firefox and WebKit accessibility-tree gaps are explicit skips, never passes;
+    - Playwright WebKit is never called Safari, and no user-agent string is used to identify one;
+    - CF-7 and CF-8 stay Class 4 observations;
+    - `:focus-visible` is recorded per engine, never assumed identical; the engines happened to agree;
+    - CF-10 separates observer delivery from DOM-write order.
+  - **Manual checkpoints, all pending for S6.** None has been run, none is passed, and P-21's device approvals satisfy none (CF-43). What S4 leaves to each:
+    - **MC-1, macOS Safari:**
+      - CF-7, click without focus, reported apart from the keyboard path;
+      - CF-8's Safari path;
+      - CF-12's rings after Tab, Alt+T and restoration, including Safari's Tab-to-buttons setting;
+      - CF-1 and CF-5 genuine blur;
+      - CF-26.
+    - **MC-2, iOS Safari:** CF-7's tap without focus; CF-5 and CF-26 backgrounding (with S5's swipe items).
+    - **MC-3, Android Chrome:** CF-5 and CF-26 backgrounding (with S5's swipe items).
+    - **MC-4, Firefox for Android:** nothing from S4; S5's Gecko touch layer.
+    - **MC-5, desktop Chrome and Firefox:** CF-1, CF-5 and CF-25 genuine blur by window and app switching; CF-26 hidden documents. What S4 has here is Chromium's CDP blur only.
+    - **MC-6, Windows High Contrast:** CF-12's and CF-13's rings, with S3's CF-14 and CF-28.
+    - **MC-7, real pen:** S4.1's barrel-button press on a gap; S5's pen items.
+    - **MC-8, human visual review:** CF-12's and CF-13's appearance, with the earlier slices' items.
+  - **P-29 carry-forwards from S4.** S6 writes these into the P-29 entry; P-29 decides them, and S4 implements none of them:
+    - **CF-7:** Safari's click without focus, from MC-1 and MC-2, reported apart from the keyboard path.
+    - **CF-8 with CF-33:** the pointer-close restoration contract (D0-2).
+      - The evidence: after a mouse close, focus is restored to the next toast's close with no `:focus-visible`, and that toast stays held by focus-within with its progress frozen, in all three engines.
+      - The keyboard close restores to the same target with the ring showing.
+    - **CF-11 C:** the hotkey's discoverability through assistive technology. The DOM attribute (Class 1) and Chromium's tree (Class 2) match, and the Firefox and WebKit trees are an unverified gap.
+    - **CF-12 (a deliberate UX and accessibility decision is needed):** after pointer use, Alt+T can focus a toast with no visible ring. In all three engines the hotkey after a body click did not match `:focus-visible`, so the ring styles, which S4.2 proves, never applied. It is not a D0-16 report: D2-6 keeps engines' heuristics out of the contract. Any change, for example to how the hotkey shows focus, needs its own decision. No focus-visible CSS, hotkey or restoration behaviour was changed in S4.
+    - **The operating systems' own settings,** as already recorded.
+  - **Validation (at `3a17f9f`, the documentation of this record aside):**
+    - **Browser suites:** the blocking suite under `CI=1`, 198 of 198; the `@evidence` suite, 48 passed and 12 skipped.
+    - **Repository gates:** `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects, the browser one included), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+    - **Soak:** no full-suite soak, since no instability appeared. Each S4 slice's own targeted repeat stands: S4.1 165 of 165, S4.2 165 of 165, and the H2 reproduction 120 of 120.
+  - **Next:** the maintainer's acceptance of S4; then S5 (swipe), not started.
+- **S5 decisions (the maintainer, at the S5 orientation review):**
+  1. Layer A also carries existing §19 and P-21 contracts where synthetic input can verify the logic, as Class 1: the `swipe` pause's start and end, an intersecting selection preventing a swipe, custom toasts swiping, RTL's physical directions, and the reduced-motion dismissal without travel after release. These are existing contracts, not new requirements or thresholds.
+  2. D2's engine gating applies to S5.2's Chromium-only Class 1 tests: they skip in Firefox and WebKit with a reason naming their manual checkpoint. The Playwright projects are not changed to avoid those skips.
+  3. S5.2's layer B starts with a Chromium context with `hasTouch: true` at 1280 × 720. Mobile metrics need evidence of a set-up problem and a recorded decision.
+  4. CF-36's completion stays synthetic in Chromium, Firefox and WebKit; trusted touch is extra evidence.
+  5. P-22 stays on Node 24 (Issue #24 tracks Node 26). If P-22 is still active on or after 2026-10-28, it stops for a maintainer decision (D2-15).
+- **S5.1 record: harness and cross-engine swipe logic (done).** CF-29 layer A and the approved §19 contracts, with synthetic pointer events, CF-29's mouse case, with trusted mouse input, and CF-36's completion are blocking in Chromium, Firefox and WebKit. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified. No D0-16 report was raised.
+  - **Spec added:** `browser/tests/swipe.spec.ts`, 18 blocking tests per engine, so the blocking suite is now 84 per engine and 252 in all. No evidence test.
+  - **Synthetic input, and what it cannot show.**
+    - **How layer A drives a gesture:** it dispatches `PointerEvent`s from script, inside the page, on the element where the contact starts:
+      - `pointerType: 'touch'`, one `pointerId`, `isPrimary`;
+      - `buttons` 1 on `pointerdown` and each `pointermove`, and 0 on `pointerup` or `pointercancel`, as browsers report a contact (the P-21 pen correction drops a move with `buttons` 0);
+      - each event's own `timeStamp` is recorded.
+    - **Not trusted:** the events have `isTrusted` false, and `setPointerCapture` throws for them, which the library tolerates. So layer A proves the library's gesture logic only.
+    - **What it never shows:** native pointer capture, `touch-action`, the browser's scroll arbitration, or real touch or pen input. Those are layer B (S5.2, Chromium) and the device checkpoints (MC-2, MC-3, MC-4, MC-7).
+    - **Reading state:** each step's toast state is read after the next frame and a task, because the renderer commits a pause change after the event's own task.
+  - **D2 values in the spec.** The slop (10 px), the distance (`min(0.4 × width, 100 px)`) and the velocity (0.4 px/ms over 100 ms) are written in the spec, not imported, so a change to the implementation's constants fails. Each test's preconditions check where its gesture lies against them.
+    - **Slow drags:** 8 px every 50 ms, released 50 ms after the last move. Their release velocity, recomputed from the events' timestamps as D2 defines it, must be at most half the threshold. It measured 0 in every run, so only the distance can decide.
+    - **The flick:** activation, then two moves 8 ms apart, with no state read in between. Its velocity must be at least twice the threshold. It measured 3.6 to 4.7 px/ms over ten runs per engine, and its offset is below the distance.
+  - **CF-29 layer A (Class 1, synthetic):**
+    - **Distance commit,** with a slow drag past the distance:
+      - at `top-left` (left), `top-right` (right), and `top-center` in both directions;
+      - the toast followed the drag (its transform X equals the offset);
+      - the dismissal reason is `swipe`;
+      - §19's exit continues from the dragged offset: from the release frame on, X never moves back toward rest and travels on past the offset until the toast is removed.
+    - **Below the distance,** slow: the toast springs back to rest (transform X 0, no swiping state), with no dismissal.
+    - **Velocity:** the flick under the distance commits with `swipe`.
+    - **Forbidden direction,** at `top-left` and `top-right`:
+      - a start in the forbidden direction never activates (no swipe state, no offset, no pause);
+      - an active drag carried back past its origin is clamped at 0;
+      - neither dismisses.
+    - **Activation:**
+      - 9 px does nothing and 10 px activates;
+      - a move past the slop without horizontal dominance (9, 9) drops the candidate for good;
+      - exactly dominant (15, 10) activates.
+    - **Interactive descendants:** a drag from the action, the close or a button in custom content never activates.
+  - **§19 and P-21 contracts (Class 1, synthetic, decision 1):**
+    - **The `swipe` pause:**
+      - no pause after `pointerdown` or short of the slop;
+      - paused once activated;
+      - a commit leaves the toast exiting and never held;
+      - after a snap-back and after a `pointercancel`, the pause has gone while the cosmetic settle still runs.
+    - **Selection:** a selection of the toast's text prevents activation; with it removed, the same drag commits.
+    - **Custom toasts:** a custom toast swipes and is dismissed with `swipe`.
+    - **RTL:** with `dir="rtl"` on the document (`:dir(rtl)` checked), `top-left` still swipes only left and `top-right` only right.
+    - **Reduced motion:** under Playwright's emulation, the drag still follows the pointer, a commit dismisses with `swipe`, and no frame after release shows travel past the release offset.
+  - **CF-29's mouse case (Class 1, trusted Playwright mouse):** a 200 px drag in 20 px steps across a `top-center` toast. At every step there is no swipe state and `transform: none`, and nothing is dismissed. The hover pause it sets is P-15's, not asserted here.
+  - **CF-36's completion (Class 1, synthetic):** a release below the distance, then a programmatic dismissal 0 ms or 50 ms into the snap-back.
+    - **Preconditions:** below the distance, and springing back in the release frame.
+    - **Asserted:**
+      - from the next frame on, the toast is never held;
+      - it is removed, with exactly one `onDismiss`, reason `programmatic`;
+      - a new toast with the same ID then has no swipe state and swipes normally.
+
+    The opacity during that exit is CF-36's and CF-40's Class 2 evidence (S5.3).
+
+  - **Harness change:** `toastState()` gains `transformX` (the computed transform's horizontal translation) and `swiping` (the root's internal `data-swiping`), as observations only. The synthetic gesture helper lives in the spec.
+  - **Browser differences:** none in any outcome.
+  - **A test-design correction during S5.1:**
+    - **What happened:** in one mutation run, the flick failed once in one engine, and the failure could not be reproduced (216 of 216 in four repeats under the same parallel load, 45 of 45 in isolation).
+    - **Likely cause:** the flick then read the toast's state after every move, so a stalled frame could slow it towards the precondition (WebKit measured 0.99 px/ms at the time, against the 0.8 required).
+    - **The correction:** its moves are now dispatched 8 ms apart with no reads in between. The precondition and its margin are unchanged.
+  - **Mutation checks**, each a temporary edit reverted at once (`git status` clean for `src/`):
+    - **A mouse treated as touch:** the mouse test fails in every engine (3).
+    - **The distance cap raised to 150 px:** every distance commit fails (33). Lowered to 70 px: the below-distance and CF-36 tests fail (9).
+    - **The velocity threshold raised to 10 px/ms, or velocity commits disabled:** the flick fails in every engine (3 each). A lowered threshold is not detected, since the slow releases measure 0; the distance tests carry the low side.
+    - **`protectedTarget` bypassed:** the interactive-descendant test fails in every engine (3).
+    - **The `swipe` pause not cleared on a snap-back or cancel:** the pause test and the 50 ms CF-36 test fail in every engine (6).
+    - **The selection check removed:** the selection test fails in every engine (3).
+    - **The reduced-motion release rule disabled:** the reduced-motion test fails in every engine (3).
+  - **Commands:** unchanged. `npm run test:browser` (252 tests); `npm run test:browser:evidence` (unchanged: 48 passed, 12 skipped).
+  - **Validation:**
+    - **Focused:** `swipe.spec.ts` 54 of 54.
+    - **Repeat run:** `--repeat-each=5` under `CI=1` (one worker, zero retries): **270 of 270**. Earlier slices were not soaked again: nothing they cover changed.
+    - **Full blocking suite** under `CI=1`: 252 of 252. The `@evidence` run: 48 passed, 12 skipped.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Carried forward to S5.2:**
+    - **Layer B (Chromium, trusted CDP touch, `hasTouch` at 1280 × 720, decision 3):** distance commit, spring-back, centre directions, the forbidden clamp, interactive descendants.
+    - **CF-30 and CF-41:** vertical scrolling from a toast, and `pointercancel`.
+    - **CF-32:** a programmatic dismissal mid-drag, and a genuine capture loss.
+    - **CF-35:** continuity (Chromium trusted; Firefox and WebKit synthetic).
+    - **Gating:** each Chromium-only test skips elsewhere naming MC-2, MC-3 or MC-4 (decision 2).
+- **S5.2 record: trusted Chromium touch, scroll arbitration, capture and motion continuity (done).** CF-29 layer B, CF-30, CF-32 and CF-41 at their Chromium Class 1 layers, and CF-35's continuity (Chromium trusted; Firefox and WebKit synthetic), are blocking. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified. No D0-16 report was raised.
+  - **Specs added:**
+    - `swipe-touch.spec.ts`: 10 Chromium tests (CF-29 layer B, CF-30 and CF-41, CF-32), each skipped in Firefox and WebKit with the reason naming MC-4 (Firefox for Android), MC-2 (iOS Safari) and MC-3 (Android Chrome) (S5 decision 2);
+    - `swipe-motion.spec.ts`: 4 tests per engine (CF-35).
+
+    The blocking suite now lists 294 tests: Chromium runs 98, and Firefox and WebKit run 88 each, with the 10 named skips. These are the first engine-gated skips in the blocking job, as D2's engine-gating rule provides; no project was changed.
+
+  - **Trusted touch, and what it is.**
+    - **The input:** CDP `Input.dispatchTouchEvent` in a context with `hasTouch` at 1280 × 720 (S5 decision 3); no mobile metrics were needed. The browser turns it into trusted `touch` pointer events, with real implicit and explicit capture and real `touch-action`.
+    - **What is recorded:** the browser's own events, as the page receives them: `pointerdown`, `pointermove`, `pointerup`, `pointercancel`, `gotpointercapture`, `lostpointercapture` and `click`, each with `isTrusted`, `pointerType`, `pointerId`, target and `timeStamp`. This is kept apart from the test's input, and each test asserts that every recorded input event is trusted `touch`.
+    - **Delivery:** Chromium dispatches touch moves with the next frame, after CDP has returned. So each step waits until the page has received the last move at its `clientX` (or a `pointercancel`) before anything is observed.
+    - **No release velocity in the no-commit and distance cases:** the finger rests 150 ms before lifting, and the trusted timestamps prove there was no move within the 100 ms velocity window, so only the distance decides. A trusted velocity commit stays Class 2 (S5.3).
+  - **CF-29 layer B (Class 1, Chromium trusted):**
+    - **Distance commit:** a 140 px drag at `top-right` (right) and at `top-center` in both directions. The toast follows the finger past the distance; the root takes real capture (`gotpointercapture` on the root); the dismissal reason is `swipe`.
+    - **Spring-back:** a 60 px drag returns to rest, unheld and not dismissed.
+    - **Forbidden direction:** a drag left at `top-right` never activates.
+    - **Interactive descendants:** a drag that starts on the action or the close never activates, and dismisses nothing. The start target is asserted, and the close's SVG content counts as the close. No `click` dismissed either control after the drag.
+  - **CF-30 and CF-41 (Class 1, Chromium trusted).**
+    - **Control:** on the long page at `scrollY` 1000, a 250 px downward drag on page content scrolls the page, so this context scrolls by touch.
+    - **The same drag starting on a toast's title:**
+      - the page scrolls;
+      - the browser sends a trusted `pointercancel` and no `pointerup`;
+      - the toast stays at rest, with no swipe state and no offset, unheld, and is not dismissed.
+    - **In the capability probe before the spec** (not committed): 1000 → 573 px from the toast, and 0 → 451 px for the control.
+  - **CF-32 (Class 1, Chromium trusted):**
+    - **A programmatic dismissal during an active 60 px drag:**
+      - at once the toast is `exiting`, `inert`, unheld, and the root no longer holds the pointer (`hasPointerCapture` false);
+      - the root's `lostpointercapture` is recorded;
+      - the finger then moves on past the distance and lifts, and the only dismissal is the `programmatic` one, once.
+    - **A genuine loss of capture:**
+      - with the root holding real capture (`hasPointerCapture` true), the page calls `releasePointerCapture`. This is not a dispatched event: the browser itself sends a trusted `lostpointercapture` to the root;
+      - as the Pointer Events specification has it, that event comes with the pointer's next event, so the test moves once more and waits for it;
+      - the drag ends at once;
+      - moving on past the distance and lifting dismisses nothing, and the toast returns to rest, unheld.
+  - **CF-35 (Class 1; Chromium trusted, Firefox and WebKit synthetic):** one test body with two drivers: CDP touch, or `PointerEvent`s dispatched on the toast's title (labelled synthetic; logic only). `b` is the dragged toast in a `top-right` stack.
+    - **Activation during a reposition:**
+      - with the finger already down, an insertion starts moving `b` down;
+      - the move that activates is read in its own task: `b`'s rendered top just before the library handles it (a capture-phase listener) and just after (a bubble-phase listener);
+      - the precondition: `b` is mid-reposition;
+      - the change is at most the motion the measured speed explains over that interval, plus half a pixel;
+      - then, held for 300 ms (past the reposition), `b`'s rendered top does not move (Freeze Y).
+    - **Insertion and removal during a drag:**
+      - while `b` is dragged 40 px, two toasts are inserted above it and one above it is removed;
+      - at every frame and every toast mutation, `b`'s rendered top and its transform X stay where they were;
+      - on release, it reaches its new layout place (one slot lower) and X 0 along an interpolated path, with no reversal.
+    - **A reposition during the snap-back:**
+      - the release comes after a 150 ms rest below the distance, and an insertion follows during the snap-back;
+      - X is read in one task just before and just after the insertion's commit: the harness's `mount()` re-renders the same Toaster under `flushSync`, so the repositioning seed runs inside that task;
+      - X may change only by the snap-back's own fastest speed times that interval (Chromium and Firefox hold animation time within a task; WebKit advances it);
+      - X then returns to 0 along an interpolated path.
+    - **A reposition during the fly-out:**
+      - the public exit token is slowed to 600 ms (D0-11), and the distance commits after a 150 ms rest;
+      - an insertion 100 ms into the fly-out is measured the same way;
+      - X never moves back toward rest (the accepted one-frame hold allowed), travels on after the insertion, and the reason is `swipe`.
+  - **Test-design corrections during S5.2:** a repeat under parallel load showed flakes that were the tests', not the product's (8 of 88 at first). Each was fixed at its cause, not by loosening an assertion, and the final repeats show none:
+    - Chromium's frame-aligned touch moves were observed before delivery: the waits on the delivered `clientX` above;
+    - `lostpointercapture` was read before the next pointer event delivered it: the test now waits for it;
+    - a snap-back released without a rest occasionally committed by velocity, which is correct behaviour: the rest above;
+    - a frame-sampled speed underestimated WebKit's in-task motion around an insertion: the one-task measurement above.
+
+    No assertion was weakened, and no product behaviour was involved.
+
+  - **Mutation checks**, each a temporary edit reverted at once (`git status` clean for `src/`):
+    - **The capture-loss guard** (`event.target === root`) removed: 8 Chromium tests fail, every trusted drag that must reach release, as P-21 D1 predicted. The synthetic engines pass, because only trusted touch has a descendant's implicit capture to lose.
+    - **`touch-action: none`:** only the Chromium scroll test fails.
+    - **Freeze Y** (a dragged toast's swipe Y not absorbing the displacement): the insertion-and-removal test fails in all three engines.
+    - **Y-only seeding** (X erased by a reposition): the snap-back and fly-out tests fail in all three engines (6).
+    - **An external dismissal not ending the gesture:** the Chromium CF-32 dismissal test fails.
+    - **Activation from the layout Y instead of the visual Y:** the activation test fails in all three engines.
+  - **Commands:** unchanged. `npm run test:browser` (294 listed: 274 run and pass, 20 named skips); `npm run test:browser:evidence` (unchanged: 48 passed, 12 skipped).
+  - **Validation:**
+    - **Repeats:**
+      - `swipe-touch.spec.ts` and `swipe-motion.spec.ts` with `--repeat-each=8` under the local three workers: 176 of 176, with 160 named skips;
+      - with `--repeat-each=5` under `CI=1` (one worker, zero retries): **110 of 110**, with 100 named skips.
+    - **Full blocking suite** under `CI=1`: 274 passed, 20 skipped. The `@evidence` run: 48 passed, 12 skipped.
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Limits, unchanged:**
+    - trusted touch is Chromium's, in Playwright: never Safari, iOS, Android or Firefox for Android;
+    - Firefox and WebKit swipe coverage is synthetic logic (layer A and CF-35), and their touch, capture, `touch-action` and scrolling stay with MC-2, MC-3 and MC-4;
+    - pinch-zoom (CF-34) and real pens (CF-31, CF-37) stay manual.
+  - **Carried forward to S5.3 (evidence):**
+    - CF-29's trusted velocity commit;
+    - CF-30's and CF-41's diagonal hand-over angles;
+    - CF-31's protocol pen;
+    - CF-32's capture mechanics (where the next `pointerup` goes);
+    - CF-35's one-frame hold;
+    - CF-36's and CF-40's opacity;
+    - CF-38's shadow root;
+    - CF-39's press focus;
+    - CF-33 (Class 4).
+- **S5.3 record: swipe browser evidence (done).** Every S5 evidence layer is recorded in `swipe.evidence.spec.ts`: CF-29's trusted velocity, CF-30's and CF-41's diagonals, CF-31, CF-32's capture mechanics, CF-35's one-frame hold, CF-36 and CF-40, CF-38, CF-39, and CF-33 as Class 4. Each is recorded, never asserted as the product contract, and no class changed. No blocking test was added or changed. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged. No D0-16 report was raised.
+  - **Spec added:** `browser/tests/swipe.evidence.spec.ts` (`@evidence`), 9 tests per engine; 4 are Chromium-only and skip in Firefox and WebKit naming MC-2, MC-3, MC-4 or MC-7.
+  - **Input provenance, named in every record:**
+    - `trusted`: Chromium CDP touch (`hasTouch`, 1280 × 720), which the browser turns into trusted `touch` pointer events;
+    - `protocol`: Chromium CDP pen (`pointerType: 'pen'`). The events are trusted, but CDP decides their properties, so they are never physical-stylus evidence (MC-7);
+    - `synthetic`: script-dispatched `PointerEvent`s, logic only.
+
+    A recorder logs the page's own pointer and capture events: `isTrusted`, `pointerType`, `pointerId`, the target, the innermost target through open shadow roots (`composedPath()[0]`), position and `timeStamp`.
+
+  - **Integrity (the S4.4 rule; corrected at S5.4, recorded in the S5.4 record).** Each test asserts that its scenario genuinely occurred, never its observed values.
+    - **Provenance, asserted from the recorded events in every test except CF-39's mouse case** (checked as below) **and CF-36's** (its synthetic contact is dispatched by the spec itself):
+      - the scenario's own pointer is the `pointerId` of its `pointerdown` on the intended target;
+      - each of that pointer's `pointerdown`, `pointermove`, `pointerup` and `pointercancel` must be trusted `touch` (Chromium CDP touch), trusted `pen` (Chromium protocol pen), or `isTrusted` false with `touch` (synthetic, Firefox and WebKit). The label is checked against the events, never taken from the engine's name;
+      - another pointer's events are listed in the record, never asserted. None appeared in the S5.4 runs.
+    - **Capture events,** where present: those of the scenario's pointer must be trusted, with its `pointerType` (CF-29, CF-30 and CF-41, CF-31 and CF-32).
+    - **Scenario preconditions:**
+      - **CF-29:** the release offset under the distance, and the D2 release velocity, recomputed from the trusted timestamps, at least twice the threshold;
+      - **CF-30 and CF-41:** a `pointerdown` on the intended toast, and at least one delivered move;
+      - **CF-31:** a `pointerdown` on the intended toast, or on page content;
+      - **CF-32:** the root's `gotpointercapture` before the dismissal, and its `lostpointercapture` after it;
+      - **CF-35:** the contact on `b`'s title, a fly-out under way, and the insertion landing during it;
+      - **CF-36 and CF-40:** a release below opacity 1, the snap-back or release state in the release frame, the exit reached, and the removal;
+      - **CF-38:** the contact's innermost target (`composedPath()[0]`) being the intended button;
+      - **CF-39:** a trusted `pointerdown` of the intended type (mouse, touch or pen);
+      - **CF-33:** the contact on `a`'s title, the swiped toast holding focus first, and the `swipe` dismissal.
+    - **Recorded only:** activation, cancellation, scrolling, dismissals, focus, opacities, holds and the delivered movement.
+
+    None of these is a product contract.
+
+  - **CF-29, a trusted velocity commit (Chromium):** activation, then one move a delivered frame later, and an immediate lift, with an offset of 80 px against the 100 px distance. The D2 velocity, recomputed from the trusted timestamps, measured 1.13 to 1.16 px/ms over five runs, and the flick committed with `swipe` each time. An earlier shape, with two moves after activation, measured only 0.86 px/ms, too close to the precondition, and was replaced.
+    - **Limitation:** Chromium delivers touch moves once per frame, so a velocity scenario needs moves at least a frame apart; moves sent within one frame coalesce, and the activation and the last position can then share an event, leaving no offset to commit. That is why the trusted velocity commit stays Class 2.
+  - **CF-30 and CF-41, diagonals (Chromium trusted):** CDP input of 150 px from a toast's title on the long page at `scrollY` 1000, in 8 moves, at an intended angle from horizontal. The delivered movement is measured from the browser's own events: from the `pointerdown` to the last `pointermove` before any `pointercancel`. It was the same in the three S5.4 runs that recorded it.
+
+    | Intended | Moves delivered | Delivered dx / dy | Observed angle | Swipe activated | Browser `pointercancel` | Page scrolled | Dismissed    |
+    | -------- | --------------- | ----------------- | -------------- | --------------- | ----------------------- | ------------- | ------------ |
+    | 20°      | 8 of 8          | 141 / 51 px       | 20°            | yes             | no                      | 0             | yes, `swipe` |
+    | 30°      | 8 of 8          | 130 / 75 px       | 30°            | yes             | no                      | 0             | yes, `swipe` |
+    | 45°      | 8 of 8          | 106 / 106 px      | 45°            | no              | no                      | 0             | no           |
+    | 60°      | 1 of 8          | 9 / 15 px         | 59°            | no              | yes, after that move    | 128–135 px    | no           |
+    - **At 60°,** the browser delivered one move of 17 px and then took the pointer for scrolling. The rest of the input became page scroll, never pointer moves, so the observed angle rests on that single move.
+    - **The angles** are the input's intent and the delivered moves; no universal threshold is drawn from them.
+
+    In every case the toast ended at rest and unheld.
+    - **The difference from D1:** at 45° D1 recorded a cancel and a scroll. Here the library dropped the candidate, since 45° fails its 1.5 dominance, and Chromium neither cancelled nor scrolled. At exactly 45° the browser's own arbitration is at its boundary.
+    - **Not a contract:** this is the browser's arbitration, not the product contract.
+
+  - **CF-31, protocol pen (Chromium):**
+    - **Horizontal:** a 140 px pen drag on a toast is trusted `pen` throughout. The root takes capture, the swipe activates, and it commits with `swipe`.
+    - **Vertical:** a pen drag scrolled nothing, neither from a toast nor from the page, and no `pointercancel` came. So in this set-up Chromium does not pan for protocol pen input at all: a pen drag here is never handed to scrolling, whatever `touch-action` says. Real pens and their `touch-action` stay MC-7.
+  - **CF-32, capture mechanics (Chromium trusted):**
+    - **Before the dismissal:** `pointerdown` on the title; `gotpointercapture` on the title (touch's implicit capture); `lostpointercapture` on the title as the root takes capture; `gotpointercapture` on the root.
+    - **After a programmatic dismissal:** `lostpointercapture` on the root. The next `pointermove`s and the `pointerup` go to the position's list, because the exiting toast is inert. One dismissal, `programmatic`.
+    - **Status:** an observed order, not a required one beyond the documented contract.
+  - **CF-35, the one-frame hold** (exit slowed to 600 ms; Chromium trusted, Firefox and WebKit synthetic; every frame read with its own `performance.now()`):
+    - **The control, with no reposition:** there are held frames in the first 4 to 17 ms after the release, where the transform transition starts (in three WebKit runs, none). Those are the start of the transition, not a hold caused by repositioning: the clock artifact the control separates out.
+    - **With an insertion during the fly-out:** a further held frame right after the insertion in Chromium (at 109 to 125 ms, the insertion at 106 to 111 ms) and Firefox (at 119 to 141 ms, the insertion at 115 to 125 ms), in all five runs (S5.3 and S5.4). None after the insertion in WebKit in any run.
+
+    This is the accepted cosmetic hold (P-21 S3). It is not required behaviour, and its appearance stays MC-8.
+
+  - **CF-36 and CF-40, opacity (synthetic, all three):**
+    - **Method:** a release at opacity 0.878 below the distance (the snap-back), then a programmatic dismissal 0, 16, 50 or 100 ms later; and a commit by distance at 0.696. Sampling starts in the release's task. "At dismissal" is the last frame before the exit.
+    - **Chromium:** the exit starts from 1 whatever the snap-back value: a first step of +0.122 at 0 ms, +0.11 at 16 ms, +0.048 at 50 ms and +0.015 at 100 ms, then monotone.
+    - **Firefox:** no first step, with one rise of +0.03 over one frame at 16 ms.
+    - **WebKit:** first steps of at most +0.035, then monotone.
+    - **A commit:** no rise in any engine. The exit fades from the swipe opacity, so no running opacity transition overrides P-18's exit fade (CF-40). Every case completed its exit, and was removed with its own reason.
+
+    These match D1b and D2-7's accepted cosmetic difference. WebKit's +0.035 at 16 ms is a little more than D1b's +0.010; it is a single frame. The optional human observation of Chromium's step stays MC-8.
+
+  - **CF-38, Shadow DOM** (Chromium trusted; Firefox and WebKit synthetic composed events; custom content from the new harness fixture):
+    - **A drag from a button inside an open shadow root,** in all three engines: `composedPath()[0]` is the shadow button, while `pointerdown` reaches the toast retargeted to its host. The swipe activates and commits with `swipe`.
+    - **The light-DOM button beside it** never activates.
+
+    This is the confirmed D2-2 limitation, for P-26 and §37: `protectedTarget()` sees the host. No `composedPath()` change was made.
+
+  - **CF-39, press focus:**
+    - **A trusted mouse press on the toast's body** focuses the root (`tabindex="-1"`) in all three engines, and the toast is held.
+    - **In Chromium:**
+      - a trusted touch tap leaves `<body>` focused during the contact and focuses the root after the lift (the compatibility mouse events);
+      - a held trusted touch drag focuses nothing, during it or after;
+      - a protocol pen press focuses the root at once, like a mouse.
+    - **Status:** existing pointer-focus behaviour, not a contract. Touch and pen on real devices stay MC-2, MC-3 and MC-7.
+  - **CF-33, focus after a swipe dismissal of the focused toast (Class 4):** with the first toast focused by Alt+T and swiped away (Chromium trusted; Firefox and WebKit synthetic), focus goes to the next toast's root (§18), which matches `:focus-visible` after the keyboard's Alt+T and is held by focus-within, in all three engines. A swipe after pointer use, where `:focus-visible` would not match (S4.3's CF-12 result), was not recorded here. The pointer-triggered restoration question (D0-2) goes to P-29 with CF-8.
+  - **Harness change:** `shadowFixture()`, custom content with a light-DOM button and a button in an open shadow root (CF-38). Observation only.
+  - **Commands:** unchanged. `npm run test:browser:evidence` lists 29 per engine, 87 in all: 67 pass and 20 skip (the earlier 12, and this spec's 4 Chromium-only tests in Firefox and WebKit). `npm run test:browser` is unchanged: 274 passed, 20 named skips.
+  - **Validation:**
+    - the new spec passes, or skips with its named reason, in all three engines, in two full runs and two further runs of its CF-29 and CF-36 tests. The outcomes agree, and timings that varied are given as ranges;
+    - the full `@evidence` run under `CI=1`: 67 passed, 20 skipped;
+    - the full blocking suite under `CI=1`: 274 passed, 20 named skips;
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Remaining manual checkpoints (S6):**
+    - MC-2, MC-3 and MC-4 for real touch, scrolling, diagonals and `pointercancel` (AC-SW-1's layer C), and pinch-zoom (CF-34, CF-42);
+    - MC-7 for real pens (CF-31, CF-37) and pen press focus (CF-39);
+    - MC-8 for the one-frame hold's appearance (CF-35) and, optionally, Chromium's opacity step (CF-36).
+  - **Carried forward to S5.4:**
+    - reconcile AC-SW-1's layers: A (C F W, S5.1), B (C, S5.2), and C (MC-2, MC-3, MC-4, pending);
+    - the S5 coverage matrix;
+    - carry-forwards: CF-38 to P-26 and §37; CF-33 to P-29; CF-31 and CF-37 to MC-7; CF-34 and CF-42 to MC-2, MC-3 and MC-4.
+- **S5.4 record: S5 reconciliation (done; S5 awaits the maintainer's acceptance).** A reconciliation of S5 (S5.1, S5.2, S5.3) against the D2 matrix and §19. It is not an acceptance: S5 is ready for the maintainer to accept, and is not accepted by this record. No CF item was reclassified. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged since S4-H2's approved fix.
+  - **Evidence-integrity stop and correction.** The reconciliation found that the S5.3 record claimed more than its evidence tests enforced. It stopped before committing and reported. The maintainer approved corrections 1 to 5, done in `c3f4a78`, which the S5.3 record now describes:
+    - **CF-30 and CF-41:** the moves are checked as trusted `touch`, and the movement the browser actually delivered is recorded (moves, dx and dy, the observed angle) beside the intended angle;
+    - **CF-31:** trusted `pen` for every event of all three cases;
+    - **CF-32:** `isTrusted` is kept with each recorded event, and every capture event is checked as the browser's own;
+    - **CF-33, CF-35 and CF-38:** the input's provenance is checked from the events (trusted `touch` in Chromium, `isTrusted` false in Firefox and WebKit), never inferred from the engine;
+    - **the wording:** it now separates preconditions, asserted provenance and recorded observations.
+
+    Each check covers only the scenario's own pointer, by the `pointerId` of its `pointerdown`; another pointer's events are recorded, never asserted.
+
+    - **A failure during the correction:** in its first run, the CF-29 test, unchanged from S5.3, failed once. Its S5.3 assertion required **every** recorded pointer event to be trusted `touch`, and one event was not. The event could not be identified (the next runs cleared the run's artifacts), and it did not recur in 12 further runs, whose scenario events were all trusted `touch`.
+    - **The fix:** the cause was the over-broad assertion, not the scenario. CF-29 now takes the scoped check above.
+    - **No production behaviour, contract or classification is involved.** The observations recorded at S5.3 reproduced in every S5.4 run.
+
+  - **Totals:**
+    - **Blocking:** 294 tests listed, 98 per engine. Chromium runs all 98; Firefox and WebKit run 88 and skip `swipe-touch.spec.ts`'s 10, with the reason naming MC-4, MC-2 and MC-3. A full run: 274 passed and 20 skipped.
+    - **S5's share:** `swipe.spec.ts` 18 per engine, `swipe-motion.spec.ts` 4 per engine, `swipe-touch.spec.ts` 10 (Chromium).
+    - **Evidence:** 87 tests listed, 29 per engine; a full run gives 67 passed and 20 skipped. S5's share is `swipe.evidence.spec.ts`, 9 per engine, of which 4 are Chromium-only.
+  - **Blocking gate integrity:**
+    - CI's `browser` job runs `npm run test:browser`, which is `playwright test --grep-invert @evidence`. Its listing holds the 13 blocking spec files and no `*.evidence.spec.ts`.
+    - `retries: 0`, with `forbidOnly` under `CI`. No `.only`, `.fixme` or `.fail`. The one skip is `swipe-touch.spec.ts`'s file-level engine gate (S5 decision 2).
+    - **Layer B** asserts that every input event is trusted `touch`. **Layer A** and the Firefox and WebKit part of CF-35 are labelled synthetic in their specs and records.
+  - **S5.2's synchronisation, reviewed.** Each wait is either on genuine browser delivery or is the scenario's own property:
+    - waits for the browser's delivery of a move (its `pointermove` at the sent `clientX`, or a `pointercancel`), since Chromium delivers touch moves with the next frame;
+    - waits for the browser's `lostpointercapture`, which comes with the pointer's next event;
+    - the 150 ms rests before a lift, an asserted precondition (no move within the 100 ms velocity window, from trusted timestamps);
+    - the 300 ms holds that are the property under test (Y frozen through a reposition);
+    - the one-task insertion measurement through the harness's `mount()` under `flushSync`, which is recorded.
+
+    None loosened an assertion.
+
+  - **AC-SW-1, by D2-3's layers.** AC-SW-1 is met only when all three have passed.
+
+    | Layer                        | Input                                                       | Engines                                         | Status                                                                                                                     |
+    | ---------------------------- | ----------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+    | A, swipe logic               | synthetic `PointerEvent`s; logic only, never real touch     | Chromium, Firefox, WebKit                       | **blocking, passing** (`swipe.spec.ts`), with the trusted mouse case                                                       |
+    | B, trusted touch integration | Chromium CDP touch: real capture, `touch-action`, scrolling | Chromium                                        | **blocking, passing** (`swipe-touch.spec.ts`; CF-35 also in `swipe-motion.spec.ts`)                                        |
+    | C, real devices and browsers | real touch on real devices                                  | iOS Safari, Android Chrome, Firefox for Android | **pending: S6**, MC-2, MC-3 and MC-4. Not complete; Playwright WebKit is never Safari, and layer A is never touch coverage |
+
+  - **Coverage matrix.** "Pass" is blocking in the named engines (C, F, W); "recorded" is Class 2 or 4 evidence, never a contract. Input: T trusted (Chromium CDP touch), P protocol (Chromium CDP pen), S synthetic, M trusted mouse.
+
+    | Item                | Class (D2)                          | Spec and scenario                                                                                                                                                                                                                                        | Input   | Result                           | Limitation                                                                 | Destination                         |
+    | ------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------- | -------------------------------------------------------------------------- | ----------------------------------- |
+    | CF-29               | 1 (A C F W; B C; mouse C F W); 2; 3 | `swipe.spec.ts`: distance at left, right and centre (both ways), below it, the flick, the forbidden clamp, activation slop and dominance, interactive descendants, the mouse drag. `swipe-touch.spec.ts`: layer B. Evidence: the trusted velocity commit | S; M; T | pass C F W; pass C; recorded (C) | trusted velocity is Class 2 (Chromium's frame-aligned moves); real devices | MC-2, MC-3, MC-4                    |
+    | CF-30               | 1 (C); 2; 3                         | `swipe-touch.spec.ts`: a vertical drag from a toast scrolls, with the browser's `pointercancel` and no dismissal, after a scrolling control. Evidence: diagonals                                                                                         | T       | pass C; recorded (C)             | Firefox and WebKit scrolling not automatable                               | MC-2, MC-3, MC-4                    |
+    | CF-31               | 2; 3                                | evidence: protocol pen, horizontal (commits), vertical from a toast and the page (no scroll)                                                                                                                                                             | P       | recorded (C)                     | protocol pen is not a stylus                                               | MC-7                                |
+    | CF-32               | 1 (C); 2; 3                         | `swipe-touch.spec.ts`: a programmatic dismissal mid-drag wins once; a genuine capture loss restores. Evidence: capture mechanics                                                                                                                         | T       | pass C; recorded (C)             | real touch devices                                                         | MC-2, MC-4                          |
+    | CF-33               | 4                                   | evidence: focus after a swipe of the focused toast                                                                                                                                                                                                       | T; S    | recorded C F W                   | a swipe after pointer use not recorded                                     | P-29 (with CF-8)                    |
+    | CF-34               | 3                                   | none: pinch-zoom is not automatable (D1)                                                                                                                                                                                                                 | —       | pending                          | —                                                                          | MC-2, MC-3, MC-4                    |
+    | CF-35               | 1 (C T; F W S); 2; 3                | `swipe-motion.spec.ts`: activation mid-reposition, Freeze Y under insertion and removal, X kept through repositions during the snap-back and the fly-out. Evidence: the one-frame hold against a control                                                 | T; S    | pass C F W; recorded C F W       | appearance                                                                 | MC-8                                |
+    | CF-36               | 1 (C F W S); 2; optional 3          | `swipe.spec.ts`: a dismissal during the snap-back completes once with its reason. Evidence: opacity                                                                                                                                                      | S       | pass C F W; recorded C F W       | Chromium's first-frame step (accepted, D2-7)                               | MC-8 (optional)                     |
+    | CF-37               | 3                                   | none: real pen hardware                                                                                                                                                                                                                                  | —       | pending                          | the re-base decision follows MC-7 (D0-4)                                   | MC-7                                |
+    | CF-38               | 2                                   | evidence: a drag from a shadow-root button starts and commits; the light-DOM one never does                                                                                                                                                              | T; S    | recorded C F W                   | the confirmed D2-2 limitation; no `composedPath()` change                  | P-26, §37                           |
+    | CF-39               | 2; 3                                | evidence: mouse press (C F W), touch tap and held drag (C), protocol pen press (C)                                                                                                                                                                       | M; T; P | recorded                         | real touch and pen                                                         | MC-2, MC-3, MC-7                    |
+    | CF-40               | 2                                   | evidence, with CF-36: on a commit, no rise in any engine                                                                                                                                                                                                 | S       | recorded C F W                   | —                                                                          | —                                   |
+    | CF-41               | as CF-30                            | as CF-30                                                                                                                                                                                                                                                 | T       | pass C; recorded (C)             | as CF-30                                                                   | MC-2, MC-3, MC-4                    |
+    | CF-42               | 4                                   | assembled at S6 from CF-30, CF-34 and CF-41                                                                                                                                                                                                              | —       | pending (needs CF-34)            | `pan-y` kept (D0-14)                                                       | P-26, after MC-2, MC-3, MC-4        |
+    | CF-43               | a rule                              | P-21's device approvals satisfy no CF item                                                                                                                                                                                                               | —       | applied: none was counted        | —                                                                          | S6                                  |
+    | §19 (S5 decision 1) | 1 (C F W S)                         | `swipe.spec.ts`: the `swipe` pause's start and end; a selection prevents a swipe; custom toasts swipe; RTL keeps the physical directions; reduced motion dismisses without travel                                                                        | S       | pass C F W                       | logic only                                                                 | real devices under MC-2, MC-3, MC-4 |
+
+  - **Carry-forwards:**
+    - **S6, manual checkpoints, all pending and none passed:**
+      - MC-2 (iOS Safari), MC-3 (Android Chrome) and MC-4 (Firefox for Android): real touch swipes, scroll arbitration, diagonals, `pointercancel`, pinch-zoom (CF-34) and the `touch-action` evidence (CF-42), with S3's safe areas and S4's backgrounding and tap-without-focus;
+      - MC-7: real pens (CF-31, CF-37, CF-39's pen press);
+      - MC-8: CF-35's hold and, optionally, CF-36's Chromium step, with the earlier visual items;
+      - MC-1, MC-5 and MC-6, as S3 and S4 recorded them.
+    - **P-26:** the Shadow DOM boundary (CF-38, with its post-v2 `composedPath()` candidate, §37); `touch-action: pan-y` and pinch-zoom (CF-42); with S3's forced-colours distinction.
+    - **P-29:**
+      - CF-33 with CF-8 and CF-7: the pointer-triggered restoration contract;
+      - S4's CF-12 finding: no visible ring after Alt+T following pointer use;
+      - CF-11 C: discoverability through assistive technology.
+  - **Validation (at `c3f4a78`; this record is documentation only):**
+    - **Browser suites:** the blocking suite under `CI=1`, 274 passed and 20 named skips; the `@evidence` suite under `CI=1`, 67 passed and 20 skipped, with no other pointer's events in any record;
+    - **The corrected evidence spec:** its own runs agreed on every outcome;
+    - **Repository gates:** `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass;
+    - **Soak:** no full-suite soak, since no instability appeared. S5's targeted repeats stand: S5.1 270 of 270; S5.2 176 of 176 at three local workers and 110 of 110 under `CI=1`.
+  - **Next:** the maintainer's acceptance of S5; then S6, not started.
+- **S6 preflight record: the CF-35 WebKit activation allowance (done; awaits the maintainer's acceptance).** The maintainer accepted S5 (`c3f4a78`, `c838e02`). The S6 orientation's preflight did not reproduce S5's baseline, so it stopped before any orientation work. A test-design defect was found and corrected, with the maintainer's approval at each step. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified. No D0-16 report was raised.
+  - **The failed baseline.** At `c838e02`, the blocking suite under `CI=1` gave **273 passed, 1 failed, 20 skipped**. The failure was `swipe-motion.spec.ts`, "CF-35 … activation during a reposition starts from the current position, then freezes Y", in WebKit (synthetic input). The `@evidence` suite matched S5.4 (67 passed, 20 skipped). The failure's own artifacts were overwritten by the evidence run that followed, so it is known by name only.
+  - **Targeted diagnosis** (approved: this test only, WebKit, `CI=1`, one worker, zero retries, `--repeat-each=20`, on an idle host): **16 passed, 4 failed**, all at the S5.2 assertion "no jump at activation". The change measured 1.27 to 1.29 px against allowances of 0.92 to 1.27 px.
+    - **The reposition was genuinely in progress:** `b`'s transform Y was −47.6 or −51.5 px at activation.
+    - **Freeze Y held:** in every failure, all 25 drag frames sat exactly at the activation's `after` top.
+    - **The mechanism:** the allowance (half a pixel plus the fastest frame-to-frame speed times the `before` to `after` interval) took its speed only from frames sampled before activation. Activation lands about 10 ms into the 200 ms reposition, so those frames held only its first interval, the slow start of `cubic-bezier(0.2, 0, 0, 1)`: 0.29 to 0.42 px/ms. Between that frame and `before`, `b` was moving at 1.07 to 1.18 px/ms. WebKit advances motion within a task (S2) and its `performance.now()` read in whole milliseconds here, so the 1 to 2 ms between `before` and `after` carried about 1.27 px of real reposition motion, more than the stale speed allowed. S5.2's 13 WebKit repeats of this test (8 and 5) all passed; at the rate seen here that has about a 5% chance.
+    - **Classification:** a test-design defect in the allowance's speed estimate, not a production defect.
+  - **The correction** (`swipe-motion.spec.ts`, this test only). The speed estimate now includes the activating move's own `before` read as its last sample, so it measures the motion leading into activation. The principle is unchanged: the permitted change is only the motion the measured speed explains over the interval, plus half a pixel. No sleep, fixed tolerance, clock-resolution term, production or timing change was added, and the Freeze Y assertion and the other CF-35 tests are unchanged.
+  - **Mutation.** S5.2's mutation, activation from the layout Y instead of the visual Y (`useSwipe.ts` writing Y 0 at activation), still fails the corrected test at "no jump at activation" in every engine: 37.97 px against 2.14 (Chromium), 58.15 against 1.19 (Firefox) and 46.37 against 1.71 (WebKit). It was reverted at once, and `src/` is identical to `c838e02`.
+  - **Targeted repeats of the corrected test,** under `CI=1`, one worker, zero retries:
+    - **WebKit, 100 repetitions with traces on: 100 passed.** Decoded from every trace: the measured interval was 1 ms in 22 runs, 2 ms in 70, and 3 to 5 ms in 8; 54 runs showed a non-zero change, up to 1.29 px; the old allowance would have failed 10 of them, the corrected one none; Y never moved while held (24 or more drag frames each); activation fell at transform Y −64.0 to −19.5 px.
+    - **Chromium and Firefox, 20 repetitions each: 40 passed.**
+  - **Full validation** (one fresh run each, no retries): the blocking suite under `CI=1`, **274 passed, 20 named skips**; the `@evidence` suite under `CI=1`, 67 passed, 20 skipped; `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Remaining uncertainty:**
+    - The smallest margin in the 100 runs was 0.14 px (a 1.26 px change against 1.41 px, with a measured interval of 1 ms). WebKit's whole-millisecond clock can understate the interval, so the margin is thinnest when it reads 1 ms. No clock-resolution term was added; the S6 soak is the next evidence on it.
+    - 100 clean runs do not show that future flakiness is impossible.
+    - The original failure's own trace was lost, so that it shared this mechanism is inferred from the reproduction.
+  - **Diagnostics,** kept outside the repository and session storage at `~/p22-diagnostics/2026-10-09-cf35-webkit/`: the commands, environment, logs, results, the four failure traces and screenshots, the 100 WebKit traces, and the allowance calculations.
+  - **Next:** the maintainer's acceptance of this correction; then the S6 orientation, not started.
+- **S6.1 record: the manual QA page (done; awaits the maintainer's acceptance).** The page S6's manual checkpoints run on, from the S6 orientation's proposal as the maintainer approved it. Test infrastructure only: `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, no CF item was reclassified, and no checkpoint was run.
+  - **The maintainer's device inventory:**
+    - **Available:** a Windows desktop, an Android phone with a display cutout, and an iPhone with a notch or Dynamic Island. MC-2, MC-3, MC-4, MC-5, MC-6 and MC-8 (except its Safari part on macOS) can be scheduled.
+    - **Unavailable, so unverified gaps for now:** macOS Safari (MC-1, and MC-8's desktop Safari part) and physical pen hardware (MC-7). iOS Safari does not stand in for macOS Safari, nor Chromium's protocol pen for a pen. P-22's closure is not decided here.
+  - **Files:**
+    - `browser/harness/manual.html` and `manual.tsx`: the page, served at `/manual.html`;
+    - `browser/vite.config.ts`: a second HTML entry. With two entries, the build moves the shared library and React code into one chunk that `index.html` now preloads; the automated harness's source, API, selectors and behaviour are unchanged;
+    - `browser/tests/manual.spec.ts`: the smoke test;
+    - `browser/MANUAL_QA.md`: how to serve and use the page, and the LAN procedure.
+  - **The page:**
+    - the real public entry (`src/index.ts`) and the production stylesheet, linked byte for byte by the existing build plugin; its own styles use an `mq-` prefix, are added from script, and never select `.ret-*` or set `touch-action`, stacking or transforms;
+    - `width=device-width, initial-scale=1, viewport-fit=cover`, with zoom enabled; a tall page with scroll markers; focusable buttons before and after the region; the `dir` attribute on `<html>`, as the specs set it;
+    - the Toaster in its own React root, so the panel's status updates never re-render it;
+    - **controls:** the six positions, LTR and RTL, the three themes, `maxVisible`, slow motion (the public enter and exit tokens at 1800 and 1200 ms, as consumer CSS; the 200 ms reposition is not a token and stays at production speed); the next toast's type (default, success, error, warning, info, loading, custom), duration (persistent, 8 s, or the Toaster's 5 s), description, action and progress; add one, add three, dismiss all, and dismiss the newest in 2 s (for CF-32); presets for a persistent swipe target, an 8 s toast with progress, a persistent toast with an action, and a 280 × 96 px custom toast with a button inside;
+    - **status**, four times a second: each toast's ID, type, position, phase, `data-paused`, `data-swiping`, `inert` and progress fraction; `visibilityState`, `hasFocus()`, the active element and `:focus-visible`; `scrollY`, `visualViewport.scale`, the viewport, the measured `env(safe-area-inset-*)` values and `dir`; the user agent;
+    - **event log** (up to 2000 entries, the newest 150 shown, each with `performance.now()` and wall-clock time): pointer events with `pointerType`, `pointerId`, `button`, `buttons`, pressure and `isTrusted` (moves when `buttons` changes or at most every 100 ms per pointer, with a count of those left out), `pointercancel`, `got`/`lostpointercapture`; clicks with the active element; navigation keys and Alt+T, never typed text; `focusin`/`focusout` with `:focus-visible`; window focus and blur; `visibilitychange`; `pagehide`/`pageshow`; scrolls, resizes and visual-viewport changes, at most every 250 ms; toast roots added and removed, their lifecycle attributes, and `onDismiss` with its reason;
+    - **observational only:** every listener is passive, in the capture phase, and never calls `preventDefault`, `stopPropagation` or pointer capture; there are no touch listeners;
+    - **export:** a session label; **Download JSON** (a Blob download, which works over plain HTTP and on iOS, Android Chrome and Firefox) with the label, the environment (user agent, touch points, pixel ratio, screen, orientation, React version, reduced-motion, colour-scheme and forced-colours media), the status and the log; **Show JSON** as a fallback; **Clear log**. No Clipboard API, devtools, telemetry or upload.
+  - **Smoke test (Class 1, Chromium, Firefox, WebKit; one per engine):** the page loads; `/styles.css` is byte-identical to `src/styles.css` and the only linked stylesheet; the region is present; a success toast created from the page's controls renders, styled and visible, in a `position: fixed` list; the status shows it; its close button removes it; and the log holds its creation, its dismissal with reason `close-button`, and the mouse's pointer events.
+  - **Validation:**
+    - the smoke test: 3 passed;
+    - the blocking suite under `CI=1`: **277 passed, 20 named skips** (274 plus the three smoke tests; no other test or skip changed);
+    - the `@evidence` suite under `CI=1`: 67 passed, 20 skipped;
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass;
+    - a scratch check in Chromium at the Pixel 7 size (not committed): no horizontal overflow at 412 px, the presets, the scheduled dismissal, RTL at `bottom-left`, the JSON export and download, and no page errors.
+  - **Serving:** `npm run browser:serve`, then `http://localhost:4180/manual.html`. From WSL, Windows' own `curl.exe` fetched the page through `localhost` and `127.0.0.1` (HTTP 200). A look in a Windows browser is the first step of the first manual session.
+  - **LAN access: pending.** WSL2 uses NAT here, so phones need a temporary Windows port forward and firewall rule. `browser/MANUAL_QA.md` describes them and their cleanup; nothing was run, and they wait for the maintainer's approval.
+  - **Limitations:** toasts sit above the page, so at a top or bottom position they can cover controls at that edge; the status reads the progress fraction from the fill's computed transform; the safe-area values are those the browser resolves for the page.
+  - **Pending:** every manual checkpoint (none run or passed; AC-SW-1 layer C stays pending); the LAN setup; S6.2 (the soak, with the CF-35 watch); S6.3 (the reconciliation and carry-forwards).
+- **S6.1a record: a 10-minute progress preset (done; awaits the maintainer's acceptance).** The maintainer accepted S6.1 (`a73bff8`) after opening the page in Windows Chrome. That confirms the page works; it is not an MC-5 result. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no checkpoint was run.
+  - **Why:** MC-5's and MC-1's background cases (CF-1, CF-5, CF-25, CF-26; AC-PR-1's manual layer) include hiding for more than about 5 minutes. The longest progress preset was 8 s, so the toast would have closed long before the case ended.
+  - **The preset:** **10-minute progress — background/visibility test**, first under Presets. It calls the public `toast.info` with `duration: 600_000` and `progress: true`, labelled "10-minute progress" and its ID. Pause and resume are the library's own; the page adds no timer or polling that touches the toast. Its creation is logged with `"duration":"ten-minutes"`. The instrumentation and the other controls are unchanged: the status and log already show the phase, `data-paused`, the progress fraction, visibility, `hasFocus()`, the active element and `:focus-visible`, and the focus, blur and visibility events. `browser/MANUAL_QA.md` describes its use. The page gives no verdict.
+  - **Smoke test:** the existing test case gains the preset, so the count is unchanged. The toast is visible with its label; the fill's computed `animation-duration` is `600s` and it is running; its fraction falls below 1 while staying above 0.99; and the status and log show it. Chromium, Firefox and WebKit: 3 passed.
+  - **Validation:** the blocking suite under `CI=1`, **277 passed, 20 named skips**; the `@evidence` suite under `CI=1`, 67 passed, 20 skipped; `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Limitation:** the status shows the fraction to three decimals, which is 0.6 s of a 10-minute toast; run-ahead after minutes hidden is far larger.
+  - **Pending:** every manual checkpoint (none run or passed); the LAN setup; S6.2; S6.3.
+- **MC-5 record: desktop Chrome and Firefox on Windows (partly recorded; not complete).** The maintainer accepted S6.1a (`51290fb`), then ran six cases on the manual QA page in real Windows Chrome and Firefox with the 10-minute progress preset, and reported them on 2026-10-09. These are the maintainer's **visual observations**, not machine evidence: the `visibilitychange` transitions were not checked, the progress fractions before and after were not written down, and no JSON log was reviewed. Nothing here is inferred beyond what was reported. `src/`, the harness and the tests are unchanged.
+  - **Not yet recorded:** the Windows build, the Chrome and Firefox versions and the date of each session, which every checkpoint records.
+  - **Reported, in each of Chrome and Firefox:**
+
+    | Case                                          | Reported observation                                                                                                                      |
+    | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+    | Focus inside the toast, Alt+Tab away and back | focus inside confirmed by eye; the toast stayed paused while focused; no visible run-ahead on return; progress resumed once focus left it |
+    | Tab hidden for more than 5 minutes            | the toast stayed; no visible run-ahead on return; progress resumed normally                                                               |
+    | Window minimised for more than 5 minutes      | the toast stayed; no visible run-ahead on return; progress resumed normally                                                               |
+
+  - **Against MC-5's requirements:**
+    - **CF-26, hidden tab and minimised window for more than about 5 minutes (intensive throttling): supported visually, in both browsers.** The bar showed no visible run-ahead and resumed. On a 10-minute bar, the run-ahead T1 prevents would be about half its length after 5 minutes, so a visual check can see it; a smaller drift could not be seen, and no fraction was recorded.
+    - **CF-1, genuine app switching while a toast holds focus: supported visually, in both browsers.** The focus-within pause held through Alt+Tab and cleared once focus left. Whether `window-blur` set and cleared `data-paused` was not checked: with focus inside, the focus-within pause hides the blur reason's own effect.
+    - **CF-25 and CF-1, genuine blur on its own: not covered.** No case blurred the window with focus and the pointer outside the toast, so the reported cases do not show that blur alone freezes the bar and resumes it from the held fraction. That is the Class 3 layer CF-25 assigns to Firefox (Chromium's is CDP evidence only).
+    - **CF-5, real blur and `visibilitychange`: outcome only.** The outcomes are consistent with the document being hidden, but the events themselves were not observed.
+    - **Window switching** (another browser window) was not reported apart from Alt+Tab.
+    - **Occlusion-only hiding** (the browser window fully covered by another window, without minimising it or switching tabs) was not attempted. MC-5 asks for it where the platform produces it.
+  - **Assessment: MC-5 is partly verified, not passed.** No new production defect was reported, and nothing calls for a D0-16 report.
+  - **To complete MC-5:**
+    - record the Windows build, the browser versions and the session dates;
+    - in each browser, blur alone: the 10-minute preset with focus and the pointer away from the toast, Alt+Tab away for about a minute and back, then window switching, with the status values before and after and a JSON export;
+    - one hidden-tab and one minimised case per browser with a JSON export, so the `window-blur`/`window-focus`, `visibilitychange` and `data-paused` transitions and the fractions are recorded. The long, more-than-5-minute cases stand as reported visually;
+    - occlusion-only hiding: attempt it, and record whether Windows produced a hidden document.
+- **MC-5 final record: desktop Chrome and Firefox on Windows (accepted / PASSED).** It completes the partial record above, which stands as written. The maintainer ran the remaining cases and supplied the environment. Every result below is the maintainer's **visual observation**: no JSON log was exported, no progress fraction was written down, and no event trace was reviewed. Nothing here is inferred beyond what was reported. `src/`, the harness and the tests are unchanged.
+  - **Environment:** Windows 11, version 26H2, build 26300.955; Chrome 154.0.8037.95; Firefox 157.0.1; the manual QA page with the 10-minute progress preset (`51290fb`), served locally; all cases on 2026-10-09.
+  - **Results: 6 cases in each browser, 12 in all, every one reported positive.**
+
+    | Case                                                                 | Chrome   | Firefox  |
+    | -------------------------------------------------------------------- | -------- | -------- |
+    | 1. Focus inside the toast, Alt+Tab away and back                     | positive | positive |
+    | 2. Tab hidden for more than 5 minutes                                | positive | positive |
+    | 3. Window minimised for more than 5 minutes                          | positive | positive |
+    | 4. Window blur alone, with focus and the pointer outside the toast   | positive | positive |
+    | 5. Switching between two windows of the same browser                 | positive | positive |
+    | 6. Occlusion only: the browser fully covered by another app's window | positive | positive |
+
+    "Positive" means, as reported: the toast stayed where applicable; no visible run-ahead of the progress bar on return; progress resumed normally. In case 4, the bar paused while the window was blurred. In case 1, it stayed paused while focus was inside the toast and resumed once focus left.
+
+  - **Occlusion and visibility:** Firefox reported `visibilitychange` to `hidden` during occlusion. Whether Chrome's document became hidden during occlusion was **not determined**.
+  - **Against MC-5's requirements (and its CF items, in Chrome and Firefox):**
+    - **CF-1, genuine window and app switching while a toast holds focus:** case 1 (app switching) and case 5 (window switching). With focus inside, the focus-within pause hides the blur reason's own effect, so case 1 alone does not show it; case 4 does.
+    - **CF-25, genuine blur freezes and resumes the bar:** case 4, blur with no focus or pointer in the toast, so only the blur reason (`window-blur`) applied. This is the Firefox Class 3 layer, and real-Chrome evidence beside Chromium's CDP layer.
+    - **CF-5, real blur and visibility:** real blur in cases 1, 4 and 5; real hidden documents in cases 2 and 3, and in Firefox's case 6, where the hidden state was seen. The events themselves were not traced.
+    - **CF-26, the bar on return after genuine hiding, without run-ahead (T1):** cases 2 and 3, each hidden for more than 5 minutes (intensive throttling), and case 6, occlusion-only hiding, which MC-5 asks for where the platform produces it. Firefox produced it. Chrome's case 6 passed on its outcome, but whether it hid the document is unknown, so for Chrome it is evidence of the outcome, not of the hidden-document path. Chrome's hidden-document path is covered by cases 2 and 3.
+  - **Limitations, recorded with the evidence:**
+    - **Visual, not measured:** without fractions, a run-ahead or drift smaller than the eye can see on the bar would go unnoticed. The failure T1 prevents is large: after 5 minutes hidden, about half of a 10-minute bar.
+    - **No event trace:** the `window-blur`, `visibilitychange` and `data-paused` transitions were not recorded. The library pauses on both window blur and a hidden document (`useEnvironmentPause`), and switching tabs, minimising or covering the window normally also takes focus from it (browser behaviour, not observed here), so cases 2, 3 and 6 need not have exercised the hidden-document reason on its own. MC-5 asks for the behaviour, not for the reasons separated.
+    - **Chrome's occlusion visibility** is undetermined, as above.
+  - **Assessment:**
+    - MC-5's requirement is behaviour in real browsers, recorded as a manual checkpoint (Class 3): the machine, the operating-system and browser versions, the date, and a case-by-case result with observations. No MC-5 item, and none of CF-1, CF-5, CF-25 and CF-26, requires an exported log or measured fractions. Every required case now has a reported result in both browsers, and the environment is complete.
+    - **Decision: accepted / PASSED.** The maintainer accepted MC-5 as passed on the maintainer's visual evidence, with the limitations above. The hidden-document pause reason was not isolated or verified on its own.
+    - No production defect was reported, and none is inferred from the missing traces.
+    - **Optional, not required:** a Chrome occlusion case with a JSON export would settle whether Chrome hides an occluded document. The outcome is already recorded, so it would add only that detail.
+  - **Scope:** MC-5 covers desktop Chrome and Firefox only. The same CF items stay open elsewhere: MC-1 (macOS Safari, an unverified gap), and MC-2 and MC-3 for mobile backgrounding (CF-5, CF-26). AC-PR-1's manual layer is therefore not complete.
+- **MC-6 record: real Windows High Contrast in Chrome and Firefox (accepted / PASSED).** The maintainer ran the manual QA page under a Windows contrast theme on 2026-10-09: first broad checks, then a follow-up covering each rendering requirement. Every result below is the maintainer's **visual and interaction observation** in real browsers, not automated evidence. Emulated forced colours remain the separate Class 1 layer (CF-14, S3). Nothing is inferred beyond what was reported. `src/`, the harness and the tests are unchanged.
+  - **Environment:** Windows 11, version 26H2, build 26300.955; Chrome 154.0.8037.95; Firefox 157.0.1; the **Aquatic** contrast theme, the same in both; 2026-10-09.
+  - **Results, positive in both browsers:**
+
+    | MC-6 requirement (forced-colours rule)                                                                        | Reported in Chrome and Firefox                                                                    |
+    | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+    | CF-14: the card keeps a visible edge (`CanvasText` border)                                                    | visible on all six types: default, success, error, warning, info and loading                      |
+    | CF-14: each type recognisable by its icon                                                                     | success, error, warning and info by their icons; loading by its spinner; default has no type icon |
+    | CF-14: the action button has a border (`ButtonText`)                                                          | visible on **Persistent with action**                                                             |
+    | CF-14 and CF-12: the focus rings in `Highlight`                                                               | the action and close buttons, in Aquatic's highlight colour; the toast root after Alt+T           |
+    | CF-14 and CF-13: the region ring (`Highlight`, with a `Canvas` halo), shown while the region itself has focus | visible after the single-toast close sequence (Alt+T, Tab to the close button, Enter)             |
+    | CF-28: the progress fill in `CanvasText`, with no track                                                       | the fill visible, with no track behind it                                                         |
+
+    The earlier broad checks were also positive in both: text readable, controls visible, keyboard focus visible; no defect was reported. Keyboard activation worked in Firefox and was not reported separately in Chrome; it is not an MC-6 requirement.
+
+  - **Limitations:**
+    - **Visual only.** The rings' colour is the maintainer's judgement against the theme's highlight colour, not a measured value. No screenshots are recorded.
+    - **`focusVisible` not recorded.** The Status value was not written down in either browser, for the toast root after Alt+T or for the region after the close sequence. The rings were seen; the `:focus-visible` state behind them was not independently checked. MC-6 asks for the rings' appearance, so this is recorded, not required.
+    - **The Alt+T ring is engine behaviour.** Whether an engine matches `:focus-visible` after Alt+T depends on its heuristics and on the input used before (D2-6). This session's earlier input was not recorded, so the ring seen here does not contradict S4's observation that no ring shows after Alt+T following pointer use, and it is no contract.
+  - **Assessment: accepted / PASSED.** All six rendering requirements of MC-6 (D0-8; CF-14, CF-28, CF-12 and CF-13 at Class 3) were observed in both browsers, and the environment, including the theme, is complete. No production defect was reported or inferred. P-26 can now distinguish emulated forced colours (Class 1, Chromium, Firefox and WebKit) from this real Windows High Contrast evidence (Chrome and Firefox, Aquatic).
+- **S6.1b record: the manual QA page's MC-8 additions (done; awaits the maintainer's review).** The maintainer approved the MC-8 checklist and this slice. It adds the two controls the checklist found missing. Test infrastructure only: `src/`, the production stylesheet, the public API, the package exports and the 30 tokens are unchanged, no CF item was reclassified, and MC-8 has not been run.
+  - **MC-8's coverage (the maintainer's decisions):** Chromium and Gecko on the Windows desktop now; real iOS Safari for the WebKit engine and Safari, once phone access is approved; CF-35 and CF-36, which need touch, with MC-2, MC-3 and MC-4. **macOS Safari stays an unverified gap.** Phone network access is not yet approved.
+  - **Close button on custom toasts** (CF-12's custom close ring): a checkbox under Next toast, off by default. When it is on, custom toasts, the Custom 280 × 96 preset included, are created through the public `toast.custom` with `closeButton: true`, and their `create` entry carries `"closeButton":true`. When it is off, custom toasts are unchanged.
+  - **Add one in 2 s** (CF-35, an insertion during a swipe fly-out): one ordinary toast, about 2 s after the click, through the same path as Add one, with the Next toast settings captured at the click. The log records `add-scheduled` at the click; when the timer fires, the toast's `create` entry and then `add-scheduled-fired` with its ID. The button is disabled, reading "(pending)", until then, so only one insertion is ever pending, and settings changed meanwhile do not affect it.
+  - **`browser/MANUAL_QA.md`:** how to inspect the custom close ring, keyboard only, in both themes; and how to reproduce CF-35 with touch: Slow motion lengthens the fly-out to 1.2 s but not the fixed 200 ms reposition; the expected cosmetic result; how the log shows the order; and that a visual check records what was seen, never a measured frame.
+  - **Smoke test:** a second manual-page test case in Chromium, Firefox and WebKit. Custom toasts have no close button by default, and get one with the option, which dismisses with reason `close-button`. The scheduled insertion adds nothing at once, keeps the button disabled while pending, then adds exactly one toast, with at least 1,900 ms between `add-scheduled` and `add-scheduled-fired` (a lower bound only). The swipe-target, action and progress presets still create their toasts.
+  - **Validation:**
+    - the manual-page smoke tests: 6 passed (2 per engine);
+    - the blocking suite under `CI=1`: **280 passed, 20 named skips** (277 plus the new case in three engines; no other test or skip changed);
+    - the `@evidence` suite under `CI=1`: 67 passed, 20 skipped;
+    - `format:check`, `lint` with the stylesheet contract, `typecheck` (four projects), `typecheck:demo`, the full Vitest suite (40 files, 1,695 tests), `validate:package`, `build:demo` and `git diff --check` all pass.
+  - **Limitations:** the 200 ms reposition cannot be slowed (it is not a token); swiping needs a touch device, so CF-35 waits for the phones; the insertion's timing relative to the swipe is the tester's, so a case may need repeating until the log shows it landed during the fly-out.
+- **MC-8 Windows record: human visual review in desktop Chrome and Firefox (Windows desktop portion PASSED; MC-8 not complete).** The maintainer reviewed the manual QA page directly, by eye, following the approved MC-8 checklist, and approved this portion. Every result below is the maintainer's **human visual observation**: no screenshot, recording, log or measurement is part of it, and it is not frame-level evidence. The frame metrics remain the separate Class 2 records (S2, S3, S5.3). `src/`, the harness and the tests are unchanged.
+  - **Environment:** Windows 11, version 26H2, build 26300.955; Chrome 154.0.8037.95 (Chromium); Firefox 157.0.1 (Gecko); the manual QA page at `44f5338` (S6.1b); 2026-10-09.
+  - **Results, in both Chrome and Firefox:**
+
+    | Item  | Case                                                                                                                                                                 | Result               |
+    | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+    | CF-27 | The strip at about 75%, 50% and 25% remaining (`top-right`, LTR, light): the corner follows the curve                                                                | pass at all three    |
+    | CF-27 | The moving edge is straight                                                                                                                                          | pass                 |
+    | CF-12 | Rings in the light and dark themes: the action, the close button, the toast root after Alt+T, the custom toast's root and the custom close button (the S6.1b option) | pass, in both themes |
+    | CF-13 | The region ring after the last toast was closed by keyboard (`top-right`, LTR, light); Status `active=region`, `focusVisible=true`                                   | pass                 |
+    | CF-23 | Enter while moving, slow motion and production speed                                                                                                                 | pass at both         |
+    | CF-23 | Exit while moving, slow motion and production speed                                                                                                                  | pass at both         |
+    | CF-23 | Enter and exit at `bottom-left`, production speed                                                                                                                    | pass                 |
+
+    No visual defect was observed. For CF-23, no visible jump, jitter or misalignment was reported, so nothing reopens the P-18 and P-19 boundary.
+
+  - **`focusVisible` during CF-12:** Chrome showed `true` in the dark theme and was not recorded in the light theme; Firefox was not recorded. The rings were seen; the state behind them was not checked in those cases. Whether a ring shows after Alt+T is engine behaviour (D2-6) and no contract.
+  - **MC-8 still pending:**
+    - real iOS Safari, the WebKit engine and Safari: CF-12, CF-13, CF-23 and CF-27 where they apply on the phone;
+    - CF-35, the fly-out hold, with real touch in iOS Safari, Android Chrome and Firefox for Android (with MC-2, MC-3 and MC-4);
+    - optionally, CF-36, Chromium's first-frame step, in Android Chrome.
+  - **macOS desktop Safari: unverified,** not passed (no Mac is available).
+  - **Assessment:** the Windows desktop portion of MC-8 (Chromium and Gecko) passed on the maintainer's human visual evidence. MC-8 is not complete.
+- **MC-2 record: real iOS Safari on a notched iPhone (accepted / PASSED).** The maintainer ran the manual QA page on a real iPhone, in an initial session and a follow-up for the items the first did not cover. Every result below is the maintainer's **direct observation**, with harness event-log entries and Status values read on the device where stated. No screenshot, downloaded JSON, recording or timing measurement is part of it, and none of it is automated or frame-level evidence. `src/`, the harness and the tests are unchanged.
+  - **Environment:** iPhone 17 Pro; iOS 27; Safari, which is real Safari and WebKit, not Playwright WebKit; the manual QA page at `44f5338`, served on the trusted local network; 2026-10-09.
+  - **Results:**
+
+    | MC-2 item (AC-SW-1 where it applies)                        | Reported                                                                                                                                                                                                                                                         | Status       |
+    | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+    | CF-29: a swipe past the threshold dismisses, reason `swipe` | swipe-to-dismiss, from one toast and from a stack; at `top-center`, left and right; a short fast flick; the log's reason was `swipe`                                                                                                                             | pass         |
+    | CF-29: below the threshold it springs back                  | a cancelled swipe snapped back; at `top-right`, a swipe toward the centre was blocked and sprang back                                                                                                                                                            | pass         |
+    | CF-29: never starts on interactive elements                 | horizontal drags starting on the action and on the close button did not start a swipe; tapping them activated them                                                                                                                                               | pass         |
+    | CF-30 and CF-41: vertical scroll, `pointercancel`           | a vertical drag starting on a toast scrolled the page with no dismissal; `pointercancel` appeared in the log                                                                                                                                                     | pass         |
+    | CF-30 and CF-41: diagonals                                  | about 30° and about 60° from horizontal: both were taken as swipes. An observed iOS Safari outcome of the browser's arbitration, recorded: not a defect and not a contract                                                                                       | recorded     |
+    | CF-32: a programmatic dismissal mid-drag                    | during an active touch drag, exactly one dismissal, with the log's reason `programmatic`                                                                                                                                                                         | pass         |
+    | CF-34: pinch-zoom                                           | pinch-zoom worked starting on a toast and starting on the page; no zoom value was recorded                                                                                                                                                                       | recorded     |
+    | CF-15: safe areas with `viewport-fit=cover`                 | `top-right` within the top safe area; `bottom-right` above the home indicator; the left positions; landscape; fixed placement while scrolling; stacking                                                                                                          | pass         |
+    | CF-7: tap without focus                                     | after a tap on the close button, Status showed the close button active (`active=close`). Evidence only, no focus contract                                                                                                                                        | recorded     |
+    | CF-39: touch press                                          | after a touch on the toast body, Status showed the toast root active (`active=toast`). Evidence only, no focus contract                                                                                                                                          | recorded     |
+    | CF-26: backgrounding                                        | the 10-minute preset, Safari in the background for about two minutes: the toast stayed, the bar appeared held with no visible jump, and it resumed later. When it started moving again after Safari returned to the foreground could not be determined precisely | pass, visual |
+
+  - **Also seen on the iPhone, for MC-8:** CF-23 (enter, exit and the stack's movement), CF-27 (the strip's corners and straight edge) and CF-35 (an insertion during a touch fly-out) passed visually. **CF-12 and CF-13 are unverified on iOS Safari:** no external keyboard was used, and touch activation is not keyboard focus evidence. They are MC-8 items, not MC-2's, and MC-8 stays open.
+  - **Limitations:**
+    - the results are human observations, with log entries and Status values read on the device; nothing was exported or measured;
+    - CF-26 is visual: no fraction or resume time was measured, and no pause reason was isolated;
+    - CF-7, CF-39, the diagonals and pinch-zoom are recorded observations, not contracts.
+  - **Assessment: accepted / PASSED.** Every MC-2 item was covered on real iOS Safari, and the environment is complete. No production defect was reported. This is AC-SW-1's real-device layer for iOS Safari and WebKit only: **the layer is not complete until MC-3 and MC-4 pass.**
+  - **Still open:** MC-3 (Android Chrome) and MC-4 (Firefox for Android); MC-8 (iOS CF-12 and CF-13, CF-35 on Android, optionally CF-36); MC-1 (macOS Safari) and MC-7 (pen), both unverified; S6.2 and S6.3, not started.
+- **MC-3 record: real Android Chrome on a phone with a display cutout (accepted / PASSED).** The maintainer ran the manual QA page on a real Android phone in Chrome. Every result below is the maintainer's **direct observation**, with harness event-log entries and Status values read on the device where stated. No screenshot, downloaded JSON, recording or timing measurement is part of it, and none of it is automated or frame-level evidence. `src/`, the harness and the tests are unchanged.
+  - **Environment:** Nothing Phone (2); Android 16; Google Chrome for Android 153, real Chromium on a device (the major version confirmed; the full build not recorded); the manual QA page at `44f5338`, served on the trusted local network; 2026-10-09.
+  - **Results:**
+
+    | MC-3 item (AC-SW-1 where it applies)                        | Reported                                                                                                                                                                                                           | Status       |
+    | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+    | CF-29: a swipe past the threshold dismisses, reason `swipe` | at `top-center`, left and right; a fast flick; the log's reason was `swipe`                                                                                                                                        | pass         |
+    | CF-29: below the threshold it springs back                  | a short drag sprang back; at `top-right`, a swipe toward the centre was blocked and sprang back                                                                                                                    | pass         |
+    | CF-29: never starts on interactive elements                 | horizontal drags starting on the action and on the close button did not start a swipe                                                                                                                              | pass         |
+    | CF-30 and CF-41: vertical scroll, `pointercancel`           | a vertical drag starting on a toast scrolled the page with no dismissal; `pointercancel` appeared in the log                                                                                                       | pass         |
+    | CF-30 and CF-41: diagonals                                  | about 30° from horizontal: a swipe; about 60°: a scroll. An observed Android Chrome outcome of the browser's arbitration, recorded: not a defect and not a contract                                                | recorded     |
+    | CF-32: a programmatic dismissal mid-drag                    | during an active touch drag, exactly one dismissal, with the log's reason `programmatic`                                                                                                                           | pass         |
+    | CF-34: pinch-zoom                                           | pinch-zoom worked starting on a toast and starting on the page; no zoom value was measured                                                                                                                         | recorded     |
+    | CF-15: safe areas with `viewport-fit=cover`                 | in portrait, `top-right`, `bottom-right`, `top-left` and `bottom-left`; in landscape, the left and right placements within the safe areas on both sides; no clipping against the screen edges or the camera cutout | pass         |
+    | CF-7: tap without focus                                     | after a touch on the close button, Status showed the close button active (`active=close`). Evidence only, no focus contract                                                                                        | recorded     |
+    | CF-39: touch press                                          | after a touch on the toast body, Status showed the toast root active (`active=toast`). Evidence only, no focus contract                                                                                            | recorded     |
+    | CF-26: backgrounding                                        | the 10-minute preset, Chrome in the background for about 1 to 2 minutes: the toast stayed, with no visible jump; progress resumed immediately or nearly so, as the maintainer saw it                               | pass, visual |
+
+  - **Also seen on the phone, for MC-8:** CF-23 (enter, exit and the stack's movement), CF-27 (the strip's corners and moving edge) and CF-35 (an insertion during a touch fly-out) passed visually in real Android Chrome. MC-8 stays open.
+  - **Limitations:**
+    - the results are human observations, with log entries and Status values read on the device; nothing was exported or measured;
+    - only Chrome's major version (153) is recorded, not its full build;
+    - CF-26 is visual: no fraction or resume time was measured, and no pause reason was isolated;
+    - CF-7, CF-39, the diagonals and pinch-zoom are recorded observations, not contracts.
+  - **Assessment: accepted / PASSED.** MC-3's items were covered on real Android Chrome, and no production defect was reported. With MC-2, AC-SW-1's real-device layer now has iOS Safari and Android Chrome: **it is not complete until MC-4 passes.**
+  - **Still open:** MC-4 (Firefox for Android); MC-8 (iOS CF-12 and CF-13, which stay unverified, CF-35 in Firefox for Android, optionally CF-36); MC-1 (macOS Safari) and MC-7 (pen), both unverified; S6.2 and S6.3, not started.
+- **MC-4 record: real Firefox for Android on a touch device (accepted / PASSED), and AC-SW-1's real-device layer.** The maintainer ran the manual QA page on the same real Android phone as MC-3, in Firefox. Every result below is the maintainer's **direct observation**, with harness event-log entries and Status values read on the device where stated. No screenshot, downloaded JSON, recording or timing measurement is part of it, and none of it is automated or frame-level evidence. `src/`, the harness and the tests are unchanged.
+  - **Environment:** Nothing Phone (2); Android 16; Firefox for Android 156, real Gecko on a device (the major version confirmed; the full build not recorded); the manual QA page at `44f5338`, served on the trusted local network; 2026-10-09.
+  - **Results:**
+
+    | MC-4 item (AC-SW-1 where it applies)                        | Reported                                                                                                                                                                              | Status       |
+    | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+    | CF-29: a swipe past the threshold dismisses, reason `swipe` | at `top-center`, left and right; a fast flick; the log's reason was `swipe`                                                                                                           | pass         |
+    | CF-29: below the threshold it springs back                  | a short drag sprang back; at `top-right`, a swipe toward the centre was blocked and sprang back                                                                                       | pass         |
+    | CF-29: never starts on interactive elements                 | horizontal drags starting on the action and on the close button did not start a swipe                                                                                                 | pass         |
+    | CF-30 and CF-41: vertical scroll, `pointercancel`           | a vertical drag starting on a toast scrolled the page with no dismissal; `pointercancel` appeared in the log                                                                          | pass         |
+    | CF-30 and CF-41: diagonals                                  | about 30° from horizontal: a swipe; about 60°: a scroll. An observed Firefox for Android outcome of the browser's arbitration, recorded: not a defect and not a contract              | recorded     |
+    | CF-32: a programmatic dismissal mid-drag                    | during an active touch drag, exactly one dismissal, with the log's reason `programmatic`                                                                                              | pass         |
+    | CF-34: pinch-zoom                                           | zoom worked starting on a toast and starting on the page; no zoom value was recorded                                                                                                  | recorded     |
+    | CF-15: safe areas with `viewport-fit=cover`                 | in portrait, the four corner positions; in landscape, the left and right safe areas; no clipping                                                                                      | pass         |
+    | CF-7: tap without focus                                     | after a touch on the close button, Status showed the close button active (`active=close`). Evidence only, no focus contract                                                           | recorded     |
+    | CF-39: touch press                                          | after a touch on the toast body, Status showed the toast root active (`active=toast`). Evidence only, no focus contract                                                               | recorded     |
+    | CF-26: backgrounding                                        | the 10-minute preset, Firefox in the background for about 1 to 2 minutes: the toast stayed, with no visible jump; progress resumed immediately or nearly so, as the maintainer saw it | pass, visual |
+
+    MC-4's row asks for CF-29, CF-30, CF-41, CF-32 where observable and CF-34; CF-15, CF-26, CF-7 and CF-39 are further evidence on the same device.
+
+  - **Also seen on the phone, for MC-8:** CF-23 (enter, exit and the stack's movement), CF-27 (the strip's corners and moving edge) and CF-35 (an insertion during a touch fly-out, with no visible jump, duplicate or unexpected dismissal) passed visually in real Firefox for Android. MC-8 stays open.
+  - **Limitations:**
+    - the results are human observations, with log entries and Status values read on the device; nothing was exported or measured;
+    - only Firefox's major version (156) is recorded, not its full build;
+    - CF-26 is visual: no fraction or resume time was measured, and no pause reason was isolated;
+    - CF-7, CF-39, the diagonals and pinch-zoom are recorded observations, not contracts.
+  - **Assessment: accepted / PASSED.** MC-4's items were covered on real Firefox for Android, and no production defect was reported.
+  - **AC-SW-1's real-device layer (D2-3, layer C): PASSED.**
+
+    | Layer                                   | Evidence                                                                                                | Status                       |
+    | --------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------- |
+    | A, swipe logic (synthetic, C F W)       | `swipe.spec.ts`, with the trusted mouse case                                                            | blocking, passing (S5)       |
+    | B, trusted touch integration (Chromium) | `swipe-touch.spec.ts`, with CF-35 in `swipe-motion.spec.ts`                                             | blocking, passing (S5)       |
+    | C, real devices and browsers            | MC-2 (iOS Safari, `808f321`), MC-3 (Android Chrome, `fa113aa`), MC-4 (Firefox for Android, this record) | **passed** (manual, Class 3) |
+
+    Every part of AC-SW-1's wording has passed on all three real-device browsers: a swipe past the threshold dismisses with reason `swipe`; one below it springs back; centre positions accept either direction; vertical scrolling still works; a swipe never starts on the interactive elements tested (the action and close buttons). A mouse drag never dismissing is layer A's trusted mouse case. **AC-SW-1 is not closed by this record:** the AC table also lists the CF-38 Shadow DOM boundary, which P-26 documents and whose treatment in AC-SW-1's sign-off is P-29's judgement (D2-2 and D2's reconciled contradictions), and S6.3 traces the criterion in the final reconciliation.
+
+  - **Still open:** MC-8 (iOS CF-12 and CF-13, which stay unverified; desktop Safari, unverified; optionally CF-36); MC-1 (macOS Safari) and MC-7 (pen), both unverified; S6.2 and S6.3, not started.
+- **S6.2 record: the first local soak, the CF-35 X-assertion correction, and the passed rerun (the local soak and the evidence rerun passed; S6.2 open).** The rerun is recorded at the end of this record, apart from the first soak and the correction. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified. No D0-16 report was raised.
+  - **First local soak** (2026-10-09, `64b98f5`; the blocking suite under `CI=1`, one worker, zero retries, `--repeat-each=20`; Chromium 153.0.8010.12, Firefox 155.0, WebKit 26.6): **5,599 passed, 400 named skips, 1 failed**. The skips are `swipe-touch.spec.ts`'s engine gate in Firefox and WebKit. The failure: WebKit, `swipe-motion.spec.ts`, "CF-35 … a reposition during the snap-back keeps X", at "X across the insertion": a 3.562 px change against a 3.255 px allowance. It was not retried.
+  - **Diagnosis.** The assertion allows 0.5 px plus the fastest frame-to-frame speed of X times the interval between the `before` and `after` reads, which span the insertion's commit in one task. In the failing trace, X moved 0.594 px/ms within that 6 ms task, faster than any sampled frame-to-frame speed (0.459 px/ms; the sampled frames were up to 30 ms apart). The next frame showed the same X as `after`, and the motion was monotone and settled at 0, so the failure matched no motion defect. 100 targeted WebKit runs passed (minimum margin 0.22 px); 91 of them showed that same held next frame. The mechanism is that frame-averaged speed underestimates the motion inside WebKit's measuring task. It differs from the S6 preflight correction (`6599f24`), whose speed came only from frames before activation; that remedy does not apply here.
+  - **Rejected first candidate (H):** ending the window at the next frame in every engine removed the false positive but missed a 10 px forward jump in 6 of 60 runs, in Firefox and WebKit, and the jump raised its own allowance through the speed estimate.
+  - **The correction** (`expectXKept`, used by the snap-back and fly-out tests):
+    - **Chromium and Firefox** keep the original window, `before` to `after`. They hold animation time within a task (S3), so X changed by 0.000 px in the task in all 80 validation runs; their sensitivity is unchanged.
+    - **WebKit** advances animation time within a task. Its window runs to the first frame sampled after the task, since its `after` read can show motion that frame would otherwise show. Its speed leaves out the one frame interval that spans the insertion, so a jump there cannot raise its own allowance. With no frame after the task, the test fails at a named precondition.
+    - The engine comes from Playwright's `browserName`. The 0.5 px base, the reversal, trajectory, interpolation and settling assertions, and the scenarios are unchanged.
+  - **Validation of the correction** (`CI=1`, one worker, zero retries, traces on):
+    - clean: **280 of 280 passed** (WebKit 100 per test, Chromium and Firefox 20 per test); the soak's failing trace passes under the correction with a 1.99 px margin;
+    - X reset on reposition (S5.2's Y-only seeding, temporary): **18 of 18 detected**, at "X across the insertion", in every engine and both tests;
+    - a 10 px jump in X along the direction of travel (temporary): **60 of 60 detected** (10 per engine per test). The smallest gap was 0.46 px, in WebKit's snap-back;
+    - each mutation was reverted at once, and `src/` stayed identical to `64b98f5`.
+  - **Remaining WebKit limitation.** WebKit's allowance grows with the time from `before` to the next frame. In clean runs it was 10 px or more in 11 of 200, and reached **19.93 px** once, when the insertion task itself took 39 ms. A forward jump smaller than that allowance cannot be told from real motion by timing alone, so **the corrected test does not prove that every small forward discontinuity is detected**. Larger ones, such as X erased or reseeded (29 to 45 px), are; backward jumps are caught by the reversal checks. Closing the gap would mean reading the transition's own state, which P-22 does not do.
+  - **S6.2 was not passed at this point.** The full local soak had to be rerun on the corrected suite, and the three CI `browser` runs after an authorised push remain. Diagnostics, outside the repository: `~/p22-diagnostics/2026-10-09-s6.2-soak/`, `…-s6.2-cf35-snapback-100/`, `…-s6.2-cf35-optionH/` and `…-s6.2-cf35-revision/`.
+  - **Second local soak: passed** (2026-10-09, `dc383b2`; the blocking suite under `CI=1`, `--grep-invert @evidence`, `--repeat-each=20`, one worker, zero retries; Node 24.21.0, Playwright 1.63.0 with Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6; `src/` and the configuration unchanged since `64b98f5`):
+
+    | Engine   | Passed    | Skipped | Failed | Flaky |
+    | -------- | --------- | ------- | ------ | ----- |
+    | Chromium | 2,000     | 0       | 0      | 0     |
+    | Firefox  | 1,800     | 200     | 0      | 0     |
+    | WebKit   | 1,800     | 200     | 0      | 0     |
+    | Total    | **5,600** | **400** | **0**  | **0** |
+
+    The only skips are `swipe-touch.spec.ts`'s engine gate in Firefox and WebKit; there were no unexpected skips and no flaky results. The corrected snap-back and fly-out tests passed 20 of 20 in each engine. Traces were kept for failures only, so this run adds no margin data: the WebKit limitation above stands as measured.
+
+  - **Formal `@evidence` rerun: passed** (the same commit and environment; `CI=1`, `--grep @evidence`, one worker, zero retries): Chromium 29 passed; Firefox 19 passed and 10 skipped; WebKit 19 passed and 10 skipped; **67 passed, 20 named skips, 0 failed**. The skips are the Chromium-only evidence specs, each naming its manual checkpoint or gap: CF-1, CF-5 and CF-11 B (`environment.evidence.spec.ts`); the protocol pen press (`focus.evidence.spec.ts`); CF-15 and CF-25 (`layout.evidence.spec.ts`); CF-29's trusted flick, the CF-30 and CF-41 diagonals, CF-31 and CF-32 (`swipe.evidence.spec.ts`).
+  - **Diagnostics,** outside the repository: `~/p22-diagnostics/2026-10-09-s6.2-soak-rerun/` (the command, environment, configuration snapshot, timestamps, log and JSON results) and `~/p22-diagnostics/2026-10-09-s6.2-evidence/`.
+  - **Status:** the local soak and the formal evidence rerun **passed**. **S6.2 as a whole stays open:** at least three successful CI `browser` runs after an authorised push are still required. S6.3 has not started. The manual gaps (MC-1, MC-7, MC-8's open items) and the acceptance-criteria status are unchanged.
+- **S6.3a record: the reconciliation (done; awaits the maintainer's review).** Every CF item, H1-R, acceptance criterion and manual checkpoint traced to its evidence or to a reported gap, against the D2 matrix and the S1 to S6.2 records, which stay as written. Documentation only: `src/`, the production stylesheet, the public API, the 30 tokens, the harness and the tests are unchanged since S6.2, and no CF item was reclassified. No D0-16 report was raised. It is not an acceptance of S6, and it closes neither S6.2 nor S6.3.
+  - **Maintainer decisions** (after the S6.3 inventory and the S6.3-0 review below):
+    - **MC-1:** macOS Safari is an unverified gap, carried to P-29.
+    - **MC-7:** real pen hardware is an unverified gap, carried forward.
+    - **MC-8:** the WebKit-engine CF-12 and CF-13 visual checks passed (S6.3-0); the Safari-specific gaps remain.
+    - **AC-PR-1:** partially met, not fully satisfied.
+    - **AC-SW-1:** layers A, B and C passed; the CF-38 boundary and the formal sign-off stay deferred.
+    - **CF-23:** the real iOS Safari observation (MC-2) is accepted as the WebKit visual evidence for this checkpoint.
+    - **CF-36:** the optional check was not performed and is not passed.
+    - **CF-35:** the documented WebKit sensitivity limitation of the X assertion (S6.2) is retained.
+    - **CF-17:** the WebKit observation (D2-10) is accepted, with no further action.
+    - **CF-37:** no production change; the re-base decision is deferred until real pen evidence exists (D0-4).
+    - **CF-12:** the no-ring observation after Alt+T following pointer use only is kept for P-29.
+  - **CI run 1 of 3 (S6.2): passed.** Run `37970231273` on PR #29, event `pull_request`, attempt 1, head `d1b7c00`, 2026-10-09. All five jobs succeeded (`quality`, `test`, `build-package`, `browser`, `demo`), and GitGuardian passed. The `browser` job: **280 passed, 20 skipped** (the `swipe-touch.spec.ts` engine gate in Firefox and WebKit), with zero retries, in 6.7 minutes. At least two more successful CI `browser` runs are required; **S6.2 stays open.**
+  - **S6.3-0: MC-8's WebKit-engine check in headed Playwright WebKit (CF-12, CF-13 visual: PASS).** Approved as a limited MC-8 check for the WebKit engine, which MC-8 allows for its engine only (D2). It is **not Safari evidence** (D0-7).
+    - **Environment:** Playwright 1.63.0's WebKit 26.6, the GTK port, headed under WSLg 1.0.71 on Windows WSL2 (kernel 6.6.87.2), Node 24.21.0; the S1 local library workaround, set for the one process only; the manual QA page at `d1b7c00` (`npm run browser:serve`), 1280 × 720 at a device pixel ratio of 2; 2026-10-10.
+    - **Method:** a scripted session outside the repository. Every focus state was reached by trusted Playwright keyboard input (Tab, Alt+T, Enter and Space); a mouse was used only for the deliberate pointer case. Each scenario was captured as a full-viewport and a stack screenshot, with the focused element and its `:focus-visible` state. The screenshots are WebKit's own rendering of the page; the maintainer reviewed them by eye and accepted the result. They are no evidence of macOS or iOS Safari rendering.
+    - **Results, light and dark (`top-right`, LTR):**
+
+      | Item  | Scenario                                                                        | Light | Dark |
+      | ----- | ------------------------------------------------------------------------------- | ----- | ---- |
+      | CF-12 | The action, by Tab                                                              | pass  | pass |
+      | CF-12 | The close button, by Tab                                                        | pass  | pass |
+      | CF-12 | The toast root after Alt+T, following keyboard use: over the card edge          | pass  | pass |
+      | CF-12 | Restoration: the first of two toasts closed by keyboard; the next toast's close | pass  | pass |
+      | CF-12 | The custom toast's root after Alt+T: outside the content                        | pass  | pass |
+      | CF-12 | The custom close (S6.1b option), in `currentColor`                              | pass  | pass |
+      | CF-13 | The region ring after the last toast was closed by keyboard (Alt+T, Tab, Enter) | pass  | pass |
+
+      Every ring was visible and unclipped. The region ring was inset on all four sides of the viewport, and `scrollY` stayed 0. Its `--ret-surface` halo showed against the page in the dark theme; in the light theme it matches the white page.
+
+    - **Alt+T after pointer use only** (the toast added by mouse, a click on the page body, then Alt+T): the root took focus with no `:focus-visible` and no ring, in both themes. This repeats S4.3's CF-12 observation in headed WebKit; it is engine behaviour (D2-6), not a contract, and stays with P-29. With keyboard input earlier on the same page, the ring showed.
+    - **Observed, not a defect:** a custom toast's root is wider than its 280 px content, so the root's ring also encloses the close button at the root's inline-end corner, which sits on the page background.
+    - **Limits:** WebKit engine only; the `system` theme was not run (it resolves to light or dark); in headed mode the window manager decides real window focus (D1); the first attempt, which opened a second page, failed for a harness reason (that page's controls never became visible) and was rerun on one page.
+    - **Diagnostics,** outside the repository: `~/p22-diagnostics/2026-10-10-s6.3-0-webkit-headed/` (the environment, the script, the log, `session.json`, 32 screenshots and the failed first attempt).
+  - **Manual checkpoints, reconciled:**
+
+    | MC   | Environment                         | Result                                                                                                                                                                                                                                                                                                                                                                      |
+    | ---- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | MC-1 | macOS Safari                        | **Unverified gap** (no Mac): CF-7, CF-8's Safari path, CF-12's rings (with Safari's Tab-to-buttons setting), CF-1, CF-5 and CF-25 genuine blur, CF-26. Carried to P-29, whose §17.6 checklist needs VoiceOver with Safari on macOS anyway                                                                                                                                   |
+    | MC-2 | iOS Safari, iPhone 17 Pro           | **Passed** (`808f321`)                                                                                                                                                                                                                                                                                                                                                      |
+    | MC-3 | Android Chrome, Nothing Phone (2)   | **Passed** (`fa113aa`)                                                                                                                                                                                                                                                                                                                                                      |
+    | MC-4 | Firefox for Android, the same phone | **Passed** (`64b98f5`)                                                                                                                                                                                                                                                                                                                                                      |
+    | MC-5 | Windows Chrome and Firefox          | **Passed**, on visual evidence                                                                                                                                                                                                                                                                                                                                              |
+    | MC-6 | Windows High Contrast (Aquatic)     | **Passed**, in Chrome and Firefox                                                                                                                                                                                                                                                                                                                                           |
+    | MC-7 | Real pen hardware                   | **Unverified gap** (no pen): CF-31, CF-37, CF-39's pen press, S4.1's barrel-button press on a gap. Carried forward                                                                                                                                                                                                                                                          |
+    | MC-8 | Human visual review per engine      | **Passed for Chromium and Gecko** (Windows); **for the WebKit engine,** CF-12 and CF-13 in Playwright WebKit (S6.3-0) and CF-23, CF-27 and CF-35 in real iOS Safari; CF-23, CF-27 and CF-35 also in Android Chrome and Firefox for Android. **Unverified:** CF-12 and CF-13 in real iOS Safari (no keyboard), and desktop Safari. **CF-36's optional check: not performed** |
+
+    No checkpoint was satisfied by a P-21 device approval or by a Playwright run standing in for a real browser (CF-43, D2-13).
+
+  - **CF-42: the evidence on retaining `touch-action: pan-y`, assembled (Class 4).**
+    - **Scrolling (CF-30, CF-41):** a vertical drag from a toast scrolled the page with no dismissal, the browser's `pointercancel` restoring the toast: blocking in Chromium (CDP touch), and passed on real iOS Safari, Android Chrome and Firefox for Android.
+    - **Diagonals:** the browser's arbitration, never the contract. Chromium CDP: 20° and 30° continue, 45° and 60° cancel. At about 30°, all three real-device browsers took a swipe; at about 60°, Android Chrome and Firefox for Android scrolled, while iOS Safari took a swipe.
+    - **Pinch-zoom (CF-34):** on all three real-device browsers, pinch-zoom worked when it was started on a toast and when it was started on the page. No zoom value was recorded, and **whether both fingers started on the toast was not recorded**, so the observation does not establish what `pan-y` does to a two-finger gesture that lies entirely on a toast. It does not show the loss of pinch-zoom P-21 anticipated for a pinch that starts on a toast.
+    - **Disposition:** no material accessibility or UX defect was observed, so D0-14 is not triggered: `pan-y` is retained, with no CSS change. P-26 documents the observed boundary, including the unrecorded finger placement (S6.3b).
+  - **CF-1 to CF-43 and H1-R, reconciled.** "Pass" is blocking (C, F, W); "recorded" is Class 2 or 4 evidence; manual results as the checkpoint records give them.
+
+    | ID    | Automated                                                      | Manual                                                                                            | Remaining gap                                                        | Disposition                                        |
+    | ----- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------- |
+    | CF-1  | recorded (C, CDP minimise)                                     | MC-5 passed                                                                                       | Safari (MC-1)                                                        | closed in P-22 with the gap; MC-1 to P-29          |
+    | CF-2  | pass C F W; recorded                                           | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-3  | recorded C F W                                                 | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-4  | recorded C F W                                                 | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-5  | recorded (C)                                                   | MC-5 passed; MC-2, MC-3 backgrounding passed (visual)                                             | Safari (MC-1); events not traced                                     | closed with the gap; MC-1 to P-29                  |
+    | CF-6  | pass C F W, with S4-H2; recorded                               | —                                                                                                 | a non-primary press on a bare gap (MC-7's barrel button)             | closed                                             |
+    | CF-7  | recorded C F W (Class 4)                                       | MC-2, MC-3, MC-4 recorded: a tapped close took focus                                              | macOS Safari (MC-1)                                                  | carried to P-29, with CF-8                         |
+    | CF-8  | recorded C F W (Class 4)                                       | —                                                                                                 | the contract decision (D0-2)                                         | carried to P-29                                    |
+    | CF-9  | recorded C F W                                                 | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-10 | recorded C F W                                                 | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-11 | A pass C F W; B recorded (C)                                   | —                                                                                                 | B in Firefox and WebKit (no tooling); C, assistive technology        | closed with the gap; C to P-29                     |
+    | CF-12 | pass C F W; recorded                                           | MC-6 passed; MC-8 passed (C and F on Windows; WebKit engine, S6.3-0)                              | real iOS and macOS Safari; no ring after Alt+T following pointer use | closed with the gaps; MC-1 and the finding to P-29 |
+    | CF-13 | pass C F W                                                     | MC-6 passed; MC-8 passed (C and F on Windows; WebKit engine, S6.3-0)                              | real iOS and macOS Safari                                            | closed with the gaps; MC-1 to P-29                 |
+    | CF-14 | pass C F W (emulated)                                          | MC-6 passed                                                                                       | —                                                                    | closed; P-26 separates emulation from MC-6         |
+    | CF-15 | pass C F W; recorded (C, override)                             | MC-2, MC-3 passed (MC-4 as well)                                                                  | —                                                                    | closed                                             |
+    | CF-16 | pass C F W                                                     | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-17 | pass C F W; recorded, with the WebKit observation              | —                                                                                                 | the accepted WebKit observation (D2-10)                              | closed                                             |
+    | CF-18 | pass C F W                                                     | —                                                                                                 | the operating system's setting                                       | closed; the setting to P-29                        |
+    | CF-19 | pass C F W                                                     | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-20 | pass C F W                                                     | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-21 | pass C F W                                                     | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-22 | pass C F W                                                     | —                                                                                                 | the operating system's setting                                       | closed; the setting to P-29                        |
+    | CF-23 | recorded C F W (S2)                                            | MC-8: C and F on Windows; real iOS Safari (WebKit, accepted); Android Chrome; Firefox for Android | desktop Safari                                                       | closed; the P-18 and P-19 boundary stands          |
+    | CF-24 | pass C F W                                                     | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-25 | pass C F W; recorded (C, CDP blur)                             | MC-5 passed (case 4)                                                                              | Safari blur (MC-1)                                                   | closed with the gap; MC-1 to P-29                  |
+    | CF-26 | none (Class 3 only)                                            | MC-5 passed; MC-2, MC-3 passed (visual; MC-4 as well)                                             | macOS Safari (MC-1); visual only                                     | closed with the gap; MC-1 to P-29                  |
+    | CF-27 | recorded C F W                                                 | MC-8: C and F on Windows; the three real-device browsers                                          | —                                                                    | closed                                             |
+    | CF-28 | pass C F W (emulated)                                          | MC-6 passed                                                                                       | —                                                                    | closed                                             |
+    | CF-29 | layer A pass C F W; layer B pass C; mouse pass C F W; recorded | MC-2, MC-3, MC-4 passed                                                                           | —                                                                    | closed                                             |
+    | CF-30 | pass C; recorded (C, diagonals)                                | MC-2, MC-3, MC-4 passed; diagonals recorded                                                       | —                                                                    | closed                                             |
+    | CF-31 | recorded (C, protocol pen only)                                | MC-7 unavailable                                                                                  | real pen                                                             | unverified gap, carried forward                    |
+    | CF-32 | pass C; recorded                                               | MC-2, MC-4 passed (MC-3 as well)                                                                  | —                                                                    | closed                                             |
+    | CF-33 | recorded C F W (Class 4)                                       | —                                                                                                 | a swipe after pointer use not recorded; the contract (D0-2)          | carried to P-29, with CF-8                         |
+    | CF-34 | none (not automatable)                                         | MC-2, MC-3, MC-4 recorded                                                                         | finger placement not recorded (CF-42)                                | closed; to P-26 with CF-42                         |
+    | CF-35 | pass (C trusted; F and W synthetic); recorded                  | MC-8: the three real-device browsers                                                              | the retained WebKit sensitivity limitation (S6.2)                    | closed                                             |
+    | CF-36 | pass C F W (completion); recorded                              | optional check **not performed**                                                                  | —                                                                    | closed on its required layers; not passed manually |
+    | CF-37 | none (Class 3 only)                                            | MC-7 unavailable                                                                                  | all of it; the re-base decision                                      | unverified gap; decision deferred (D0-4)           |
+    | CF-38 | recorded C F W (the confirmed limitation, D2-2)                | —                                                                                                 | the documented boundary; AC-SW-1's sign-off                          | closed in P-22; to P-26, §37 and P-29              |
+    | CF-39 | recorded (mouse C F W; touch C; protocol pen C)                | touch: MC-2, MC-3 (MC-4 as well)                                                                  | pen press (MC-7)                                                     | closed with the pen gap                            |
+    | CF-40 | recorded C F W                                                 | —                                                                                                 | —                                                                    | closed                                             |
+    | CF-41 | as CF-30                                                       | as CF-30                                                                                          | —                                                                    | closed                                             |
+    | CF-42 | assembled above (Class 4)                                      | from MC-2, MC-3, MC-4                                                                             | finger placement not recorded                                        | closed; to P-26                                    |
+    | CF-43 | a rule                                                         | applied: no P-21 approval was counted                                                             | —                                                                    | closed                                             |
+    | H1-R  | pass C F W                                                     | —                                                                                                 | —                                                                    | closed                                             |
+
+  - **Acceptance criteria covered by P-22** (D2's table; wording unchanged):
+
+    | Criterion | Evidence                                                                 | Status                                                                                                              |
+    | --------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+    | AC-MO-1   | CF-16, CF-20                                                             | **met** (P-22's layers)                                                                                             |
+    | AC-MO-2   | CF-21; CF-23 (MC-8, with real iOS Safari as its WebKit evidence)         | **met** (P-22's layers)                                                                                             |
+    | AC-MO-3   | CF-18, CF-22                                                             | **met** for P-22's layers; the operating system's setting is P-29's                                                 |
+    | AC-LC-2   | CF-17 Class 1, and its Class 2 timing                                    | **met** (P-22's layers)                                                                                             |
+    | AC-PR-1   | CF-25 (C F W); CF-25 blur (C, CDP; MC-5); CF-26 (MC-5, MC-2, MC-3)       | **partially met, not fully satisfied:** MC-1's Safari layers for CF-25 and CF-26 are an unverified gap              |
+    | AC-RTL-1  | CF-15, CF-24                                                             | **met** (P-22's layers)                                                                                             |
+    | AC-SW-1   | layer A (C F W, with the mouse); layer B (C); layer C (MC-2, MC-3, MC-4) | **layers A, B and C passed; not signed off:** the CF-38 boundary (P-26) and the formal sign-off (P-29) are deferred |
+    | AC-CI-1   | the blocking `browser` job; CI run 1 of 3                                | the `browser` gate blocks and passed once in CI; the S6.2 CI runs are not complete                                  |
+    | AC-KB-1   | no regression: H1-R, CF-6, S4-H2                                         | **no regression**                                                                                                   |
+
+    "Met" here means P-22's layers. Every §36 criterion is signed off at P-29.
+
+  - **Unverified gaps, reported to the maintainer (D2):** macOS Safari (MC-1); real pen hardware (MC-7: CF-31, CF-37, CF-39's pen press, the barrel-button case); CF-12 and CF-13 in real iOS Safari; desktop Safari's part of MC-8; the Firefox and WebKit accessibility trees (CF-11 B); the finger placement in CF-34's pinch-zoom observations. CF-36's optional check was not performed.
+  - **Carry-forwards** (written into their entries by S6.3b, `c2d71bf`):
+    - **P-26:** the Shadow DOM boundary (CF-38), as confirmed and unchanged by P-22; `touch-action: pan-y` and pinch-zoom from the CF-42 assembly above, which qualifies, without disproving, the P-21 expectation that a pinch starting on a toast is not handled; emulated forced colours (C F W, with S3's engine differences) apart from real Windows High Contrast (MC-6: Chrome and Firefox, Aquatic); the browser-support evidence (the engines and real browsers verified, and pen verified only by Chromium's protocol pen).
+    - **P-29:** CF-7, CF-8 and CF-33, the pointer-triggered restoration contract, with the real-device tap results; CF-12's no-ring observation after Alt+T following pointer use only; CF-11 C; AC-SW-1's formal sign-off, including CF-38's treatment; MC-1 and AC-PR-1's Safari layers; MC-7 and CF-37 if pen hardware becomes available; the operating systems' own settings.
+    - **§37:** `composedPath()` hardening for shadow-root controls (CF-38, D2-2); CF-37's same-ID re-base, deferred until real pen evidence.
+  - **Validation:** `npm run format:check` and `git diff --check` pass. Documentation only.
+  - **Status:** **S6.2 stays open** (one of at least three CI `browser` runs passed). **S6.3 stays open:** S6.3b (the carry-forwards into P-26, P-29 and §37) and S6.3c (the remaining CI records and the status lines) remain. S6 is not accepted.
+- **S6.3c record: the final reconciliation (done; awaits the maintainer's acceptance of S6).** It completes S6.2 and S6.3. Documentation only: `src/`, the production stylesheet, the public API, the 30 tokens, the harness, the tests and the configuration are unchanged since S6.2, and no CF item was reclassified. No D0-16 report was raised. The S6.2 record, including its failed first soak and the CF-35 investigation, and the S6.3a record stay as written, apart from the S6.3a label corrected below.
+  - **S6.2: complete** (accepted by the maintainer). Its three parts: the local soak (5,600 passed, 400 named skips, 0 failed, 0 flaky, at `dc383b2`), after the first soak's failure and the CF-35 correction (the S6.2 record); the formal `@evidence` rerun (67 passed, 20 named skips); and three independent CI `browser` runs, each on its own push and head:
+
+    | Run           | Head      | Event          | Attempt | `browser`              | Failures, retries | Checks                                                                          |
+    | ------------- | --------- | -------------- | ------- | ---------------------- | ----------------- | ------------------------------------------------------------------------------- |
+    | `37970231273` | `d1b7c00` | `pull_request` | 1       | 280 passed, 20 skipped | 0, 0              | `quality`, `test`, `build-package`, `demo`, `browser` and GitGuardian succeeded |
+    | `38033875838` | `2797648` | `pull_request` | 1       | 280 passed, 20 skipped | 0, 0              | the same                                                                        |
+    | `38034905636` | `c2d71bf` | `pull_request` | 1       | 280 passed, 20 skipped | 0, 0              | the same                                                                        |
+
+    The 20 skips are the `swipe-touch.spec.ts` engine gate in Firefox and WebKit, as in every run. Run 3's `browser` job checked out the PR's merge ref, `refs/remotes/pull/29/merge` at `c35b4fc`, whose parents are `1644671` (`v2`, unchanged since D0) and `c2d71bf`. No run was retried, cancelled or triggered by hand: each came from a push of a reviewed slice.
+
+  - **S6.3: done.** S6.3a, the reconciliation (`2797648`); S6.3b, the carry-forwards written into P-26, P-29 and §37 (`c2d71bf`); S6.3c, this record. The S6.3a record's carry-forward label, which said they were not yet written, is corrected to point at S6.3b.
+  - **MC-8, final status:**
+    - **Chromium and Gecko:** passed, the maintainer's visual review in Windows Chrome and Firefox (the MC-8 Windows record).
+    - **The WebKit engine:** CF-12 and CF-13 passed in headed Playwright WebKit 26.6 (GTK, WSLg), light and dark, on the maintainer's review of the screenshots (S6.3-0). CF-23, CF-27 and CF-35 passed visually in real iOS Safari, for exactly the cases MC-2 records (CF-23 accepted as this checkpoint's WebKit evidence). Playwright WebKit is not Safari.
+    - **Also seen:** CF-23, CF-27 and CF-35 in real Android Chrome and Firefox for Android.
+    - **Unverified:** CF-12 and CF-13 ring appearance under keyboard focus in real Safari (iOS was checked by touch only), and every desktop Safari part (MC-1).
+    - **CF-36's optional check: not performed**, so not passed.
+  - **Acceptance criteria covered by P-22, final:**
+
+    | Criterion | Status                                                                                                                       |
+    | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+    | AC-MO-1   | **met** (P-22's layers)                                                                                                      |
+    | AC-MO-2   | **met** (P-22's layers); repositioning under the operating system's reduced-motion setting is P-29's                         |
+    | AC-MO-3   | **met** (P-22's layers, by emulation); the operating system's own reduced-motion setting is P-29's                           |
+    | AC-LC-2   | **met**                                                                                                                      |
+    | AC-RTL-1  | **met**                                                                                                                      |
+    | AC-KB-1   | **no regression** (H1-R, CF-6, S4-H2)                                                                                        |
+    | AC-PR-1   | **partially met:** the macOS Safari layers (CF-25 blur, CF-26 hidden documents; MC-1) are an unverified gap, carried to P-29 |
+    | AC-SW-1   | **layers A, B and C passed;** the formal sign-off, including CF-38's treatment, is deferred to P-29                          |
+    | AC-CI-1   | P-22's part **met:** the blocking `browser` gate, with zero retries, passed three independent CI runs (S6.2)                 |
+
+    No criterion is waived. Every §36 criterion is signed off at P-29.
+
+  - **Final consistency audit** (the whole P-22 entry against P-26, P-29 and §37; no contradiction found):
+    - **Destinations:** every carry-forward in the S6.3a record has its entry: P-26 (CF-38, CF-42 with CF-34, forced colours, browser and input coverage); P-29 (CF-7, CF-8 and CF-33; the iOS tap observation; CF-12 after pointer-only Alt+T; CF-11; AC-SW-1's sign-off; MC-1 and AC-PR-1's Safari layers; real Safari CF-12 and CF-13; MC-7; the operating systems' settings); §37 (CF-38's `composedPath()` hardening; CF-37's re-base).
+    - **CF-38** stays an acknowledged Shadow DOM limitation, not fixed (D2-2; P-26; §37).
+    - **CF-42** states the observed pinch-zoom result and that finger placement was not recorded (S6.3a; P-26); `pan-y` is unchanged.
+    - **CF-37's** re-base decision stays deferred until real pen evidence (P-29; §37); no production change.
+    - **CF-36's** optional check is recorded as not performed.
+    - **Real Safari and real pen gaps** stay visible: MC-1, MC-7, and CF-12 and CF-13 in real Safari (S6.3a, this record, P-26, P-29).
+    - **Earlier failures** stay recorded: the D1 and S4.1 D0-16 reports and their hardening slices, the S6 preflight's CF-35 failure, the S6.2 first soak's failure and correction, and the S4.4 and S5.4 integrity corrections.
+    - **Statuses:** the acceptance statuses here match the S6.3a record; only S6.2's CI runs and AC-CI-1's part have changed since, as recorded.
+  - **Validation** (at `c2d71bf`, before this documentation; `CI=1` for the browser suite, one worker, zero retries; the S1 local library workaround for the Playwright browsers):
+    - `npm run format:check`, `lint` (ESLint and the stylesheet contract), `typecheck` (four projects), `typecheck:demo`, `validate:package` and `build:demo` pass;
+    - `npm test`: 40 files, 1,695 tests passed;
+    - `npm run test:browser`: **280 passed, 20 named skips**, 0 failed;
+    - after this record: `format:check` and `git diff --check` pass.
+  - **Diagnostics,** outside the repository: `~/p22-diagnostics/2026-10-10-s6.3c-validation/`.
+  - **Next:** the maintainer's acceptance of S6; then the publication review, the PR into `v2` and a merge commit, when the maintainer asks. Pushing this record starts a further CI run on the PR's final head; it is not part of S6.2's count.
 - Carried over from P-15. jsdom cannot show these, so P-22 verifies them in real browsers. They are checks, not requirements added to P-15:
   - switching the browser or window away and back while a toast holds focus
   - a focused control becoming disabled, hidden or `inert` and losing focus without a useful focus event
@@ -3765,6 +5710,53 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **A dismissal during the snap-back (P-21 S4).** The settle rule still transitions opacity; in Chromium P-18's exit fade runs unaffected. Confirm WebKit and Firefox do not let the running opacity transition override the exit fade.
   - **Pen contact loss (P-21 pre-publication correction).** On real pen hardware in each engine: implicit capture, `buttons` on hover (0, or 2 with the barrel button pressed), and whether a pen reuses its pointer ID across contacts. A stale pending candidate is cleared only by that pointer's own hover (`buttons` 0); a new contact with the same pointer ID and no hover between is ignored at `pointerdown`, so its moves are measured from the stale origin and may activate without the slop and dominance (bounded by its own `pointerup`, with no dismissal unless it travels). Decide whether a same-ID `pointerdown` should re-base the candidate.
   - **Shadow DOM controls (P-21 review, MINOR-1).** A swipe can start from an interactive element inside a shadow root in custom content, since `event.target` is retargeted to the host. Decide whether to walk `composedPath()` to the root, and document the boundary for P-26.
+- **Carry-forward index (D0).** Stable IDs for every check above and for the P-22 items recorded elsewhere in this plan. The lists above stay authoritative for each item's wording; the index only makes them traceable. The last column gives only the constraint a D0 decision already sets. Every other class is set at D2 (D0-1), and "D2" means no D0 constraint beyond D0-1, D0-11 and D0-16.
+
+  | ID    | From | Check                                                                                                        | D0 constraint                                                    |
+  | ----- | ---- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+  | CF-1  | P-15 | Switching the browser or window away and back while a toast holds focus                                      | D0-6                                                             |
+  | CF-2  | P-15 | A focused control becoming disabled, hidden or `inert` without a useful focus event                          | D2                                                               |
+  | CF-3  | P-15 | Focus when the focused node is removed                                                                       | D2                                                               |
+  | CF-4  | P-15 | Pointer boundary when a stack appears under a stationary pointer                                             | D2                                                               |
+  | CF-5  | P-15 | Real `blur` and `visibilitychange`                                                                           | D0-6                                                             |
+  | CF-6  | P-16 | `inert`: focus, restoration before `inert`, the browser's fix-up, pointer and click on an inert toast        | D2                                                               |
+  | CF-7  | P-16 | Click without focus                                                                                          | D0-7: real Safari is a separate manual checkpoint                |
+  | CF-8  | P-16 | The open question on pointer-triggered close                                                                 | D0-2: evidence only, no contract change before P-29              |
+  | CF-9  | P-16 | Revival and `inert` refusing focus                                                                           | D2                                                               |
+  | CF-10 | P-16 | Ordering of restoration, focus events, `inert` and the focus-within handover                                 | D2                                                               |
+  | CF-11 | P-16 | `aria-keyshortcuts` in the DOM and the accessibility tree (assistive technology: P-29)                       | D2                                                               |
+  | CF-12 | P-17 | Focus-visible rings, and when each browser shows them after script focus                                     | D2                                                               |
+  | CF-13 | P-17 | The region ring: appearance, no pointer input, stacking                                                      | D0-13 for its appearance                                         |
+  | CF-14 | P-17 | Forced colours: Chromium emulation, and real Windows High Contrast                                           | D0-8: Chromium emulation automated; Windows High Contrast manual |
+  | CF-15 | P-17 | Layout: six positions, safe areas, narrow viewport, RTL mirroring (AC-RTL-1)                                 | D2                                                               |
+  | CF-16 | P-18 | Enter and exit playback, `animationend` completion, held last frame, left positions settling (AC-MO-1, D-14) | D2                                                               |
+  | CF-17 | P-18 | Fallbacks without `animationend`, and with an overridden token (AC-LC-2)                                     | D2                                                               |
+  | CF-18 | P-18 | Reduced-motion emulation (AC-MO-3)                                                                           | D2                                                               |
+  | CF-19 | P-18 | Spinner rotation, and its events never completing the toast                                                  | D2                                                               |
+  | CF-20 | P-18 | Individual `translate`, `scale` and `rotate` in every engine                                                 | D2                                                               |
+  | CF-21 | P-19 | Reflow in three engines (AC-MO-2)                                                                            | D2                                                               |
+  | CF-22 | P-19 | Reduced-motion reflow (AC-MO-3)                                                                              | D2                                                               |
+  | CF-23 | P-19 | Visual evaluation of the P-18 `scale` × P-19 `transform` overlap                                             | D0-13: human judgement                                           |
+  | CF-24 | P-20 | Progress direction (AC-RTL-1, D-11)                                                                          | D2                                                               |
+  | CF-25 | P-20 | Pause synchronisation in WebKit and Firefox (AC-PR-1, D-10)                                                  | D0-6 for the blur part                                           |
+  | CF-26 | P-20 | Hidden-document resynchronisation (T1)                                                                       | D0-6                                                             |
+  | CF-27 | P-20 | Safe corners of the strip                                                                                    | D0-13 for its appearance                                         |
+  | CF-28 | P-20 | Windows High Contrast for the fill                                                                           | D0-8: manual                                                     |
+  | CF-29 | P-21 | Touch swipe in three engines (AC-SW-1)                                                                       | D0-5                                                             |
+  | CF-30 | P-21 | Scroll arbitration, diagonals and `pointercancel`                                                            | D0-5                                                             |
+  | CF-31 | P-21 | Pen and `touch-action`, pen swipe                                                                            | D0-5; D0-4 for real pen hardware                                 |
+  | CF-32 | P-21 | `inert` with capture mid-gesture                                                                             | D0-5                                                             |
+  | CF-33 | P-21 | Pointer-triggered restoration after a swipe of a focused toast                                               | D0-2: evidence only, no contract change before P-29              |
+  | CF-34 | P-21 | Pinch-zoom per engine                                                                                        | D0-14: evidence; `pan-y` kept                                    |
+  | CF-35 | P-21 | Composition motion (activation mid-reposition, Freeze Y, X kept, the one-frame fly-out hold)                 | D0-13 for the cosmetic hold                                      |
+  | CF-36 | P-21 | A dismissal during the snap-back keeps P-18's exit fade in WebKit and Firefox                                | D2                                                               |
+  | CF-37 | P-21 | Pen contact loss, pointer-ID reuse and the stale pending candidate                                           | D0-4: real pen hardware, manual; no production change            |
+  | CF-38 | P-21 | Shadow DOM controls (MINOR-1)                                                                                | D0-3: characterise first; any fix only by a separate decision    |
+  | CF-39 | P-21 | A touch or pen press focusing the toast root (P-21 pre-publication correction, Chromium)                     | D2                                                               |
+  | CF-40 | P-21 | D2-20 item 10 in WebKit and Firefox: no opacity transition overrides P-18's exit (S4 accounting)             | D2; shares evidence with CF-36                                   |
+  | CF-41 | P-21 | D2 decision 15: scroll arbitration in every browser                                                          | D0-5; shares evidence with CF-30                                 |
+  | CF-42 | P-21 | Evidence on retaining `touch-action: pan-y`, for P-26                                                        | D0-14                                                            |
+  | CF-43 | P-21 | The iPhone Safari and Android Chrome approvals are feel sign-offs and satisfy no CF item                     | D0-1: device approval never stands in for a classified result    |
 
 **P-23 Compatibility and SSR verification**
 
@@ -3843,12 +5835,32 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Availability.** A toast can be swiped away with touch or a pen, never with a mouse or trackpad. Mouse dismissal by dragging is not part of 2.0 (§37).
   - **Direction.** Physical: toasts at left positions swipe left, at right positions right, and at centre positions either way, also in RTL.
   - **Custom toasts.** They can be swiped too. A swipe never starts on a button, link, form field or other interactive or focusable element inside the content, or while text in the toast is selected.
-  - **Shadow DOM (P-21 review, MINOR-1).** Unless P-22 changes it, controls inside a web component's shadow root are not recognised as interactive, so a swipe can start on them: state the boundary.
+  - **Shadow DOM (P-21 review, MINOR-1).** Unless P-22 changes it, controls inside a web component's shadow root are not recognised as interactive, so a swipe can start on them: state the boundary. P-22 did not change it; its evidence is in the P-22 notes below.
   - **Close button.** Custom toasts have no close button by default, so for a pointer user a swipe may be the only way to dismiss a persistent custom toast. Point consumers to `closeButton: true` or their own dismiss control (§17.3).
-  - **`touch-action`.** Toasts set `touch-action: pan-y`: vertical scrolling works from a toast, but horizontal panning and a pinch-zoom that starts on a toast are not handled by the browser, and this also applies to content inside a custom toast. Document it, with P-22's evidence, if it is retained.
+  - **`touch-action`.** Toasts set `touch-action: pan-y`: vertical scrolling works from a toast, but horizontal panning and a pinch-zoom that starts on a toast are not handled by the browser, and this also applies to content inside a custom toast. Document it, with P-22's evidence, if it is retained. P-22 retained it, and its real-device evidence qualifies the pinch-zoom part: see the P-22 notes below.
   - **Root ownership.** The library owns the toast root's `transform`, its transitions and, during a swipe, its opacity. The P-19 caveats on consumer transforms and transitions on the root apply to swipe motion too.
   - **Not contract.** `data-swiping` and the internal swipe custom properties are implementation details, not customisation hooks: do not document them.
   - **Exit tokens (P-21 D2).** `--ret-exit-duration` and `--ret-exit-easing` also time a swiped toast's fly-out, which fits inside the exit. Overriding them changes both together. Under reduced motion there is no fly-out.
+
+- Notes from P-22 (S6.3) for the behaviour, accessibility and browser-support documentation. They document the boundaries P-22 verified (P-22 D0, Boundaries); the evidence is in the P-22 entry, chiefly its S6.3a record.
+  - **Shadow DOM (CF-38, D2-2): a confirmed limitation, not fixed.**
+    - **Behaviour:** `protectedTarget()` walks from the retargeted `event.target`, so a control inside an open shadow root in custom content is seen as its host. A swipe that starts on such a control can start and commit, and the control gets no `click`. The same drag from a light-DOM control never starts a swipe (§19; blocking under CF-29).
+    - **Evidence:** trusted CDP touch in Chromium; synthetic composed pointer events in Firefox and WebKit, which show the same retargeting but are not touch evidence. No real-device check was made.
+    - **Document:** controls inside a web component's shadow root are not recognised as interactive for swiping. Consumers who put shadow-root controls in a custom toast should expect a swipe can start on them, and can give the toast a close button (`closeButton: true`) or their own dismiss control.
+    - **Not in 2.0:** `composedPath()` hardening is the post-v2 candidate D2-2 requires (§37). Do not describe the boundary as fixed.
+  - **`touch-action: pan-y` and pinch-zoom (CF-30, CF-34, CF-41, CF-42).** `pan-y` is retained unchanged (D0-14).
+    - **Vertical scrolling** that starts on a toast works with no dismissal: blocking in Chromium (CDP touch), and observed on real iOS Safari, Android Chrome and Firefox for Android.
+    - **Diagonal gestures** are arbitrated by the browser and differ between browsers (at about 60° iOS Safari took a swipe, while Android Chrome and Firefox for Android scrolled). Do not document an angle as behaviour.
+    - **Pinch-zoom:** on real iOS Safari, Android Chrome and Firefox for Android, pinch-zoom worked when it was started on a toast and when it was started on the page. Where each of the two fingers first touched was not recorded, so this does not establish the behaviour of a pinch whose two fingers both start on a toast. Do not state that a pinch starting on a toast is blocked, and do not claim that every pinch-zoom gesture works; describe what was observed and that `pan-y` leaves horizontal panning from a toast to the swipe.
+  - **Forced colours (D0-8, D2-5).** Keep the two kinds of evidence apart:
+    - **Emulated:** Playwright's `forced-colors: active` in Chromium, Firefox and WebKit is blocking automation of the §17.5 rules (CF-14, CF-28). The engines' emulation differs: Chromium itself forces outline colours to `Highlight` and border colours to `CanvasText`, Firefox forces border colours, and WebKit forces no author colour at all (P-22 S3). Emulation is not Windows High Contrast.
+    - **Real Windows High Contrast:** Windows 11 (26H2), the **Aquatic** contrast theme, in Chrome 154 and Firefox 157 (MC-6, the maintainer's visual check): the card edge, the action's border, the `Highlight` rings, the region ring, each type recognisable by its icon (the loading toast by its spinner; the default toast has no type icon), and the progress fill with no track.
+    - **Not verified:** other contrast themes, Edge, and other platforms' contrast settings. Claim no more than this.
+  - **Browser and input coverage** (with the floor recorded in P-18 D0, decision 6):
+    - **Automated (blocking):** Playwright 1.63.0's Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6 on Linux, with React 18 (the lockfile's 18.3.1). Playwright WebKit is the WebKit engine, never Safari (D0-7).
+    - **Real browsers (manual):** Windows 11 Chrome 154 and Firefox 157 (MC-5, MC-6, MC-8); iOS Safari on iOS 27 (iPhone 17 Pro, MC-2); Android Chrome 153 and Firefox for Android 156 on Android 16 (Nothing Phone (2), MC-3, MC-4).
+    - **Not verified:** macOS Safari (MC-1), and Safari's keyboard focus rings on iOS.
+    - **Pen:** only Chromium's protocol pen (CDP) was tested: it is not a stylus, and real pen hardware was not tested (MC-7). In that simulation a horizontal pen drag committed a swipe and a vertical one from a toast did not scroll (CF-31); that is not hardware evidence, so do not claim verified pen support.
 
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
@@ -3885,6 +5897,20 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - With the screen-reader matrix (§17.6), check touch exploration of toasts while swipe is available: VoiceOver on iOS and, where possible, TalkBack. The close button stays the accessible way to dismiss.
   - In the same audit, check under the operating system's own reduced-motion setting that a swipe still dismisses with no fly-out and that a cancelled swipe returns with no snap-back travel. P-21's reduced-motion evidence is expected to be emulation only.
   - Include a swipe of a toast that holds focus in the assistive-technology evidence for the pointer-triggered close question (P-22): how the restored focus is experienced (P-21 D0, decision 17).
+- Carried over from P-22 (S6.3). Open work and evidence gaps; none is complete, and none is waived here. The evidence is in the P-22 entry, chiefly its S6.3a record.
+  - **The pointer-triggered close contract (CF-7, CF-8, CF-33; D0-2).** P-22 gathered browser evidence only and changed no contract; the decision on §10 and §18 is P-29's, with the assistive-technology evidence the P-18 and P-21 items above ask for. The browser evidence:
+    - **Mouse close** (Playwright Chromium, Firefox and WebKit, which all focus a clicked button): focus is restored to the next toast's close with no `:focus-visible`, and that toast stays held by focus-within with its progress frozen. A keyboard close restores to the same target with the ring showing.
+    - **Swipe of a focused toast** (focused by Alt+T; Chromium trusted touch, Firefox and WebKit synthetic): focus goes to the next toast's root, which matches `:focus-visible` and is held by focus-within. A swipe after pointer use was not recorded.
+    - **Tap on a close button** on real devices: in iOS Safari, Android Chrome and Firefox for Android, the tapped close button was the active element afterwards (MC-2, MC-3, MC-4). So iOS Safari did not show the "click without focus" P-16 anticipated for Safari on that tap. Evidence, not a contract.
+    - **macOS Safari's click without focus:** unverified (MC-1, below).
+  - **CF-12, Alt+T after pointer-only use: a UX and accessibility decision.** After pointer use with no earlier keyboard input, Alt+T focuses the toast root with no `:focus-visible`, so no ring shows: in all three Playwright engines (S4.3) and again in headed Playwright WebKit (S6.3-0). It is engine behaviour, not a defect and not a contract (D2-6). Any change to how the hotkey shows focus needs its own recorded decision.
+  - **CF-11, the hotkey's discoverability.** `aria-keyshortcuts` is verified in the DOM (Chromium, Firefox, WebKit) and in Chromium's accessibility tree; the Firefox and WebKit trees are an unverified gap. Check its discoverability with the screen-reader matrix (§17.6).
+  - **AC-SW-1's formal sign-off.** P-22 passed layers A, B and C (D2-3). The sign-off is P-29's, including how it treats the CF-38 Shadow DOM boundary against §19's and AC-SW-1's wording (D2-2; P-22's reconciled contradictions), with the boundary documented by P-26.
+  - **MC-1, macOS Safari: an unverified gap.** No Mac was available to P-22. The cases are: CF-7 click without focus, reported apart from the keyboard path; CF-8's Safari path; CF-12's rings after Tab, Alt+T and restoration, including Safari's Tab-to-buttons setting; CF-1, CF-5 and CF-25 genuine blur by window and app switching; CF-26 hidden documents. §17.6 already needs VoiceOver with Safari on macOS for this audit. If no Mac is available, record the gap and take a maintainer decision; no waiver is recorded here.
+  - **AC-PR-1's Safari layer.** P-22 left AC-PR-1 partially met: its Safari layers (CF-25 blur and CF-26 hidden documents, in macOS Safari) are part of MC-1.
+  - **CF-12 and CF-13 ring appearance in real Safari.** The WebKit engine passed in headed Playwright WebKit 26.6 (S6.3-0), which is not Safari evidence. Real iOS Safari was checked by touch only, so its rings are unverified; an external keyboard (iOS may need Full Keyboard Access) would show them. macOS Safari is part of MC-1.
+  - **MC-7, real pen hardware: an unverified gap**, run if hardware becomes available: CF-31 pen swipe and `touch-action` with a pen; CF-37 implicit capture, `buttons` on hover and with the barrel button, pointer-ID reuse across contacts and the stale pending candidate; CF-39's pen press; the barrel-button press on a gap between toasts (S4.1). CF-37's re-base decision depends on it (§37).
+  - **The operating systems' own settings.** P-22 verified reduced motion by emulation only (CF-18, CF-22), so the reduced-motion items above stay as written. Its only real contrast-setting evidence is Windows High Contrast with the Aquatic theme in Chrome and Firefox (MC-6).
 
 ## 36. Acceptance criteria for v2.0
 
@@ -4000,6 +6026,8 @@ These are deliberately left out of 2.0:
 - Built-in i18n bundles.
 - A Tailwind plugin or preset (optional, never a dependency).
 - Hosting in Shadow DOM or iframes.
+- Recognising interactive controls inside shadow roots in custom content (P-22 CF-38, D2-2): walking `composedPath()` instead of the retargeted `event.target` in `protectedTarget()`, so a swipe never starts on such a control. In 2.0 the boundary is documented (P-26). Any change needs its own recorded decision, with regression tests and real-browser evidence.
+- Re-basing a stale pending swipe candidate on a same-ID `pointerdown` (P-22 CF-37, D0-4). It depends on real pen hardware evidence (MC-7): implicit capture, `buttons` on hover and with the barrel button, and whether a pen reuses its pointer ID across contacts. The decision is taken once that evidence exists, at P-29 if hardware becomes available or after 2.0. Until then there is no production change, and the current behaviour stands.
 - A visual-regression suite.
 - CommonJS output.
 

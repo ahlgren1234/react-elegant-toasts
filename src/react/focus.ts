@@ -22,9 +22,13 @@ export function deepActiveElement(doc: Document): Element | null {
 /** An element that may take focus. */
 type Focusable = Element & Partial<Pick<HTMLOrSVGElement, 'focus'>>;
 
-/** Focuses `target`, true only when its own tree reports it focused afterwards. */
+/**
+ * Focuses `target` for removal restoration, true only when its own tree reports it focused
+ * afterwards. Without scrolling: the region is a static element wherever `<Toaster />` sits, and a
+ * plain `focus()` scrolls the page to it (P-22 H1). The hotkey and Escape focus on their own.
+ */
 function tryFocus(target: Focusable): boolean {
-  target.focus?.();
+  target.focus?.({ preventScroll: true });
   return activeElementOf(target) === target;
 }
 

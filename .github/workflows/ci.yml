@@ -68,6 +68,32 @@ jobs:
       # Builds, packs and validates the tarball, including the packed consumer fixture (§27).
       - run: npm run validate:package
 
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      # The browser builds pinned by @playwright/test, and their system packages through apt.
+      - run: npx playwright install --with-deps chromium firefox webkit
+      # Chromium, Firefox and WebKit, all blocking, with zero retries (§26, P-22).
+      - run: npm run test:browser
+      # Report, traces and screenshots of the harness page, on failure only.
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-results
+          path: browser-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   demo:
     runs-on: ubuntu-latest
     timeout-minutes: 10

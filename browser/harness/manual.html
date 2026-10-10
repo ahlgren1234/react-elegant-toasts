@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>react-elegant-toasts manual QA</title>
+  </head>
+  <body>
+    <main class="mq-page">
+      <h1>react-elegant-toasts manual QA (P-22 S6)</h1>
+      <p class="mq-note">
+        The real library and the production stylesheet. Toasts sit above the page and the controls
+        never cover them; scroll so the controls you need are away from the chosen edge.
+      </p>
+      <button type="button" data-qa="before">Before the region</button>
+      <div id="mq-toaster"></div>
+      <div class="mq-stage" aria-hidden="true">Toast area</div>
+      <div id="mq-panel"></div>
+      <div class="mq-filler" data-qa="page"></div>
+      <button type="button" data-qa="after">After the region</button>
+      <div class="mq-stage" aria-hidden="true">End of page</div>
+    </main>
+    <script type="module" src="./manual.tsx"></script>
+  </body>
+</html>

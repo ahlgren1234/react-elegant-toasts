@@ -14,6 +14,8 @@ out
 
 # Testing
 coverage
+browser-dist/
+browser-results/
 
 # Debug
 npm-debug.log*

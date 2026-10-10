@@ -104,6 +104,13 @@ interface StackListProps {
 // The list owns the reason: when it unmounts, for example as its last toast leaves under the
 // pointer, the hover goes with it, since no `pointerleave` will ever arrive. The list also moves
 // its surviving toasts smoothly when its toasts change (§22).
+//
+// A press on the list itself, on a gap between toasts or through an exiting toast, which is inert
+// and so never the target, would focus the nearest focusable ancestor: the region, which takes
+// focus from script (§18). That would undo the restoration that moved focus out of the exiting toast
+// (P-22 H2). So a `mousedown` whose target is the list itself keeps its default action, focus,
+// from happening. Only that one: a press on a toast, its content or its controls is untouched, and
+// the event still propagates, and `click` still follows.
 function StackList({ position, ids, children }: StackListProps) {
   const ref = useRef<HTMLOListElement>(null);
   useStackReposition(ref, position, ids);
@@ -112,11 +119,16 @@ function StackList({ position, ids, children }: StackListProps) {
     if (!list) return;
     const onPointerEnter = () => setStackPause(position, true);
     const onPointerLeave = () => setStackPause(position, false);
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.target === list) event.preventDefault();
+    };
     list.addEventListener('pointerenter', onPointerEnter);
     list.addEventListener('pointerleave', onPointerLeave);
+    list.addEventListener('mousedown', onMouseDown);
     return () => {
       list.removeEventListener('pointerenter', onPointerEnter);
       list.removeEventListener('pointerleave', onPointerLeave);
+      list.removeEventListener('mousedown', onMouseDown);
       setStackPause(position, false);
     };
   }, [position]);
