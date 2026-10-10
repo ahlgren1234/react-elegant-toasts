@@ -5785,12 +5785,32 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Availability.** A toast can be swiped away with touch or a pen, never with a mouse or trackpad. Mouse dismissal by dragging is not part of 2.0 (§37).
   - **Direction.** Physical: toasts at left positions swipe left, at right positions right, and at centre positions either way, also in RTL.
   - **Custom toasts.** They can be swiped too. A swipe never starts on a button, link, form field or other interactive or focusable element inside the content, or while text in the toast is selected.
-  - **Shadow DOM (P-21 review, MINOR-1).** Unless P-22 changes it, controls inside a web component's shadow root are not recognised as interactive, so a swipe can start on them: state the boundary.
+  - **Shadow DOM (P-21 review, MINOR-1).** Unless P-22 changes it, controls inside a web component's shadow root are not recognised as interactive, so a swipe can start on them: state the boundary. P-22 did not change it; its evidence is in the P-22 notes below.
   - **Close button.** Custom toasts have no close button by default, so for a pointer user a swipe may be the only way to dismiss a persistent custom toast. Point consumers to `closeButton: true` or their own dismiss control (§17.3).
-  - **`touch-action`.** Toasts set `touch-action: pan-y`: vertical scrolling works from a toast, but horizontal panning and a pinch-zoom that starts on a toast are not handled by the browser, and this also applies to content inside a custom toast. Document it, with P-22's evidence, if it is retained.
+  - **`touch-action`.** Toasts set `touch-action: pan-y`: vertical scrolling works from a toast, but horizontal panning and a pinch-zoom that starts on a toast are not handled by the browser, and this also applies to content inside a custom toast. Document it, with P-22's evidence, if it is retained. P-22 retained it, and its real-device evidence qualifies the pinch-zoom part: see the P-22 notes below.
   - **Root ownership.** The library owns the toast root's `transform`, its transitions and, during a swipe, its opacity. The P-19 caveats on consumer transforms and transitions on the root apply to swipe motion too.
   - **Not contract.** `data-swiping` and the internal swipe custom properties are implementation details, not customisation hooks: do not document them.
   - **Exit tokens (P-21 D2).** `--ret-exit-duration` and `--ret-exit-easing` also time a swiped toast's fly-out, which fits inside the exit. Overriding them changes both together. Under reduced motion there is no fly-out.
+
+- Notes from P-22 (S6.3) for the behaviour, accessibility and browser-support documentation. They document the boundaries P-22 verified (P-22 D0, Boundaries); the evidence is in the P-22 entry, chiefly its S6.3a record.
+  - **Shadow DOM (CF-38, D2-2): a confirmed limitation, not fixed.**
+    - **Behaviour:** `protectedTarget()` walks from the retargeted `event.target`, so a control inside an open shadow root in custom content is seen as its host. A swipe that starts on such a control can start and commit, and the control gets no `click`. The same drag from a light-DOM control never starts a swipe (§19; blocking under CF-29).
+    - **Evidence:** trusted CDP touch in Chromium; synthetic composed pointer events in Firefox and WebKit, which show the same retargeting but are not touch evidence. No real-device check was made.
+    - **Document:** controls inside a web component's shadow root are not recognised as interactive for swiping. Consumers who put shadow-root controls in a custom toast should expect a swipe can start on them, and can give the toast a close button (`closeButton: true`) or their own dismiss control.
+    - **Not in 2.0:** `composedPath()` hardening is the post-v2 candidate D2-2 requires (§37). Do not describe the boundary as fixed.
+  - **`touch-action: pan-y` and pinch-zoom (CF-30, CF-34, CF-41, CF-42).** `pan-y` is retained unchanged (D0-14).
+    - **Vertical scrolling** that starts on a toast works with no dismissal: blocking in Chromium (CDP touch), and observed on real iOS Safari, Android Chrome and Firefox for Android.
+    - **Diagonal gestures** are arbitrated by the browser and differ between browsers (at about 60° iOS Safari took a swipe, while Android Chrome and Firefox for Android scrolled). Do not document an angle as behaviour.
+    - **Pinch-zoom:** on real iOS Safari, Android Chrome and Firefox for Android, pinch-zoom worked when it was started on a toast and when it was started on the page. Where each of the two fingers first touched was not recorded, so this does not establish the behaviour of a pinch whose two fingers both start on a toast. Do not state that a pinch starting on a toast is blocked, and do not claim that every pinch-zoom gesture works; describe what was observed and that `pan-y` leaves horizontal panning from a toast to the swipe.
+  - **Forced colours (D0-8, D2-5).** Keep the two kinds of evidence apart:
+    - **Emulated:** Playwright's `forced-colors: active` in Chromium, Firefox and WebKit is blocking automation of the §17.5 rules (CF-14, CF-28). The engines' emulation differs: Chromium itself forces outline colours to `Highlight` and border colours to `CanvasText`, Firefox forces border colours, and WebKit forces no author colour at all (P-22 S3). Emulation is not Windows High Contrast.
+    - **Real Windows High Contrast:** Windows 11 (26H2), the **Aquatic** contrast theme, in Chrome 154 and Firefox 157 (MC-6, the maintainer's visual check): the card edge, the action's border, the `Highlight` rings, the region ring, each type recognisable by its icon (the loading toast by its spinner; the default toast has no type icon), and the progress fill with no track.
+    - **Not verified:** other contrast themes, Edge, and other platforms' contrast settings. Claim no more than this.
+  - **Browser and input coverage** (with the floor recorded in P-18 D0, decision 6):
+    - **Automated (blocking):** Playwright 1.63.0's Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6 on Linux, with React 18 (the lockfile's 18.3.1). Playwright WebKit is the WebKit engine, never Safari (D0-7).
+    - **Real browsers (manual):** Windows 11 Chrome 154 and Firefox 157 (MC-5, MC-6, MC-8); iOS Safari on iOS 27 (iPhone 17 Pro, MC-2); Android Chrome 153 and Firefox for Android 156 on Android 16 (Nothing Phone (2), MC-3, MC-4).
+    - **Not verified:** macOS Safari (MC-1), and Safari's keyboard focus rings on iOS.
+    - **Pen:** only Chromium's protocol pen (CDP) was tested: it is not a stylus, and real pen hardware was not tested (MC-7). In that simulation a horizontal pen drag committed a swipe and a vertical one from a toast did not scroll (CF-31); that is not hardware evidence, so do not claim verified pen support.
 
 **P-27 Migration guide** (§30), 0.x → 2.0.
 
@@ -5827,6 +5847,20 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - With the screen-reader matrix (§17.6), check touch exploration of toasts while swipe is available: VoiceOver on iOS and, where possible, TalkBack. The close button stays the accessible way to dismiss.
   - In the same audit, check under the operating system's own reduced-motion setting that a swipe still dismisses with no fly-out and that a cancelled swipe returns with no snap-back travel. P-21's reduced-motion evidence is expected to be emulation only.
   - Include a swipe of a toast that holds focus in the assistive-technology evidence for the pointer-triggered close question (P-22): how the restored focus is experienced (P-21 D0, decision 17).
+- Carried over from P-22 (S6.3). Open work and evidence gaps; none is complete, and none is waived here. The evidence is in the P-22 entry, chiefly its S6.3a record.
+  - **The pointer-triggered close contract (CF-7, CF-8, CF-33; D0-2).** P-22 gathered browser evidence only and changed no contract; the decision on §10 and §18 is P-29's, with the assistive-technology evidence the P-18 and P-21 items above ask for. The browser evidence:
+    - **Mouse close** (Playwright Chromium, Firefox and WebKit, which all focus a clicked button): focus is restored to the next toast's close with no `:focus-visible`, and that toast stays held by focus-within with its progress frozen. A keyboard close restores to the same target with the ring showing.
+    - **Swipe of a focused toast** (focused by Alt+T; Chromium trusted touch, Firefox and WebKit synthetic): focus goes to the next toast's root, which matches `:focus-visible` and is held by focus-within. A swipe after pointer use was not recorded.
+    - **Tap on a close button** on real devices: in iOS Safari, Android Chrome and Firefox for Android, the tapped close button was the active element afterwards (MC-2, MC-3, MC-4). So iOS Safari did not show the "click without focus" P-16 anticipated for Safari on that tap. Evidence, not a contract.
+    - **macOS Safari's click without focus:** unverified (MC-1, below).
+  - **CF-12, Alt+T after pointer-only use: a UX and accessibility decision.** After pointer use with no earlier keyboard input, Alt+T focuses the toast root with no `:focus-visible`, so no ring shows: in all three Playwright engines (S4.3) and again in headed Playwright WebKit (S6.3-0). It is engine behaviour, not a defect and not a contract (D2-6). Any change to how the hotkey shows focus needs its own recorded decision.
+  - **CF-11, the hotkey's discoverability.** `aria-keyshortcuts` is verified in the DOM (Chromium, Firefox, WebKit) and in Chromium's accessibility tree; the Firefox and WebKit trees are an unverified gap. Check its discoverability with the screen-reader matrix (§17.6).
+  - **AC-SW-1's formal sign-off.** P-22 passed layers A, B and C (D2-3). The sign-off is P-29's, including how it treats the CF-38 Shadow DOM boundary against §19's and AC-SW-1's wording (D2-2; P-22's reconciled contradictions), with the boundary documented by P-26.
+  - **MC-1, macOS Safari: an unverified gap.** No Mac was available to P-22. The cases are: CF-7 click without focus, reported apart from the keyboard path; CF-8's Safari path; CF-12's rings after Tab, Alt+T and restoration, including Safari's Tab-to-buttons setting; CF-1, CF-5 and CF-25 genuine blur by window and app switching; CF-26 hidden documents. §17.6 already needs VoiceOver with Safari on macOS for this audit. If no Mac is available, record the gap and take a maintainer decision; no waiver is recorded here.
+  - **AC-PR-1's Safari layer.** P-22 left AC-PR-1 partially met: its Safari layers (CF-25 blur and CF-26 hidden documents, in macOS Safari) are part of MC-1.
+  - **CF-12 and CF-13 ring appearance in real Safari.** The WebKit engine passed in headed Playwright WebKit 26.6 (S6.3-0), which is not Safari evidence. Real iOS Safari was checked by touch only, so its rings are unverified; an external keyboard (iOS may need Full Keyboard Access) would show them. macOS Safari is part of MC-1.
+  - **MC-7, real pen hardware: an unverified gap**, run if hardware becomes available: CF-31 pen swipe and `touch-action` with a pen; CF-37 implicit capture, `buttons` on hover and with the barrel button, pointer-ID reuse across contacts and the stale pending candidate; CF-39's pen press; the barrel-button press on a gap between toasts (S4.1). CF-37's re-base decision depends on it (§37).
+  - **The operating systems' own settings.** P-22 verified reduced motion by emulation only (CF-18, CF-22), so the reduced-motion items above stay as written. Its only real contrast-setting evidence is Windows High Contrast with the Aquatic theme in Chrome and Firefox (MC-6).
 
 ## 36. Acceptance criteria for v2.0
 
@@ -5942,6 +5976,8 @@ These are deliberately left out of 2.0:
 - Built-in i18n bundles.
 - A Tailwind plugin or preset (optional, never a dependency).
 - Hosting in Shadow DOM or iframes.
+- Recognising interactive controls inside shadow roots in custom content (P-22 CF-38, D2-2): walking `composedPath()` instead of the retargeted `event.target` in `protectedTarget()`, so a swipe never starts on such a control. In 2.0 the boundary is documented (P-26). Any change needs its own recorded decision, with regression tests and real-browser evidence.
+- Re-basing a stale pending swipe candidate on a same-ID `pointerdown` (P-22 CF-37, D0-4). It depends on real pen hardware evidence (MC-7): implicit capture, `buttons` on hover and with the barrel button, and whether a pen reuses its pointer ID across contacts. The decision is taken once that evidence exists, at P-29 if hardware becomes available or after 2.0. Until then there is no production change, and the current behaviour stands.
 - A visual-regression suite.
 - CommonJS output.
 
