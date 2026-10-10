@@ -21,9 +21,10 @@ interface Sample {
   /** `performance.now()` when the sample was read: WebKit's motion follows it within a task. */
   readonly time: number;
   readonly mutation: boolean;
-  /** `b`'s rendered top (transforms included), its computed transform X, and its swipe state. */
+  /** `b`'s rendered top (transforms included), its computed transform X and Y, and its swipe state. */
   readonly top: number;
   readonly x: number;
+  readonly transformY: number;
   readonly swiping: string | null;
   readonly connected: boolean;
 }
@@ -162,18 +163,26 @@ async function startSampling(page: Page): Promise<() => Promise<Sample[]>> {
         now: performance.now(),
         top: state.top,
         x: state.transformX,
+        transformY: state.transformY,
         swiping: state.swiping,
         connected: state.connected,
       };
     };
-    let before: { top: number; time: number; transformY: number } | null = null;
+    let before: Activation['before'] | null = null;
     document.addEventListener(
       'pointermove',
       () => {
         const state = h.toastState('b');
+        const style = getComputedStyle(document.querySelector('.ret-toast.h-b')!);
         before =
           state.swiping === null
-            ? { top: state.top, time: performance.now(), transformY: state.transformY }
+            ? {
+                top: state.top,
+                time: performance.now(),
+                transformY: state.transformY,
+                duration: style.transitionDuration,
+                easing: style.transitionTimingFunction,
+              }
             : null;
       },
       { capture: true }
@@ -211,6 +220,56 @@ const stageTime = (page: Page, name: string) =>
         .time,
     name
   );
+
+/**
+ * The activating move's task: `b` just before the library handled it, with its reposition
+ * transition's computed timing, and just after.
+ */
+interface Activation {
+  readonly before: {
+    readonly top: number;
+    readonly time: number;
+    readonly transformY: number;
+    readonly duration: string;
+    readonly easing: string;
+  };
+  readonly after: { readonly top: number; readonly time: number };
+}
+
+/**
+ * WebKit's `performance.now()` reads in whole milliseconds here (P-22 S6 preflight), so the
+ * difference of two reads can understate the elapsed time by up to one tick.
+ */
+const WEBKIT_CLOCK_TICK_MS = 1;
+
+/** A single `transition-duration` in ms; NaN for anything else. */
+function durationMs(value: string): number {
+  const match = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(value.trim());
+  return match ? Number(match[1]) * (match[2] === 's' ? 1000 : 1) : Number.NaN;
+}
+
+/**
+ * The steepest slope (output progress per input progress) of a single `cubic-bezier()` timing
+ * function: the largest y'(u) / x'(u) over the curve's parameter u, so no inversion of x is
+ * needed. NaN when the value is not one `cubic-bezier()`, or x'(u) reaches 0.
+ */
+function maxSlopeOf(easing: string): number {
+  const match = /^cubic-bezier\(([^,]+),([^,]+),([^,]+),([^,)]+)\)$/.exec(easing.trim());
+  if (!match) return Number.NaN;
+  const [x1, y1, x2, y2] = match.slice(1).map(Number) as [number, number, number, number];
+  if (![x1, y1, x2, y2].every(Number.isFinite)) return Number.NaN;
+  // The derivative of a cubic Bézier from 0 to 1 with control points p1, p2.
+  const derivative = (p1: number, p2: number, u: number) =>
+    3 * (1 - u) ** 2 * p1 + 6 * (1 - u) * u * (p2 - p1) + 3 * u ** 2 * (1 - p2);
+  let slope = 0;
+  for (let step = 0; step <= 1000; step += 1) {
+    const u = step / 1000;
+    const dx = derivative(x1, x2, u);
+    if (dx <= 0) return Number.NaN;
+    slope = Math.max(slope, Math.abs(derivative(y1, y2, u)) / dx);
+  }
+  return slope;
+}
 
 /** The fastest frame-to-frame motion of `key` among `samples`, in px/ms. */
 function speedOf(samples: readonly Sample[], key: 'top' | 'x'): number {
@@ -281,6 +340,50 @@ function expectXKept(measured: Measured, samples: readonly Sample[], browserName
   ).toBeLessThanOrEqual(allowance);
 }
 
+/**
+ * The change at activation along the reposition, positive toward `b`'s layout place, and never
+ * more than half a pixel the other way, in any engine. The reposition carries the root's transform
+ * from its offset to none, so `b` moves against the offset's sign (activation is mid-reposition,
+ * so the offset is not 0).
+ */
+function forwardAtActivation({ before, after }: Activation): number {
+  const forward = (after.top - before.top) * Math.sign(-before.transformY);
+  expect(forward, 'no jump against the reposition at activation').toBeGreaterThanOrEqual(-PX);
+  return forward;
+}
+
+/**
+ * No jump at activation, in WebKit. WebKit advances animation time within a task, so the change
+ * from `before` to `after` is real reposition motion, and frame samples, taken in the ease's slow
+ * start, underestimate its speed (P-22 post-merge, run 38037247122: 1.03 px against 0.89 px). The
+ * bound is the transition's own: no motion is faster than its distance times the timing
+ * function's steepest slope over its duration. The window is the measured interval from `before`
+ * to `after`, plus one clock tick.
+ */
+function expectNoActivationJumpWebKit(activation: Activation, samples: readonly Sample[]): void {
+  const { before, after } = activation;
+  const rest = samples[0]!;
+  expect(rest.mutation, 'precondition: the first sample precedes the insertion').toBe(false);
+  expect(Math.abs(rest.transformY), 'precondition: `b` at rest before the insertion').toBeLessThan(
+    PX
+  );
+  // The reposition carries `b` from its place before the insertion to its new layout place.
+  const distance = before.top - before.transformY - rest.top;
+  expect(Math.abs(distance), 'precondition: a measured reposition distance').toBeGreaterThan(PX);
+  const duration = durationMs(before.duration);
+  expect(duration, `precondition: the transition's duration (${before.duration})`).toBeGreaterThan(
+    0
+  );
+  const slope = maxSlopeOf(before.easing);
+  expect(
+    slope,
+    `precondition: the transition's timing function (${before.easing})`
+  ).toBeGreaterThan(0);
+  const maxSpeed = (Math.abs(distance) * slope) / duration;
+  const allowance = PX + maxSpeed * (after.time - before.time + WEBKIT_CLOCK_TICK_MS);
+  expect(forwardAtActivation(activation), 'no jump at activation').toBeLessThanOrEqual(allowance);
+}
+
 test.describe('CF-35: swipe and repositioning compose with no jump', () => {
   test('activation during a reposition starts from the current position, then freezes Y', async ({
     page,
@@ -306,36 +409,37 @@ test.describe('CF-35: swipe and repositioning compose with no jump', () => {
     const activation = await page.evaluate(
       () =>
         window.__retHarness!.events.find(event => event.type === 'activation')?.detail as
-          | {
-              before: { top: number; time: number; transformY: number };
-              after: { top: number; time: number };
-            }
-          | undefined
+          Activation | undefined
     );
     expect(activation, `precondition: the gesture activated (${driver.kind})`).toBeDefined();
     expect(activation!.before.transformY, 'precondition: activated mid-reposition').toBeLessThan(
       -PX
     );
-    // The speed includes the activating move's own `before` read: activation lands early in the
-    // reposition, whose first frames are the ease's slow start, and WebKit advances the motion
-    // between `before` and `after` within the task (S6 preflight).
-    const moving = [
-      ...samples.filter(sample => sample.time < activation!.before.time && !sample.mutation),
-      {
-        time: activation!.before.time,
-        mutation: false,
-        top: activation!.before.top,
-        x: 0,
-        swiping: null,
-        connected: true,
-      },
-    ];
-    const allowance =
-      PX + speedOf(moving, 'top') * (activation!.after.time - activation!.before.time);
-    expect(
-      Math.abs(activation!.after.top - activation!.before.top),
-      'no jump at activation'
-    ).toBeLessThanOrEqual(allowance);
+    if (browserName === 'webkit') expectNoActivationJumpWebKit(activation!, samples);
+    else {
+      // The speed includes the activating move's own `before` read: activation lands early in the
+      // reposition, whose first frames are the ease's slow start (S6 preflight). Chromium and
+      // Firefox hold animation time within a task, so the change here is the motion over the task.
+      const moving = [
+        ...samples.filter(sample => sample.time < activation!.before.time && !sample.mutation),
+        {
+          time: activation!.before.time,
+          mutation: false,
+          top: activation!.before.top,
+          x: 0,
+          transformY: activation!.before.transformY,
+          swiping: null,
+          connected: true,
+        },
+      ];
+      const allowance =
+        PX + speedOf(moving, 'top') * (activation!.after.time - activation!.before.time);
+      forwardAtActivation(activation!);
+      expect(
+        Math.abs(activation!.after.top - activation!.before.top),
+        'no jump at activation'
+      ).toBeLessThanOrEqual(allowance);
+    }
     // Frozen while held: the rendered top does not move from the activation on.
     const held = samples.filter(
       sample => sample.time >= activation!.after.time && sample.swiping === 'drag'
