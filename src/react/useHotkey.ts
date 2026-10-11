@@ -146,6 +146,15 @@ export function useHotkey(
     specRef.current = spec;
   }, [spec]);
   const previousFocus = useRef<Element | null>(null);
+  // Suspense hides content that suspends again by cleaning up its layout Effects only: the
+  // listener's passive Effect below is kept, so its cleanup cannot be the only place the record
+  // is cleared. A hidden, departed or unmounted Toaster never keeps it (P-23 S4-H).
+  useIsomorphicLayoutEffect(
+    () => () => {
+      previousFocus.current = null;
+    },
+    [owner]
+  );
 
   useEffect(() => {
     const doc = section.current?.ownerDocument;

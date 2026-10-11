@@ -1,4 +1,5 @@
-// Validates the packed package as consumers receive it (§27, P-07).
+// Validates the packed package as consumers receive it (§27, P-07; the F1 to F4 matrix and the
+// Next.js App Router consumer, P-23 S5b to S7).
 // Run through `npm run validate:package`, which builds the library first.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const PACKAGE_NAME = 'react-elegant-toasts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureDir = path.join(root, 'fixtures', 'consumer-vite');
+const nextFixtureDir = path.join(root, 'fixtures', 'consumer-next');
 const npmFlags = ['--ignore-scripts', '--no-audit', '--no-fund'];
 
 const EXPECTED_FILES = [
@@ -48,6 +50,30 @@ const TYPE_EXPORTS = [
   'ToasterProps',
 ];
 
+// The packed consumer matrix (§27 step 6, P-23 D0-5). Every leg shares the fixture's sources and
+// tsconfig, and installs the same tarball from its own committed manifest and lockfile: F1 is the
+// fixture's own, F2 to F4 live in `fixtures/consumer-vite/legs/<leg>/`. The manifests pin exact
+// versions; the table fixes what each leg is for, so a drifted manifest cannot quietly change it.
+// TypeScript 7 is only ever run as the `tsc` CLI (D0-3).
+const LEGS = [
+  { id: 'F1', manifestDir: fixtureDir, react: 18, typescript: '5.0.4' },
+  { id: 'F2', manifestDir: path.join(fixtureDir, 'legs', 'f2'), react: 19, typescript: '5.0.4' },
+  { id: 'F3', manifestDir: path.join(fixtureDir, 'legs', 'f3'), react: 18, typescript: '7.0.2' },
+  { id: 'F4', manifestDir: path.join(fixtureDir, 'legs', 'f4'), react: 19, typescript: '7.0.2' },
+];
+const LEG_PACKAGES = ['react', 'react-dom', '@types/react', '@types/react-dom', 'typescript'];
+// The Next.js App Router consumer (§27 step 8, P-23 D0-7): React 19 through Next.js, whose App
+// Router renders with the React canary built into Next.js, and TypeScript 7.0.2 through Next.js's
+// default tsc CLI checker. scripts/check-next-app.js builds, starts and drives it in Chromium.
+const NEXT_LEG = {
+  id: 'N1',
+  sourceDir: nextFixtureDir,
+  manifestDir: nextFixtureDir,
+  react: 19,
+  typescript: '7.0.2',
+  next: '16.4.0',
+};
+
 class ValidationError extends Error {}
 
 function assert(condition, message) {
@@ -62,9 +88,10 @@ function ok(message) {
   console.log(`  ✓ ${message}`);
 }
 
-function run(command, args, { cwd, capture = false, label }) {
+function run(command, args, { cwd, capture = false, label, env }) {
   const result = spawnSync(command, args, {
     cwd,
+    env,
     encoding: 'utf8',
     stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
     // Only the npm fallback needs a shell (npm.cmd on Windows); everything else runs through node.
@@ -168,13 +195,19 @@ function runPackageLinters(tarball) {
   ok('attw passed');
 }
 
-function prepareConsumer(tmp, tarball) {
-  step('Install the tarball into an isolated copy of fixtures/consumer-vite');
-  const consumer = path.join(tmp, 'consumer-vite');
-  fs.cpSync(fixtureDir, consumer, {
+function prepareConsumer(tmp, tarball, leg) {
+  const sourceDir = leg.sourceDir ?? fixtureDir;
+  const fixture = path.relative(root, sourceDir);
+  step(`${leg.id}: install the tarball into an isolated copy of ${fixture}`);
+  const consumer = path.join(tmp, `${path.basename(sourceDir)}-${leg.id.toLowerCase()}`);
+  fs.cpSync(sourceDir, consumer, {
     recursive: true,
-    filter: source => !['node_modules', 'dist', 'dist-render'].includes(path.basename(source)),
+    filter: source =>
+      !['node_modules', 'dist', 'dist-render', 'legs', '.next'].includes(path.basename(source)),
   });
+  for (const name of ['package.json', 'package-lock.json']) {
+    fs.copyFileSync(path.join(leg.manifestDir, name), path.join(consumer, name));
+  }
   const manifests = ['package.json', 'package-lock.json'].map(name => ({
     name,
     content: fs.readFileSync(path.join(consumer, name)),
@@ -212,6 +245,72 @@ function prepareConsumer(tmp, tarball) {
   assert(!isInside(consumer, root), 'the consumer must live outside the repository');
   ok(`installed copy at ${installed}`);
   return { consumer, installed };
+}
+
+/** Compares dotted versions such as "5.0" and "5.6", numerically. */
+function compareVersions(a, b) {
+  const [x, y] = [a, b].map(version => version.split('.').map(Number));
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const difference = (x[i] ?? 0) - (y[i] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+function checkLegVersions(consumer, leg) {
+  step(`${leg.id}: check the installed versions`);
+  const manifest = readJson(path.join(consumer, 'package.json'));
+  const pins = { ...manifest.dependencies, ...manifest.devDependencies };
+  const installed = {};
+  for (const name of LEG_PACKAGES) {
+    const pin = pins[name];
+    assert(/^\d+\.\d+\.\d+$/.test(pin ?? ''), `${leg.id} must pin ${name} exactly, found ${pin}`);
+    installed[name] = readJson(path.join(consumer, 'node_modules', name, 'package.json'));
+    assert(
+      installed[name].version === pin,
+      `${leg.id} installed ${name} ${installed[name].version}, but its manifest pins ${pin}`
+    );
+  }
+  for (const name of ['react', 'react-dom', '@types/react', '@types/react-dom']) {
+    const major = Number(installed[name].version.split('.')[0]);
+    assert(major === leg.react, `${leg.id} is a React ${leg.react} leg, but has ${name} ${major}`);
+  }
+  assert(
+    installed.typescript.version === leg.typescript,
+    `${leg.id} must use TypeScript ${leg.typescript}, found ${installed.typescript.version}`
+  );
+  if (leg.next) {
+    const nextVersion = readJson(
+      path.join(consumer, 'node_modules', 'next', 'package.json')
+    ).version;
+    assert(
+      nextVersion === leg.next && pins.next === leg.next,
+      `${leg.id} must pin and install Next.js ${leg.next}, found ${pins.next} and ${nextVersion}`
+    );
+    installed.next = { version: nextVersion };
+  }
+  // The type packages must declare support for this leg's TypeScript (D0-4).
+  for (const name of ['@types/react', '@types/react-dom']) {
+    const minimum = installed[name].typeScriptVersion;
+    assert(
+      minimum === undefined || compareVersions(minimum, leg.typescript) <= 0,
+      `${leg.id}: ${name} ${installed[name].version} needs TypeScript ${minimum}, the leg uses ${leg.typescript}`
+    );
+  }
+  ok(
+    `${Object.keys(installed)
+      .map(name => `${name} ${installed[name].version}`)
+      .join(', ')} (React ${leg.react}, TypeScript ${leg.typescript})`
+  );
+}
+
+function checkNextApp(consumer, leg) {
+  step(`${leg.id}: build, start and drive the Next.js App Router app in Chromium`);
+  run(process.execPath, [path.join(root, 'scripts', 'check-next-app.js'), consumer, CSS_MARKER], {
+    cwd: root,
+    label: 'Next.js App Router check',
+  });
+  ok('the App Router app built, served the empty region and showed a toast in Chromium');
 }
 
 function checkPackedManifest(installed, info) {
@@ -347,8 +446,8 @@ function checkDeclarations(installed) {
   );
 }
 
-function checkResolution(consumer, installed) {
-  step('Check Node ESM resolution from the consumer');
+function checkResolution(consumer, installed, leg) {
+  step(`${leg.id}: check Node ESM resolution from the consumer`);
   const script = `
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -436,8 +535,8 @@ console.log(JSON.stringify(result));
   );
 }
 
-function checkFixture(consumer, installed) {
-  step('Type-check the fixture');
+function checkFixture(consumer, installed, leg) {
+  step(`${leg.id}: type-check the fixture`);
   const typescript = readJson(
     path.join(consumer, 'node_modules', 'typescript', 'package.json')
   ).version;
@@ -446,12 +545,12 @@ function checkFixture(consumer, installed) {
     `TypeScript ${typescript} accepts the packed declarations; the deep type import stays blocked`
   );
 
-  step('Build the fixture with Vite');
+  step(`${leg.id}: build the fixture with Vite`);
   const vite = readJson(path.join(consumer, 'node_modules', 'vite', 'package.json')).version;
   npm(['run', 'build'], { cwd: consumer, label: `vite ${vite} build` });
   ok(`vite ${vite} build succeeded`);
 
-  step('Check the CSS reached the bundle');
+  step(`${leg.id}: check the CSS reached the bundle`);
   const packedCss = fs.readFileSync(path.join(installed, 'dist', 'styles.css'), 'utf8');
   assert(
     packedCss.includes(CSS_MARKER),
@@ -466,10 +565,21 @@ function checkFixture(consumer, installed) {
   assert(bundled.includes(CSS_MARKER), `the Vite CSS output does not contain ${CSS_MARKER}`);
   ok(`${cssFiles.join(', ')} contains ${CSS_MARKER} from the packed styles.css`);
 
-  step('Render a toast from the packed package in jsdom');
+  step(`${leg.id}: render a toast from the packed package in jsdom`);
   const jsdom = readJson(path.join(consumer, 'node_modules', 'jsdom', 'package.json')).version;
   npm(['run', 'test:render'], { cwd: consumer, label: `render check (jsdom ${jsdom})` });
   ok(`the fixture app rendered, showed and closed a toast (jsdom ${jsdom})`);
+
+  // A fresh plain-Node process each time, with no DOM: the package as a server imports it.
+  for (const mode of ['development', 'production']) {
+    step(`${leg.id}: render on the server under native Node ESM (${mode})`);
+    run(process.execPath, ['ssr-check.mjs'], {
+      cwd: consumer,
+      env: { ...process.env, NODE_ENV: mode },
+      label: `SSR smoke test (${mode})`,
+    });
+    ok(`server rendering passed in ${mode}`);
+  }
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ret-validate-package-'));
@@ -478,13 +588,26 @@ try {
   const { tarball, info } = pack(tmp);
   checkTarballContents(info);
   runPackageLinters(tarball);
-  const { consumer, installed } = prepareConsumer(tmp, tarball);
-  checkPackedManifest(installed, info);
-  checkUseClient(installed);
-  checkDeclarations(installed);
-  checkResolution(consumer, installed);
-  checkFixture(consumer, installed);
-  console.log('\nPackage validation passed.');
+  for (const [index, leg] of LEGS.entries()) {
+    const { consumer, installed } = prepareConsumer(tmp, tarball, leg);
+    checkLegVersions(consumer, leg);
+    // The package itself is the same in every leg, so its own checks run once.
+    if (index === 0) {
+      checkPackedManifest(installed, info);
+      checkUseClient(installed);
+      checkDeclarations(installed);
+    }
+    checkResolution(consumer, installed, leg);
+    checkFixture(consumer, installed, leg);
+  }
+  {
+    const { consumer, installed } = prepareConsumer(tmp, tarball, NEXT_LEG);
+    checkLegVersions(consumer, NEXT_LEG);
+    checkResolution(consumer, installed, NEXT_LEG);
+    checkNextApp(consumer, NEXT_LEG);
+  }
+  const ids = [...LEGS, NEXT_LEG].map(leg => leg.id);
+  console.log(`\nPackage validation passed (${ids.join(', ')}).`);
 } catch (error) {
   failed = true;
   console.error(

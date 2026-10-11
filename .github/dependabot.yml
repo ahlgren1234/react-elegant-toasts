@@ -27,9 +27,9 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@vitest/coverage-v8'
         update-types: ['version-update:semver-major']
-      # React 19 and Testing Library 16: the React 18/19 matrix (P-23).
-      - dependency-name: '@testing-library/react'
-        update-types: ['version-update:semver-major']
+      # React, ReactDOM and their types: a new major is outside the ^18 || ^19 peer range and the
+      # R18/R19 test matrix, so it is a deliberate, reviewed change, never an automatic update
+      # (P-23 S9).
       - dependency-name: react
         update-types: ['version-update:semver-major']
       - dependency-name: react-dom
@@ -51,9 +51,46 @@ updates:
       consumer-vite:
         update-types: [minor, patch]
     ignore:
-      # TypeScript 5.0.4 is the documented minimum (§24); the latest-TypeScript leg is P-23.
+      # F1: React 18 and TypeScript 5.0.4, the documented minimum (§24, P-23 D0-5). Each leg's
+      # TypeScript is pinned (D0-3), its React major is the leg's, and on TypeScript 5.0 its types
+      # stay on versions that declare TypeScript 5.0 support (D0-4).
       - dependency-name: typescript
-      # React 19 belongs to the P-23 compatibility matrix.
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+      - dependency-name: '@types/react-dom'
+
+  # F2: React 19 and TypeScript 5.0.4 (P-23 D0-5).
+  - package-ecosystem: npm
+    directory: /fixtures/consumer-vite/legs/f2
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      consumer-vite-f2:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: typescript
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+      - dependency-name: '@types/react-dom'
+
+  # F3: React 18 and TypeScript 7.0.2 (P-23 D0-5).
+  - package-ecosystem: npm
+    directory: /fixtures/consumer-vite/legs/f3
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      consumer-vite-f3:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: typescript
       - dependency-name: react
         update-types: ['version-update:semver-major']
       - dependency-name: react-dom
@@ -61,6 +98,50 @@ updates:
       - dependency-name: '@types/react'
         update-types: ['version-update:semver-major']
       - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+
+  # F4: React 19 and TypeScript 7.0.2 (P-23 D0-5).
+  - package-ecosystem: npm
+    directory: /fixtures/consumer-vite/legs/f4
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      consumer-vite-f4:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: typescript
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+
+  # N1: the Next.js App Router consumer, React 19 and TypeScript 7.0.2 (P-23 D0-7).
+  - package-ecosystem: npm
+    directory: /fixtures/consumer-next
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      consumer-next:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: typescript
+      - dependency-name: next
+        update-types: ['version-update:semver-major']
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions

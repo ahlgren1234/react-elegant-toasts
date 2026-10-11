@@ -1187,7 +1187,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - no debug steps
   - `deploy-demo.yml` runs only through `workflow_dispatch`, and the `github-pages` environment still accepts deployments only from `main`. It no longer runs lint, typecheck or tests, because `ci.yml` owns those gates. P-29 reconnects it to the final 2.0.0 release (§29).
   - `release.yml` is unchanged. It is a deliberate, temporary exception to the pinning and permissions policy until P-28 replaces it. It cannot publish in the meantime (§29).
-  - Dependabot, not Renovate, opens weekly `npm` and `github-actions` updates against `v2`. Minor and patch dev-dependency updates are grouped, and so are action updates. Major updates of the deliberately pinned tooling are ignored until their owning phases: ESLint and `@eslint/js` (P-05), Vite, `@vitejs/plugin-react`, Vitest and `@vitest/coverage-v8` (P-25), React, ReactDOM, their types and `@testing-library/react` (P-23). `vitest-axe` is ignored entirely (P-04). `.github/dependabot.yml` exists only on `v2`. Dependabot reads it only from the default branch, so version updates stay inactive until the file reaches `main`.
+  - Dependabot, not Renovate, opens weekly `npm` and `github-actions` updates against `v2`. Minor and patch dev-dependency updates are grouped, and so are action updates. Major updates of the deliberately pinned tooling are ignored until their owning phases: ESLint and `@eslint/js` (P-05), Vite, `@vitejs/plugin-react`, Vitest and `@vitest/coverage-v8` (P-25), React, ReactDOM, their types and `@testing-library/react` (P-23). `vitest-axe` is ignored entirely (P-04). (P-23 S1 lifted the `@testing-library/react` ignore. P-23 S9 kept the React, ReactDOM and type major ignores after P-23, for the reason its S9 record gives.) `.github/dependabot.yml` exists only on `v2`. Dependabot reads it only from the default branch, so version updates stay inactive until the file reaches `main`.
   - `demo-dist/` is git-ignored, so `build:demo` leaves the working tree clean.
   - The required status checks (`quality`, `test`, `build-package`, `demo`) are configured in GitHub only after the first green pushed run shows that those check names exist. Each later phase adds its own job.
   - AC-CI-1 is met only for the gates that exist at a given phase. P-06 makes every existing gate blocking, and later phases add the remaining §28 gates.
@@ -1229,7 +1229,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - The fixture's committed `package.json` and lockfile never contain the library. The script copies the fixture to the temp directory, runs `npm ci --ignore-scripts --no-audit --no-fund`, and installs the tarball with `npm install --no-save`. It then checks that the fixture manifests are byte-identical and that the package is a real copy inside the consumer, so repository source and the root `node_modules` cannot satisfy any import.
   - `vite build` must succeed, and its CSS output must contain `CSS_MARKER` (`.toast-progress`), which must also appear in the packed `styles.css`. P-17 updates the marker when the stylesheet is redesigned (S1 made it `.ret-toaster`). Vite's warning that the module-level `"use client"` directive is not preserved in an SPA bundle is expected.
   - The `build-package` job keeps its name and runs `npm ci --ignore-scripts --no-audit --no-fund` and then `npm run validate:package`, with no separate build step. The setup-node cache is keyed on both lockfiles. `scripts/**/*.js` gets Node globals in ESLint. The fixture is formatted but not linted.
-  - Dependabot also tracks `fixtures/consumer-vite`. It never updates the fixture's TypeScript, which is the documented minimum, and ignores major React and `@types/react` updates until P-23. Like the rest of the config, it stays inactive until it reaches `main`.
+  - Dependabot also tracks `fixtures/consumer-vite`. It never updates the fixture's TypeScript, which is the documented minimum, and ignores major React and `@types/react` updates until P-23. Like the rest of the config, it stays inactive until it reaches `main`. (P-23 S5b kept these ignores and made F1's type packages ignored entirely, so no update raises the leg above TypeScript 5.0; see P-23 D0-4 and D0-5.)
   - P-07 proves:
     - all of AC-PKG-1 and AC-PKG-3
     - for AC-PKG-2, the Vite part
@@ -3757,7 +3757,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
      - P-26's support documentation must later distinguish emulated forced-colours evidence from real Windows High Contrast evidence.
   9. **D0-9, React version:**
      - P-22 uses the repository's current React 18.2 baseline. React 19 is not introduced solely for browser testing.
-     - **Reconciliation with §26,** which says the browser suite runs on the latest React. Throughout P-22 the suite runs on React 18.2. This is a recorded, temporary reading of §26, not a silent change, and §26 itself is unchanged.
+     - **Reconciliation with §26,** which says the browser suite runs on the latest React. Throughout P-22 the suite runs on React 18.2. This is a recorded, temporary reading of §26, not a silent change, and §26 itself is unchanged. (The reading ended at P-23 S8, which moved the browser suite to React 19.3.0; see P-23's S8 record.)
      - P-23 owns the React 18/19 compatibility work and the React 19 upgrade and matrix. When P-23 changes the supported React test matrix, it may update the P-22 browser harness.
   10. **D0-10, browser test target:**
       - P-22 uses a dedicated, deterministic browser-test harness that exercises the real production implementation and the production stylesheet.
@@ -4107,7 +4107,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     11. **D2-11, CI shape.** One blocking `browser` job with Playwright projects for Chromium, Firefox and WebKit; zero retries; least-privilege permissions, SHA-pinned actions, the npm cache and no permanent debug steps; traces and artifacts on failure only. D1's cost (about 1.2 GB of browser downloads; about 46 s for a representative three-engine motion run) is accepted. A separate repeat (soak) validation before merge looks for flakiness instead of hiding it with retries.
     12. **D2-12, the sampling rule.** When the harness observes an animation or reflow from its first frame, the trigger and the frame sampler start in the same page task, never in separate round-trips. `requestAnimationFrame` is an observer only and is never mocked.
     13. **D2-13, real browser and device boundaries.** The final evidence record separates Playwright automation from real-device and manual evidence. Manual categories include, where applicable: real macOS Safari; real iOS Safari; real Android Chrome; real non-zero safe areas on notched devices; real Windows High Contrast; real pen hardware; genuine hidden-document and background behaviour; Firefox and WebKit touch and scroll integration that Playwright cannot produce; and pinch-zoom. Playwright WebKit is never labelled Safari evidence.
-    14. **D2-14, React.** The permanent browser suite runs on the repository's React 18.2 baseline. P-23 owns React 18/19 compatibility, React 19 and the matrix, and may move the harness to it. React 19 is not added to P-22 to satisfy §26's "latest React" wording: as D0-9 records, this is a temporary P-22 reading of §26, and §26 is unchanged.
+    14. **D2-14, React.** The permanent browser suite runs on the repository's React 18.2 baseline. P-23 owns React 18/19 compatibility, React 19 and the matrix, and may move the harness to it. React 19 is not added to P-22 to satisfy §26's "latest React" wording: as D0-9 records, this is a temporary P-22 reading of §26, and §26 is unchanged. (P-23 S8 moved the suite to React 19.3.0, as P-23 D0-8 planned, which ended this reading.)
     15. **D2-15, Node.** P-22 stays on Node 24 and is not combined with the Node 26 transition. P-06 records Node 26 becoming Active LTS on 2026-10-28, with the move after that date. If P-22 is still active on or after 2026-10-28, the next slice does not start until the maintainer decides (D0-17).
   - **D1's "D2 decisions required", resolved:**
     1. The D0-16 report: fixed by H1 (D2-1).
@@ -4275,7 +4275,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Contradictions reconciled at D2.** None needs a change to an approved decision.
     - **§19 and AC-SW-1 against CF-38.** §19 says a swipe never starts on interactive descendants, including inside custom content, and AC-SW-1 says it never starts on interactive elements. Shadow-root controls are the confirmed exception. D0-3 anticipated this outcome, and D2-2 accepts it as a documented boundary: the wording is unchanged, the light-DOM rule is blocking (CF-29), and P-26 documents the boundary. How AC-SW-1's sign-off treats it is P-29's judgement.
     - **§26 "forced colours (Chromium)" and D0-8:** extended to all three engines on measured capability (D2-5).
-    - **§26 "the latest React":** read as React 18.2 during P-22 (D0-9, D2-14).
+    - **§26 "the latest React":** read as React 18.2 during P-22 (D0-9, D2-14). The reading ended at P-23 S8 (React 19.3.0).
     - **CF-12:** D1's Playwright evidence differs from P-17 S5's manual Chromium review. It is recorded as evidence, not reconciled by changing either (D2-6).
     - **CF-17:** D1b recommended blocking timing under `display: none` in Chromium and Firefox; D2-10 keeps that hidden-before-creation timing out of the blocking gate in every engine.
     - **P-20's carry-forward** names WebKit and Firefox for pause synchronisation; D2 makes it blocking in all three.
@@ -4286,7 +4286,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - The pointer-triggered restoration contract (CF-8, CF-33), after P-29.
 - **S1 record: infrastructure and the harness (done).** It follows the D2 harness design, timing approach and CI mechanics. No CF item is covered or classified: the smoke specs prove the infrastructure only. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged.
   - **Dependency:** `@playwright/test` **1.63.0**, pinned exactly in `devDependencies`. It is the current release and the version D1 and D1b used, so the engines are the same: Chromium 153.0.8010.12 (with its headless shell), Firefox 155.0 and WebKit 26.6. The lockfile adds three packages, `@playwright/test`, `playwright` and `playwright-core`, all 1.63.0 and Apache-2.0, with no install scripts and no other dependencies. Nothing else was added.
-  - **React:** the harness runs the repository's React, the `^18.2.0` range the lockfile resolves to **18.3.1**, which is what "React 18.2" means throughout P-22 (D2-14). A smoke spec checks that the page runs exactly the installed version. Node stays 24.
+  - **React:** the harness runs the repository's React, the `^18.2.0` range the lockfile resolves to **18.3.1**, which is what "React 18.2" means throughout P-22 (D2-14). A smoke spec checks that the page runs exactly the installed version. Node stays 24. (This is the P-22 state. P-23 S8 moved the root baseline, and with it the harness, to React 19.3.0.)
   - **Layout:**
     - `playwright.config.ts`: the three projects and the run settings.
     - `browser/vite.config.ts`: builds and serves the harness.
@@ -4344,7 +4344,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - the fallback tolerance constants (the D2 timing approach);
     - harness additions as their slices need them: `dir` (S3), token overrides through harness CSS (S2), and the long-page fixture for H1-R (S4).
 - **S2 record: lifecycle, motion and reflow (done).** CF-16 to CF-22 at their Class 1 layers are blocking in Chromium, Firefox and WebKit, and CF-17's and CF-23's Class 2 layers are recorded as evidence. `src/`, the production stylesheet, the public API and the 30 tokens are unchanged, and no CF item was reclassified.
-  - **React baseline (clarified at S2).** P-22 uses the repository's existing React 18 baseline: the unchanged `^18.2.0` range, currently resolved by the lockfile to **React 18.3.1**. Where D0-9, D2-14 and the S1 record say "React 18.2", they mean this baseline. React is not pinned or downgraded to 18.2.0. P-23 owns React-version compatibility and React 19. This is a clarification, not a dependency change.
+  - **React baseline (clarified at S2).** P-22 uses the repository's existing React 18 baseline: the unchanged `^18.2.0` range, currently resolved by the lockfile to **React 18.3.1**. Where D0-9, D2-14 and the S1 record say "React 18.2", they mean this baseline. React is not pinned or downgraded to 18.2.0. P-23 owns React-version compatibility and React 19. This is a clarification, not a dependency change. ("Currently" describes the lockfile during P-22. P-23 S8 moved the root manifest and lockfile to React 19.3.0, and React 18.3.1 is now CI's exact override leg; see P-23 D0-1 and its S8 record.)
   - **Specs added** (`browser/tests/`; 31 blocking tests per engine, 93 in all with the S1 smoke, and 2 evidence tests per engine):
     - `motion.spec.ts` (12 per engine):
       - enter and exit at all six positions with the public motion tokens slowed (enter 600 ms, exit 400 ms, diagnostic). Each checks the edge's trusted `ret-enter-*`/`ret-exit-*` playback, the off-edge start and the frame-by-frame interpolation of `translate`, `scale` and `opacity`, `transform` untouched, completion on the root's own `animationend`, the exit's last frame held at it, removal, and a clean rest at the stack's gutters (left positions at the gutter, D-14);
@@ -5805,7 +5805,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-23 Compatibility and SSR verification**
 
 - Scope:
-  - the full React 18/19 matrix. This requires upgrading `@testing-library/react` from 14 (React 18 only) to 16, and adding `@testing-library/dom` (kept at 14 in P-04).
+  - the full React 18/19 matrix. This requires upgrading `@testing-library/react` from 14 (React 18 only; it is the package P-04 kept at 14) to 16, and adding `@testing-library/dom` as an explicit dev dependency (`@testing-library/react` 16 makes it a peer). Until then `@testing-library/dom` is only a transitive dependency of `@testing-library/react` 14, resolved to 9.3.4 (corrected at P-23 D0).
   - declarations type-checked under both `@types` versions and under TypeScript 5.0 and the latest TypeScript
   - the compatibility matrix of the packed Vite fixture (`fixtures/consumer-vite`): React 18 and 19, `@types/react` 18 and 19, and TypeScript 5.0 (the minimum) plus the latest supported TypeScript. P-07 added the fixture with React 18 and TypeScript 5.0.4 only.
   - the Node ESM `renderToString` smoke test on the packed package
@@ -5817,6 +5817,267 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - Test `<Activity>`, or whichever React 19 lifecycle hides content while keeping its state, effects or DOM.
   - The record of where focus was before the hotkey must be cleared when ownership or the lifecycle changes, also when effects or DOM are kept. A kept effect must never leave a stale record for Escape to return to.
   - Hiding a toast and showing it again must not run removal restoration, which runs only when a toast starts to exit.
+- **Status: S1 to S8 done; S9 in progress.** D0, the architecture review and decision record, is done (recorded below). The maintainer accepted the final D0 review and approved its decisions, with the clarifications recorded in them, at S0. S0 recorded them on `feat/p23-compat-ssr`, branched from `v2` at `2e6bdcc` (`ded3de3`, documentation only). S1 to S8 are done, each accepted by the maintainer, with two approved hardening slices, S4-H (a production fix) and S7-H (a test-harness fix); they are recorded below under "Slice records". S9.0 (evidence recovery) and S9.1 (this reconciliation) are done. What remains of S9 is the phase PR (#32, a draft against `v2`), its CI, the merge into `v2` with a merge commit, a green post-merge push CI and the post-merge record. Issue #17 stays open until then.
+- Acceptance: P-23 completes AC-PKG-2 (the Next.js part), AC-PKG-4 (the Next.js part), AC-PKG-5 (React 19), AC-PKG-8 and AC-PKG-9 (latest TypeScript and `@types/react` 19), and turns `test` into the React 18/19 matrix for AC-CI-1 (§28). Every other criterion must not regress under either React version. D0 changes no criterion and no normative text in §23 to §28 or §36.
+- **Starting point (the D0 review, at `2e6bdcc`, 2026-10-10 and 2026-10-11):**
+  - **Repository:** `v2` and `origin/v2` at `2e6bdcc`, clean. Issue #16 (P-22) is closed, Issue #17 (P-23) is open, and Issue #24 (the Node 26 decision) is open. The last push CI on `v2` (run `38063637185`, head `2e6bdcc`) passed all five jobs; on the run before it, `test` took about 42 s, `build-package` about 19 s and `browser` about 8 minutes.
+  - **Root:** peers `react` and `react-dom` `^18.0.0 || ^19.0.0`. Dev dependencies resolve to React and ReactDOM 18.3.1, `@types/react` 18.3.18, `@types/react-dom` 18.3.5, `@testing-library/react` 14.3.1 (with `@testing-library/dom` 9.3.4, transitive only), `@testing-library/jest-dom` 6.6.3, TypeScript 5.7.3, Vitest 3.2.7, Vite 4.5.9, jsdom 30.1.1, Playwright 1.63.0 and tsup 8.5.1. The tests use only `render`, `screen`, `within`, `fireEvent`, `act` and `cleanup` from Testing Library, plus `hydrateRoot` directly in three files; there is no `renderHook`, `legacyRoot` or `react-dom/test-utils`.
+  - **Declarations:** `dist/index.d.ts` imports only `ReactNode`, `MouseEvent` and `ReactElement` from `react`, and uses no global `JSX` namespace (§25).
+  - **Consumer fixture:** `fixtures/consumer-vite` pins React 18.3.1, `@types/react` 18.3.18, `@types/react-dom` 18.3.5, TypeScript 5.0.4, Vite 8.3.2 and jsdom 30.1.1, with `skipLibCheck: false` and `types: []`. `validate:package` packs once and runs the fixture's typecheck, `vite build` with the CSS marker, and the jsdom render check (P-07, P-14).
+  - **Server rendering:** `ssr.test.tsx` and `server.test.ts` cover the source in Vitest's node environment. No test runs the packed package on the server.
+  - **CI:** five blocking jobs on Node 24 (`quality`, `test`, `build-package`, `browser`, `demo`), 10-minute timeouts except `browser` (20). `test` runs `npm test` only; the type tests are compiled only by `quality`'s `typecheck`, against `@types/react` 18.
+  - **Rules on GitHub:** `v2` has no classic branch protection. Ruleset 24353657 ("v2 protection", active, no bypass actors) blocks deletion and force pushes, and requires the strict status checks `quality`, `test`, `build-package` and `demo` from GitHub Actions. `browser` is not a required check. `main` has classic protection: one approving review, linear history, no required checks.
+  - **Registry (2026-10-11):**
+    - `typescript` `latest` is 7.0.2 (2026-07-08), the native compiler; the newest 6.x is 6.0.3. Its `tsc` is a Node launcher (Node ≥ 16.20, no install scripts) that runs the binary of an optional platform package, `@typescript/typescript-linux-x64` on CI. It ships no JavaScript compiler API: the root export is only `lib/version.cjs`, plus `./unstable/*`.
+    - `react`, `react-dom`, `@types/react` and `@types/react-dom` `latest` are 19.3.0. React 18's newest release is 18.3.1.
+    - The minimum TypeScript declared by the type packages: `@types/react` 18.3.18 and 18.3.20 need 5.0, 18.3.23 needs 5.1, and 18.3.31 (the newest 18.x) needs 5.3; `@types/react` 19.0.12 needs 5.0 and 19.3.0 needs 5.6; `@types/react-dom` 18.3.5 and 19.0.4 need 5.0 (19.0.4 peers on `@types/react` `^19.0.0`), and 19.3.0 needs 5.6 and peers on `@types/react` `^19.3.0`.
+    - `@testing-library/react` `latest` is 16.3.3, with peers React and the React types `^18.0.0 || ^19.0.0` and `@testing-library/dom` `^10.0.0`; `@testing-library/dom` `latest` is 10.4.2.
+    - `next` `latest` is 16.4.0: peers `react` and `react-dom` `^18.2.0 || ^19.0.0`, Node ≥ 20.9, SWC binaries and `sharp` as optional dependencies.
+  - **Next.js 16.4 documentation:** the App Router uses React canary releases built into Next.js, and react and react-dom are still declared for tooling; the Pages Router uses the installed React. The minimum TypeScript is 5.1.0. `next build` uses Turbopack by default, and type-checks with the project-local `tsc` CLI by default, which is how it supports TypeScript 7; the option behind that, `experimental.useTypeScriptCli`, is experimental.
+  - **React documentation:** `<Activity>` is stable from React 19.2 (its semantics are under "React lifecycle behaviour", below). React 19 reports uncaught render errors to `window.reportError`, reuses `useMemo` and `useCallback` results in the StrictMode double render, double-invokes ref callbacks under StrictMode, moves `act` into `react`, and changes the types (`useRef` needs an argument, ref callbacks may not return implicitly, the global `JSX` namespace is removed, `ReactElement` props default to `unknown`). The documentation does not say how React 19 reports an error thrown in an event handler.
+- **Decisions locked at D0** (approved by the maintainer at S0):
+  1. **D0-1, root test legs.** React 18 and React 19 root test legs, both mandatory and blocking:
+
+     | Leg | `react` / `react-dom`      | `@types/react` / `@types/react-dom` | TypeScript  | Steps                                                                                          |
+     | --- | -------------------------- | ----------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
+     | R18 | 18.3.1 (the lockfile)      | 18.3.18 / 18.3.5                    | root, 5.7.3 | assert the React major; `npm test`; `tsc -p tsconfig.lib.json` and `tsc -p tsconfig.test.json` |
+     | R19 | 19.3.0 (an exact override) | 19.3.0 / 19.3.0                     | root, 5.7.3 | the same                                                                                       |
+
+     Each leg type-checks the library and the tests itself, because Vitest only transpiles them: without it, the `expectTypeOf` type tests would never be checked against `@types/react` 19 (§25, §26). Each leg asserts the React major it installed, so it never silently tests the other one. The root TypeScript is not changed by P-23.
+
+     **Final state after S8 (annotation; the decision is unchanged).** The table describes the legs as S3 built them. S8 moved the root manifest and lockfile to React 19.3.0, as D0-8 planned, so the install columns swapped:
+     - **R19 is the lockfile.** `package.json` pins `react`, `react-dom`, `@types/react` and `@types/react-dom` exactly at 19.3.0, and the leg installs no override.
+     - **R18 is the exact, unsaved override.** The leg runs `npm install --no-save --ignore-scripts react@18.3.1 react-dom@18.3.1 @types/react@18.3.18 @types/react-dom@18.3.5` after `npm ci`, so the committed manifest and lockfile stay on React 19.
+     - **Both legs assert exact versions** and exactly one installed copy of each package (`scripts/check-react-versions.js`). S3's R18 leg had asserted only the major; S8 tightened it.
+     - The root TypeScript stays 5.7.3 in both legs.
+
+  2. **D0-2, Testing Library first.** The first implementation slice upgrades `@testing-library/react` from 14 to 16 and adds `@testing-library/dom` 10 as an explicit dev dependency, on the unchanged React 18 baseline and with no other change.
+  3. **D0-3, TypeScript.**
+     - TypeScript 5.0.4 stays the minimum-version test (§24.2). TypeScript 7.0.2 is the target of the latest-version test.
+     - Versions are pinned exactly in the compatibility fixtures, and any later bump is a deliberate, reviewed change.
+     - TypeScript 7 is used only as the fixtures' `tsc` CLI, since it has no JavaScript compiler API. The root tooling (tsup's declarations, typescript-eslint, attw) keeps the root TypeScript.
+     - S5a verifies that the native compiler runs and that the F3 and F4 pairs below are compatible before S5b implements anything. If S5a fails, P-23 stops and reports. TypeScript 6 is never substituted automatically.
+  4. **D0-4, type versions per TypeScript leg.** The TypeScript 5.0 legs use type packages that declare TypeScript 5.0 support: `@types/react` 18.3.18 with `@types/react-dom` 18.3.5 (F1), and the pair `@types/react` 19.0.12 with `@types/react-dom` 19.0.4 (F2), the newest React 19 types that declare TypeScript 5.0. The current React 19 types, 19.3.0 and 19.3.0, are tested separately with TypeScript 7.0.2 (F4).
+  5. **D0-5, the packed Vite fixture matrix.** Each leg has its own committed, reproducible manifest and lockfile, and every leg installs the same packed tarball. The rules of P-07 hold for each leg: no manifest or lockfile references the library, installing the tarball changes neither, and the installed package is a real copy inside the consumer. All legs are blocking:
+
+     | Leg | React  | `@types/react` / `@types/react-dom` | TypeScript | Steps                                                                                                                  |
+     | --- | ------ | ----------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+     | F1  | 18.3.1 | 18.3.18 / 18.3.5                    | 5.0.4      | `tsc`, `vite build` with the CSS marker, the jsdom render check, the blocked deep imports, the Node ESM SSR smoke test |
+     | F2  | 19.3.0 | 19.0.12 / 19.0.4                    | 5.0.4      | the same                                                                                                               |
+     | F3  | 18.3.1 | 18.3.31 / the newest 18.3.x         | 7.0.2      | the same (S5a confirms the React 18 types under TypeScript 7 first)                                                    |
+     | F4  | 19.3.0 | 19.3.0 / 19.3.0                     | 7.0.2      | the same                                                                                                               |
+
+     F1 is the existing P-07 fixture. Dependabot keeps every leg on its pins: no TypeScript updates, and no type updates that would raise a leg's declared TypeScript minimum.
+
+  6. **D0-6, Node ESM SSR smoke test** (§27 step 7). It runs in the installed Vite consumer of every leg, so React 18 (F1, F3) and React 19 (F2, F4) are both covered without a separate fixture. A plain Node ESM script, with no Vite transform and no JSX of its own:
+     - imports the packed package, so the export map and the built file's `react/jsx-runtime` import resolve under native Node ESM;
+     - asserts there is no `window`, and fails on any access to `document`, `MutationObserver`, `ResizeObserver`, `matchMedia` or `requestAnimationFrame`, through recording getters. It does not define `window`, which would turn the library's server check off;
+     - checks that `renderToString(createElement(Toaster))` gives the empty region with its live regions, and that two renders, two simulated requests, give the same markup;
+     - checks that `toast()` and `toast.success(…, { id })` return `undefined`, that a later render contains no toast, and that exactly one development warning is logged, and none under `NODE_ENV=production`, in a second process.
+  7. **D0-7, the Next.js App Router fixture (N1)** (§27 step 8). One blocking fixture: Next.js 16.4.0 with React 19 (`react` and `react-dom` 19.3.0 declared), `@types/react` and `@types/react-dom` 19.3.0, and TypeScript 7.0.2, through Next.js's default `tsc` CLI checker.
+     - **Why one fixture:** the App Router runs the React canary built into Next.js, whatever React is installed, so a React 18 leg would only reach the Pages Router, which §27 does not ask for. The React 18 and 19 package proof comes from F1 to F4.
+     - **The canary is not stable React 19.3.0.** N1 proves the package works in the real framework (AC-PKG-2, AC-PKG-4). It is not treated as proof about stable React 19.3.0, which R19, F2 and F4 cover.
+     - **Isolated spike first:** before the fixture is implemented, an isolated spike outside the repository verifies the actual toolchain: Next.js 16.4.0, its built-in React, TypeScript 7.0.2 through the CLI checker, an install with `--ignore-scripts`, `next build` and `next start`. A failure stops and reports. Any TypeScript fallback needs the maintainer's approval.
+     - **Design:** `fixtures/consumer-next` with its own lockfile, installed from the same tarball. `app/layout.tsx` is a Server Component that imports `react-elegant-toasts/styles.css` and renders `<Toaster />`, which crosses the `"use client"` boundary. `app/page.tsx` renders a client component that calls `toast.success` from a button. Then: `next build` with telemetry off; the CSS marker in the built CSS; `next start`, with the server HTML holding the empty region and no toast; and a Playwright check in Chromium that clicks, sees the toast and its text, and sees the stylesheet applied (the region's computed `position` is `fixed`). The check is a dependency-free script run by `validate:package` with the root `@playwright/test`.
+     - **Two approved deviations (S7; annotations, approved by the maintainer when S7 was accepted):**
+       - **The computed position is read on the list, not the region.** The production stylesheet positions each stack's list (`:where(.ret-toaster__list) { position: fixed }`, which `styles.test.ts` asserts), and the region is `static` by design. The Playwright check therefore asserts that the shown toast's `.ret-toaster__list` has computed `position: fixed`. This keeps the decision's intent, that the stylesheet is applied; "the region's computed `position`" above is read this way.
+       - **`@types/node` 24.19.2 is pinned in the fixture,** matching CI's Node 24. Without it, `next build` installs it itself, which rewrites the fixture's manifest and drops the `--no-save` tarball.
+  8. **D0-8, the browser harness.** The browser suite stays on React 18 (P-22 D0-9) until S8. S8 moves it to React 19 only after the compatibility and lifecycle slices, which ends P-22's temporary reading of §26. The P-22 expectations and the zero-retry policy are kept. No CF-35 bound changes without separate approval. S8's evidence is in the slice plan below.
+  9. **D0-9, CI and the required checks.**
+     - The required `test` context is kept by a fail-closed aggregator. The matrix job is `test-react`, named `test (react 18)` and `test (react 19)` with `fail-fast: false`. A job named `test` needs it, runs with `if: always()`, and fails unless the matrix result is `success`. A skipped required job counts as passing, so the explicit result check is required. No other job may be named `test`. The ruleset is unchanged.
+     - `build-package` stays the package compatibility gate, with its name: F1 to F4, the SSR smoke test and N1 run in it, against one tarball.
+     - The S7 slice may raise the `build-package` timeout to 15 minutes and install Chromium in it.
+     - CI runtime is measured after implementation.
+     - `browser` should become a required check in the `v2` ruleset. That GitHub settings change is a pending administrative action for the maintainer, not authorised at S0 (carry-forwards, below).
+  10. **D0-10, Node 26.** Node 26 stays under Issue #24. No P-23 compatibility slice upgrades Node. If the transition becomes necessary during P-23, it lands at a slice boundary as a separate, reviewed PR, and the next slice re-establishes its baseline first. P-23's Node ESM smoke test and fixtures run on CI's single pinned Node (§28); P-23 adds no Node axis.
+  11. **D0-11, delivery.** One phase branch, `feat/p23-compat-ssr`, with small slices, each reviewed on its own. No production change without the maintainer's approval. One final phase PR into `v2`, merged with a merge commit, unless a specific exception is approved.
+  12. **D0-12, React lifecycles, test first.**
+      - "When ownership or the lifecycle changes" in the P-16 carry-over means React lifecycle transitions: Activity hiding and revealing, unmounting, Suspense re-suspension, and Toaster ownership changes. It does not mean ordinary toast phase changes, and it is not a requirement to clear the focus record on them. The §18 contract for the record of where focus was before the hotkey is unchanged.
+      - The lifecycle work is test first. No production bug is claimed without a failing test. A failing test is reported in the form of P-22's D0-16 (the reproduction, the violated contract, the observed and expected behaviour, the evidence, the likely cause, the smallest fix scope and the regression risk). Any production change needs separate approval, as a hardening slice (S4-H).
+- **React lifecycle behaviour (D0-12).** The S4 suite runs in jsdom under both React legs. Activity cases run only where the installed React exports `Activity` (19.2 and later), and a guard test in R19 fails if they were skipped.
+  - **Documented behaviour, tested as expectations:**
+    - Activity (React documentation): hiding uses `display: none`, keeps the DOM and the state, and destroys the Effects, layout and passive; hidden children still re-render at a lower priority; revealing re-creates the Effects; a boundary hidden on its first render renders its children without mounting their Effects. So a hidden Toaster detaches (AC-NT-3), its `keydown` listener goes and the focus record is cleared; revealing re-attaches with no duplicate listener, StrictMode included; and a Toaster first rendered hidden attaches nothing, so its toasts stay pending under the no-Toaster policy (§8.4).
+    - Ownership: hiding the active Toaster while another waits hands over (AC-NT-5), and the former owner's record is never used.
+    - The hotkey handoff: a `hotkey` changed while hidden applies after revealing, and the old hotkey no longer acts.
+    - Hiding and revealing a toast runs no removal restoration. This follows from the documented re-creation of the layout effect and the committed-phase guard in `ToastItem`.
+    - Suspense (React documentation): when shown content suspends again, its layout Effects are cleaned up, and they fire again when it is shown. Revealing runs no removal restoration.
+    - Removal restoration before `inert`: the existing jsdom test ("before inert") and the browser CF-6 tests run under React 19 unchanged.
+  - **Experimental hypotheses, to confirm by test:**
+    - whether passive Effects, so the hotkey's `keydown` listener and the focus record, are kept while shown Suspense content is hidden again (the documentation does not say), and whether Escape can then return to a stale record;
+    - the order in which a hidden Activity's store subscription is removed and its kept toast DOM is reconciled on revealing;
+    - focus inside a toast when it is hidden: real browsers blur on `display: none` and jsdom does not, so this is browser evidence, possible only after S8;
+    - how React 19 reports an error thrown in an action's handler (`toast-item.test.tsx`, which expects a window `error` event);
+    - role and name changes from `@testing-library/dom` 10's accessibility dependencies, to be read from the changelogs at S1.
+- **Slices.** Each stops for the maintainer's review. Every slice keeps `src/`, the production stylesheet and the public API unchanged unless a separately approved hardening slice says otherwise.
+  - **S1, Testing Library.** `@testing-library/react` 16 and `@testing-library/dom` 10 on React 18; test-only adjustments; the Dependabot ignore of the Testing Library major is lifted. Evidence: the test file and test counts measured at the start of S1, identical after it, with no new skips and no new console output. Gates: every local gate.
+  - **S2, React 19 locally.** The root suite and the library and test typechecks pass under React 19 and its types, with test-only fixes. If `src/` would have to change, S2 stops and reports. Evidence: both React majors green locally. Depends on S1.
+  - **S3, the `test` matrix.** `test-react` with R18 and R19, the version guard and the fail-closed `test` aggregator (D0-9). Evidence: both legs and the aggregator green on CI, after an authorised push. Depends on S2.
+  - **S4, React lifecycles.** The suite described above. A failing hypothesis follows D0-12; S4-H exists only with approval. Depends on S2; lands before S3 or with it.
+  - **S5a, the TypeScript 7 spike.** In a temporary copy outside the repository: TypeScript 7.0.2 installs with `--ignore-scripts` from a lockfile, the native compiler runs, and F3 and F4 type-check the packed declarations. No repository change. A failure stops and reports (D0-3). Independent of S1 to S4.
+  - **S5b, F1 to F4.** The leg manifests and lockfiles, `validate-package.js` running each leg against one tarball, and Dependabot per leg. Evidence: all four legs pass; the deep imports stay blocked in every leg. Depends on S5a.
+  - **S6, the Node ESM SSR smoke test** in every leg (D0-6). Evidence: it passes in F1 to F4, and negative controls on a temporary copy of the installed package, never `src/`, fail (a DOM access at import, a stored server toast). Depends on S5b.
+  - **S7, the Next.js fixture.** The isolated spike first (D0-7), then `fixtures/consumer-next`, the Playwright check, Chromium in `build-package` and its 15-minute timeout. S7 also investigates what calling `toast()` from a Server Component does (carry-forwards, below), without asserting it in the blocking fixture. Evidence: build, CSS, server HTML and a shown toast, green on CI; the measured `build-package` runtime. Depends on S5b.
+  - **S8, the browser harness on React 19.** The root lockfile baseline moves to React 19, so the harness, the demo and R19 follow it, and R18 becomes the exact override leg. Evidence: the P-22 counts unchanged (the blocking suite 280 passed and 20 named skips; `@evidence` 67 passed and 20 named skips), recorded first on React 18 at the slice's starting commit; the full soak with `--repeat-each=20`, `CI=1`, one worker and zero retries with no failure; a targeted WebKit CF-35 repeat of at least 100 runs; then at least three CI `browser` runs with no failure. A failure stops and reports; no spec, bound or configuration is relaxed in S8. Depends on S3 and S4.
+  - **S9, reconciliation.** The acceptance trace, the measured CI runtime, the carry-forwards and the status lines; then the phase PR into `v2`, its CI and a merge commit, with a green post-merge push CI.
+- **Acceptance trace.** Each requirement maps to a blocking step:
+
+  | Requirement                                                                    | Blocking step                                                                                               | Slice   |
+  | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------- |
+  | AC-PKG-2                                                                       | the CSS marker in F1 to F4; the CSS marker in N1's build and the applied stylesheet in its Playwright check | S5b, S7 |
+  | AC-PKG-4                                                                       | the `"use client"` check (P-07); N1's `next build` and its Playwright check of a shown toast                | S7      |
+  | AC-PKG-5                                                                       | typecheck, build and render in F1 to F4                                                                     | S5b     |
+  | AC-PKG-8                                                                       | the Node ESM SSR smoke test in F1 and F3 (React 18) and F2 and F4 (React 19)                                | S6      |
+  | AC-PKG-9                                                                       | `tsc` with `skipLibCheck: false` in F1 to F4                                                                | S5b     |
+  | AC-CI-1, §28 `test`                                                            | the `test-react` matrix and the required, fail-closed `test` aggregator                                     | S3      |
+  | §25, unit, component and type tests on both React versions with matching types | `npm test` and the library and test typechecks in R18 and R19                                               | S3      |
+  | P-16 carry-over                                                                | the lifecycle suite in R18 and R19, the Activity cases in R19                                               | S4      |
+  | §26, the browser suite on the latest React                                     | the `browser` job on React 19                                                                               | S8      |
+
+- **Slice records.** Every slice was reviewed and accepted by the maintainer on 2026-10-11. Each record comes from the slice's accepted report and the GitHub Actions logs; the raw local logs were scratch files and are not kept in the repository. Test counts are Vitest's, with no skips, failures or console output unless stated.
+  - **S1, Testing Library (done, `b1d891a`).**
+    - `@testing-library/react` went from 14.3.1 to 16.3.3, and `@testing-library/dom` 10.4.2 became an explicit dev dependency (it was 9.3.4, transitive only). Transitively, `aria-query` went from 5.1.3 to 5.3.0.
+    - The suite was identical test for test before and after, on React 18.3.1: 40 files and 1,695 tests. No test changed.
+    - Dependabot no longer ignores `@testing-library/react` majors.
+    - The changelogs for `@testing-library/react` 15 and 16 and `@testing-library/dom` 10 were read. `aria-query` 5.3 changes some computed roles, for example an unnamed `<section>`, but no query in the suite is affected (the D0-12 hypothesis on role changes).
+  - **S2, React 19 locally (done, no commit).**
+    - React and ReactDOM 19.3.0 and their 19.3.0 types were installed over a `git archive` copy of `b1d891a` outside the repository. A probe test, deleted afterwards, confirmed Vitest ran React 19.3.0.
+    - The result was 40 files and 1,695 tests, identical test for test to React 18. `tsc -p tsconfig.lib.json` and `tsc -p tsconfig.test.json` passed, and so did `tsconfig.tooling.json`, `tsconfig.browser.json` and `demo/tsconfig.json` under the React 19 types.
+    - No change was needed. It answered one D0-12 hypothesis: the test expecting a window `error` event from a throwing action handler passes under React 19.
+  - **S3, the `test` matrix (done, `97c2ce6`).**
+    - It adds the `test-react` matrix (`test (react 18)` and `test (react 19)`, `fail-fast: false`), `scripts/check-react-versions.js`, and the fail-closed `test` aggregator (D0-9). `test` needs the matrix, runs with `always()`, and passes only on `success`.
+    - The aggregator's step was run locally against each `needs.test-react.result`: only `success` passes, and `failure`, `cancelled`, `skipped` and empty all fail. The version guard rejected the wrong major, a nested second copy, a partial override and a malformed spec.
+    - Draft PR #32 was opened against `v2`. CI run `38123271075` succeeded on attempt 1, with 1,695 tests in each leg.
+    - **Limits:** the fail-closed paths are proven by the local simulation, not by a live failing run. A deleted matrix leg would not be detected by the aggregator; review is the guard for that.
+  - **S4, React lifecycles (done, `1307f94`), with S4-H (done, `8187187`).**
+    - `src/__tests__/react-lifecycle.test.tsx` implements the D0-12 suite. In R18 it has 8 tests: the Activity guard, 3 ordinary-update tests and 4 Suspense re-suspension tests. In R19 it has 17, adding the 9 Activity tests. The Activity tests are defined exactly when the installed React exports `Activity`, so nothing is skipped, and the guard fails on a mismatch.
+    - **Defect, reported in D0-16 form before any production change.** Suspense re-suspension cleans up layout Effects only, so the passive Effect, the only place `useHotkey` cleared the record of where focus was before the hotkey, survived a hide and reveal. Escape then returned focus to the stale element instead of releasing it, on React 18.3.1 and 19.3.0 alike. The test "re-suspension clears the record of where focus was before the hotkey (D0-12)" failed at `1307f94`, in both versions.
+    - **S4-H**, approved by the maintainer, adds a layout-effect cleanup keyed on the owner that also clears the record (`src/react/useHotkey.ts`, 9 lines). The listener, the ownership handover, dismissal, removal restoration, `inert` and the public API are unchanged. The failing test's file was unchanged by the fix.
+    - Afterwards there were 41 files: 1,703 tests on R18 and 1,712 on R19. CI run `38124788426` succeeded on attempt 1.
+    - **History note:** `1307f94` fails that one test on its own, because the test came first. The phase PR is merged with a merge commit (D0-11), so the commit stays in history as is.
+  - **S5a, the TypeScript 7 spike (done, no repository change).** This ran in temporary copies outside the repository.
+    - `typescript@7.0.2` installed from a lockfile with `--ignore-scripts`. Its native binary, `@typescript/typescript-linux-x64`, ran (`tsc -v` gave 7.0.2), and a Linux-generated lockfile records all 20 platform packages.
+    - Against a tarball packed from `8187187`:
+      - F3 (React 18.3.1, `@types/react` 18.3.31, `@types/react-dom` 18.3.7) and F4 (React 19.3.0 and its 19.3.0 types) type-checked the packed declarations with 0 errors.
+      - A deep type import without `@ts-expect-error` failed with `TS2307` in both.
+    - **Outside the plan's scope, for information:** the root's `tsconfig.test.json` fails under TypeScript 7 (2 errors in `exports.test.ts`, which uses the compiler's JavaScript API that TypeScript 7 does not ship). typescript-eslint 8.71 also declares `typescript` `<6.1.0`. Both are consistent with D0-3, which keeps the root on its TypeScript.
+    - The maintainer accepted S5a as passing.
+  - **S5b, F1 to F4 (done, `6f7a659`).**
+    - It adds a committed manifest and lockfile for each of F2, F3 and F4 under `fixtures/consumer-vite/legs/`. F1 keeps the P-07 fixture manifest, and all legs share the fixture's sources and `tsconfig.json` (`skipLibCheck: false`).
+    - `validate:package` packs once, then for each leg: `npm ci --ignore-scripts` plus the tarball, the version check (exact pins, the leg's React major and exact TypeScript, and no type package declaring a higher TypeScript minimum than the leg's), resolution and the five blocked deep imports, `tsc`, the Vite build with the CSS marker, and the jsdom render check.
+    - Installed versions: F1 at 18.3.1, 18.3.18 / 18.3.5 and 5.0.4. F2 at 19.3.0, 19.0.12 / 19.0.4 and 5.0.4. F3 at 18.3.1, 18.3.31 / 18.3.7 and 7.0.2. F4 at 19.3.0, 19.3.0 / 19.3.0 and 7.0.2.
+    - **Negative controls failed as intended:**
+      - the type guards (`TS2322`, `TS2345` or `TS2741`, and `TS2307`);
+      - 20 runtime deep imports (`ERR_PACKAGE_PATH_NOT_EXPORTED`);
+      - four deliberately wrong leg manifests, rejected by the version check.
+    - Dependabot tracks each leg and keeps its TypeScript. F1's type packages are ignored entirely (D0-4).
+    - CI run `38126342187` succeeded on attempt 1.
+  - **S6, the Node ESM SSR smoke test (done, `b26b717`).**
+    - `fixtures/consumer-vite/ssr-check.mjs` runs in each of F1 to F4 under plain `node`, once in development and once with `NODE_ENV=production`, so 8 runs on React 18.3.1 and 19.3.0. It asserts the D0-6 list, with recording getters on 16 browser globals.
+    - **Negative controls** on the installed `dist/index.js` (never `src/`) in F1 and F2 failed as intended:
+      - `typeof document` at import;
+      - reading `requestAnimationFrame` or `navigator` at import;
+      - registering a listener at import;
+      - a stored server toast. In React 18 development this was caught one step earlier, by React's server `useLayoutEffect` warning.
+    - CI run `38130249470` succeeded on attempt 1.
+  - **S7, the Next.js fixture (done, `132991d`).**
+    - **The isolated spike passed, outside the repository,** on every point D0-7 lists: Next.js 16.4.0 with its built-in React, TypeScript 7.0.2 through the CLI checker, an install with `--ignore-scripts`, `next build` and `next start`. It also showed the `@types/node` need recorded under D0-7.
+    - **The fixture** is `fixtures/consumer-next` with N1's pins and `scripts/check-next-app.js` (D0-7, with the two approved deviations recorded there).
+    - **Seven negative controls each failed for the intended reason:**
+      - the `"use client"` banner removed;
+      - a `document` read at import;
+      - the `./styles.css` export removed;
+      - a deep import;
+      - invalid API use (`TS2322` from TypeScript 7);
+      - `<Toaster />` removed;
+      - the stylesheet import removed.
+    - `build-package` installs Chromium with `--with-deps` and has a 15-minute timeout (D0-9).
+    - The Server Component investigation is under the carry-forwards below.
+    - **CI run `38131830959` failed, in `build-package` only.** `next build` succeeded, but the check treated Next's CI-only advisory "⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache" as a build warning, before the server and Chromium steps ran. It was not rerun.
+  - **S7-H, the Next.js advisory (done, `c1febed`).**
+    - `scripts/check-next-app.js` accepts exactly that advisory, matched as a whole line with its text and link together. Every other warning or error stays fatal.
+    - 11 classifier controls were run, including the advisory without its link, with another link, and an unrelated cache warning; all of these were rejected. The full check passes with and without `CI=1`.
+    - CI run `38132817726` succeeded on attempt 1, with N1 complete: build, CSS, server HTML, and the Chromium hydration and toast.
+    - **A future rewording by Next fails the check on purpose.**
+  - **S8, the browser harness on React 19 (done, `e280394`).**
+    - **React 18 baseline first, at `c1febed`:**
+      - the blocking suite: 280 passed and 20 named skips;
+      - `@evidence`: 67 passed and 20 named skips;
+      - engines: Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6.
+    - **Migration.** The root pins the four React packages at 19.3.0 (the D0-1 annotation). The lockfile's other changes are their dependencies only: `scheduler` 0.23.2 to 0.28.0, `csstype` 3.1.3 to 3.2.3, and `@types/prop-types` removed. The `browser` job asserts React 19.3.0 before the suite. Specs, bounds, skip lists, timeouts, retries, workers and the Playwright configuration are unchanged.
+    - **Local React 19 results:**
+      - the blocking suite: 280 passed and 20 named skips;
+      - `@evidence`: 67 passed and 20 named skips;
+      - the harness page reports React 19.3.0 in all three engines.
+    - **The soak** (P-22 S6.2's command, `CI=1 npx playwright test --grep-invert @evidence --repeat-each=20`, one worker, zero retries) ran on 2026-10-11 for 7,974 s:
+      - **5,600 passed and 400 named skips;**
+      - 0 failed, 0 flaky and no retries;
+      - per engine: Chromium 2,000 passed; Firefox and WebKit 1,800 passed and 200 skipped each.
+    - **The WebKit CF-35 repeat** (`CI=1 npx playwright test --project=webkit --grep "CF-35" --grep-invert @evidence --repeat-each=100`) selected exactly the four CF-35 tests. Result: **400 of 400 passed**, 0 flaky and no retries, in 11.4 min.
+    - **Local repository gates** all passed on React 19: 1,712 tests, `validate:package` (F1 to F4 and N1) and `build:demo`. The R18 override leg run as CI runs it gave 1,703 tests, and both `tsc` checks passed.
+    - **Local environment:** WSL, with Playwright's system packages installed on 2026-10-11, and no library-path workaround.
+    - **CI run `38144520183`** succeeded on all three attempts. Attempts 2 and 3 re-ran only the `browser` job. Its job IDs are `114484972089`, `114486762190` and `114488443704`, each with 280 passed and 20 named skips, 0 failed, 0 flaky and no retries. The `browser` suite took 7.0, 7.1 and 7.1 min. `test (react 18)` had 1,703 tests and `test (react 19)` had 1,712.
+    - The maintainer accepted the three attempts of one run, each on a new runner, as S8's three CI `browser` runs. P-22 had counted runs from separate pushes.
+- **S9 reconciliation (S9.0 and S9.1, done).** S9.0 recovered every piece of evidence S9 needed: the S5a spike, the S7 isolated spike, the Server Component investigation, and the S8 soak and CF-35 repeat. Each is recorded above or in the carry-forwards. Nothing was rerun, and nothing is recorded as passing without its evidence.
+  - **Acceptance evidence.** Unless stated otherwise, the CI evidence is run `38144520183` (head `e280394`).
+
+    | Requirement                                  | Evidence                                                                                                                                                                                                                             | Status                                                                        |
+    | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+    | AC-PKG-2 (the Next.js part)                  | `build-package` job `114488474487`: the `.ret-toaster` marker in the CSS of F1 to F4 and of N1's build, and in N1's Chromium check the shown toast's `.ret-toaster__list` is `position: fixed` (the D0-7 deviation)                  | met                                                                           |
+    | AC-PKG-4 (the Next.js part)                  | the same job: the `"use client"` check (P-07), N1's `next build` with no warning but the accepted advisory, the empty region in `next start`'s HTML, and the toast shown in Chromium; S7's banner-removed control fails `next build` | met                                                                           |
+    | AC-PKG-5 (React 19)                          | the same job: `tsc`, `vite build` and the jsdom render in F2 and F4 (React 19.3.0), and in F1 and F3 (React 18.3.1)                                                                                                                  | met                                                                           |
+    | AC-PKG-8                                     | the same job: 8 native Node ESM runs, F1 and F3 on React 18.3.1 and F2 and F4 on React 19.3.0, development and production; S6's negative controls                                                                                    | met                                                                           |
+    | AC-PKG-9                                     | the same job: `tsc` with `skipLibCheck: false` on TypeScript 5.0.4 (F1, F2) and 7.0.2 (F3, F4, and N1 through `next build`), with `@types/react` 18 (18.3.18, 18.3.31) and 19 (19.0.12, 19.3.0)                                      | met                                                                           |
+    | AC-CI-1, §28 `test`                          | `test (react 18)` job `114488470089`, `test (react 19)` job `114488477711`, and the aggregator `test` job `114488445705` (`test-react: success`); fail-closed paths from S3's local simulation                                       | met for P-23's part; `browser` is still not a required check (carry-forwards) |
+    | §25, both React versions with matching types | the same two legs: 41 files, 1,703 tests on R18 (18.3.1, 18.3.18 / 18.3.5) and 1,712 on R19 (19.3.0 throughout), with both `tsc` checks in each                                                                                      | met                                                                           |
+    | P-16 carry-over                              | `react-lifecycle.test.tsx` in both legs (8 tests in R18, 17 in R19 with the 9 Activity tests), S4-H (`8187187`)                                                                                                                      | met in jsdom; real-browser focus on hiding is open (below)                    |
+    | §26, the browser suite on the latest React   | `browser` jobs `114484972089`, `114486762190` and `114488443704`, each 280 passed and 20 named skips on React 19.3.0; S8's local soak (5,600 and 400) and WebKit CF-35 repeat (400 of 400)                                           | met                                                                           |
+
+    Every other criterion was kept from regressing by the unchanged suites in both legs, F1 to F4, N1, `quality`, `demo` and `browser`.
+
+  - **D0-12 hypotheses, outcomes.**
+    1. **Passive Effects kept while shown Suspense content is hidden again:** confirmed in both versions (S4). Only layout Effects are cleaned up. The stale record this left was the S4-H defect, now fixed.
+    2. **The order of a hidden Activity's unsubscription and its reconciliation on revealing:** the order itself is **not recorded**. S4 asserts the observable outcome instead: hiding detaches and returns toasts to the queue, an exiting toast finishes with one `onDismiss`, and revealing re-attaches with one subscription and one of each listener, StrictMode included.
+    3. **Focus inside a toast when it is hidden, in real browsers:** **unresolved.** S8 moved the harness to React 19 but, as its scope required, added no spec, so no browser test hides a focused toast with Activity or Suspense. It is carried forward below.
+    4. **How React 19 reports an error thrown in an action's handler:** answered at S2. The window `error` event still fires, and the existing test passes.
+    5. **Role changes from `@testing-library/dom` 10:** answered at S1. No query in the suite is affected.
+  - **Measured CI runtime.**
+    - **Final run, `38144520183` attempt 1:**
+      - each test leg about 48 to 49 s; the required `test` check finishes about 55 s after the run starts;
+      - `quality` 34 s, `build-package` 74 s, `demo` 20 s;
+      - `browser` 8 min 22 s, with the other two attempts at 7 min 56 s and 8 min 4 s.
+    - **Against the D0 baseline:** `test` was about 42 s, `build-package` about 19 s and `browser` about 8 minutes.
+    - **`build-package` through the slices:** 20 s (S3), 35 s (S5b, four legs), 40 s (S6, eight SSR runs), then 74 s with N1 (S7-H: `npm ci` 8 s, the Chromium install 20 s, `validate:package` 40 s). That is far inside its 15-minute timeout.
+    - **`browser` stays the critical path,** unchanged by P-23.
+    - **Runner image:** every job of that run, including all three `browser` attempts, ran on `ubuntu-24.04`, image version 20261004.327.1.
+  - **Dependabot policy (decided at S9).**
+    - The root ignores of React, ReactDOM, `@types/react` and `@types/react-dom` majors stay after P-23, unchanged. A new major is outside the `^18.0.0 || ^19.0.0` peer range and the R18/R19 matrix, so it is a deliberate, reviewed change. Only the comment explaining the ignore was updated.
+    - The per-leg fixture ignores (D0-3, D0-4, D0-5) and N1's are unchanged.
+    - React minor and patch updates are deliberately left as they are, and so is the grouping. Under the exact root pins, a grouped minor update would fail the version checks of R19 and `browser` until `ci.yml` is updated. That fails closed, and any change to it is deferred (carry-forwards).
+
+- **Out of scope:** P-22's deferred manual work and limitations (MC-1, MC-7, real Safari's CF-12 and CF-13, and the P-26, P-29 and §37 carry-forwards), which stay where P-22 put them; the CF-35 sensitivity limits recorded by P-22, unchanged; the `size` job (P-24); the demo (P-25); the README and reference documentation (P-26); Node 26 (Issue #24); React floors other than 18.3.1 and 19.3.0; and a Pages Router fixture.
+- **Carry-forwards and pending actions:**
+  - **Server Components and `toast()` (S7, then P-26).** §23 says that calling `toast()` from Server Components or server actions has no effect. Because the whole entry is a `"use client"` module, `toast` imported into a Server Component may be a client reference rather than the function, so the actual behaviour is unverified: it is neither assumed harmless nor assumed to throw. S7 investigates it outside the blocking fixture. If the observed behaviour differs from §23, P-26's documentation carries the correction, and any change to §23 itself is a separate decision. §23 is unchanged at D0.
+    - **Finding (S7 spike, Next.js 16.4.0; acknowledged by the maintainer for P-26):** calling `toast()` from a Server Component **throws** at request time: "Attempted to call toast() from the server but toast is on the client. It's not possible to invoke a client function from the server…". The type check and `next build` accept the code beforehand. So §23's "has no effect" does not hold for Server Components under the App Router.
+    - It is not asserted in the blocking fixture, and server actions were not investigated.
+    - P-26 documents the behaviour. §23, the public contract and the production code are unchanged, and any change to them is a separate decision.
+  - **The `browser` required check (administrative, pending).** The `v2` ruleset does not require `browser`, although P-06 says each phase adds its own job to the required checks. Adding it is a GitHub settings change for the maintainer. It is not authorised at S0, and no P-23 slice makes it. It is still pending at S9.
+  - **Focus in a hidden toast, in real browsers (open, owner undecided).** This is D0-12 hypothesis 3. jsdom does not blur on `display: none`, and no browser spec hides a focused toast with Activity or Suspense. Adding one changes the P-22 suite and its counts, so it needs a separate decision.
+  - **The Ubuntu 26 runner migration (risk, outside P-23).** GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19; the `browser` job carries that notice. Every workflow uses `ubuntu-latest`, and all of P-22's and P-23's CI evidence ran on `ubuntu-24.04`.
+    - Playwright 1.63.0 supports `ubuntu26.04-x64`, but there it downloads a different WebKit build (`webkit-ubuntu-26.04`) from the one the evidence used. Firefox and Chromium use the same builds.
+    - Given CF-35's recorded WebKit sensitivity, the first runs on the new image are the most likely place for a new failure.
+    - P-23 changes no runner. Pinning `ubuntu-24.04`, or accepting the migration, is a separate, reviewed decision.
+  - **Dependabot React minor updates and grouping (deferred).** See the S9 Dependabot decision. Dependabot stays inactive until the config reaches `main`.
+  - **Node 26 (Issue #24),** unchanged (D0-10).
+  - **Minor follow-ups, not blocking:**
+    - `scripts/check-next-app.js` still reports "with no warning" even when it accepted the CI cache advisory.
+    - The aggregator cannot detect a deleted matrix leg (S3).
+  - **Administrative actions remaining for S9,** each needing the maintainer's approval:
+    - PR #32 marked ready and given its final title;
+    - its CI;
+    - the merge into `v2` with a merge commit (D0-11);
+    - the post-merge push CI;
+    - a post-merge record, as P-22's was;
+    - closing Issue #17 and updating the Project and the roadmap.
 
 **P-24 Bundle-size baseline and budget**
 
