@@ -35,9 +35,22 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
 
-  test:
+  # Unit, type, component and axe tests against React 18 and React 19, each with matching types
+  # (§25, §28, P-23 D0-1). React 18 is the lockfile; React 19 is installed over it with exact pins.
+  test-react:
+    name: test (react ${{ matrix.react }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - react: '18'
+            override: ''
+            expect: react@18 react-dom@18 @types/react@18 @types/react-dom@18
+          - react: '19'
+            override: react@19.3.0 react-dom@19.3.0 @types/react@19.3.0 @types/react-dom@19.3.0
+            expect: react@19.3.0 react-dom@19.3.0 @types/react@19.3.0 @types/react-dom@19.3.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,7 +61,33 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - if: matrix.override != ''
+        env:
+          OVERRIDE: ${{ matrix.override }}
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund $OVERRIDE
+      # Fails unless exactly the expected React packages are installed, once each.
+      - env:
+          EXPECT: ${{ matrix.expect }}
+        run: node scripts/check-react-versions.js $EXPECT
       - run: npm test
+      # Vitest only transpiles, so the type tests are checked against this leg's types here.
+      - run: npx tsc -p tsconfig.lib.json
+      - run: npx tsc -p tsconfig.test.json
+
+  # The required `test` check (the v2 ruleset). It fails closed: it runs whatever happened to the
+  # matrix and passes only when every leg succeeded, never on a failed, cancelled or skipped one.
+  test:
+    name: test
+    needs: test-react
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULT: ${{ needs.test-react.result }}
+        run: |
+          echo "test-react: $RESULT"
+          [ "$RESULT" = success ]
 
   build-package:
     runs-on: ubuntu-latest
