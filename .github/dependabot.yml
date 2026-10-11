@@ -27,7 +27,9 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@vitest/coverage-v8'
         update-types: ['version-update:semver-major']
-      # React 19: the React 18/19 matrix (P-23).
+      # React, ReactDOM and their types: a new major is outside the ^18 || ^19 peer range and the
+      # R18/R19 test matrix, so it is a deliberate, reviewed change, never an automatic update
+      # (P-23 S9).
       - dependency-name: react
         update-types: ['version-update:semver-major']
       - dependency-name: react-dom
