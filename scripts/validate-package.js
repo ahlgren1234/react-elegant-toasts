@@ -75,9 +75,10 @@ function ok(message) {
   console.log(`  ✓ ${message}`);
 }
 
-function run(command, args, { cwd, capture = false, label }) {
+function run(command, args, { cwd, capture = false, label, env }) {
   const result = spawnSync(command, args, {
     cwd,
+    env,
     encoding: 'utf8',
     stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
     // Only the npm fallback needs a shell (npm.cmd on Windows); everything else runs through node.
@@ -532,6 +533,17 @@ function checkFixture(consumer, installed, leg) {
   const jsdom = readJson(path.join(consumer, 'node_modules', 'jsdom', 'package.json')).version;
   npm(['run', 'test:render'], { cwd: consumer, label: `render check (jsdom ${jsdom})` });
   ok(`the fixture app rendered, showed and closed a toast (jsdom ${jsdom})`);
+
+  // A fresh plain-Node process each time, with no DOM: the package as a server imports it.
+  for (const mode of ['development', 'production']) {
+    step(`${leg.id}: render on the server under native Node ESM (${mode})`);
+    run(process.execPath, ['ssr-check.mjs'], {
+      cwd: consumer,
+      env: { ...process.env, NODE_ENV: mode },
+      label: `SSR smoke test (${mode})`,
+    });
+    ok(`server rendering passed in ${mode}`);
+  }
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ret-validate-package-'));
