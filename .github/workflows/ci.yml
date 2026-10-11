@@ -91,7 +91,8 @@ jobs:
 
   build-package:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The Next.js App Router consumer adds a Next.js build and a Chromium check (P-23 D0-9).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -104,8 +105,12 @@ jobs:
             package-lock.json
             fixtures/consumer-vite/package-lock.json
             fixtures/consumer-vite/legs/*/package-lock.json
+            fixtures/consumer-next/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      # Builds, packs and validates the tarball, including the packed consumer matrix, F1 to F4 (§27).
+      # Chromium pinned by @playwright/test, and its system packages, for the Next.js consumer check.
+      - run: npx playwright install --with-deps chromium
+      # Builds, packs and validates the tarball: the packed consumer matrix, F1 to F4, and the
+      # Next.js App Router consumer, N1 (§27).
       - run: npm run validate:package
 
   browser:

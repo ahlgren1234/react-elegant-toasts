@@ -118,6 +118,30 @@ updates:
       - dependency-name: '@types/react-dom'
         update-types: ['version-update:semver-major']
 
+  # N1: the Next.js App Router consumer, React 19 and TypeScript 7.0.2 (P-23 D0-7).
+  - package-ecosystem: npm
+    directory: /fixtures/consumer-next
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      consumer-next:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: typescript
+      - dependency-name: next
+        update-types: ['version-update:semver-major']
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+
   - package-ecosystem: github-actions
     directory: /
     target-branch: v2

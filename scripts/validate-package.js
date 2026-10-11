@@ -1,4 +1,5 @@
-// Validates the packed package as consumers receive it (§27, P-07; the F1 to F4 matrix, P-23 S5b).
+// Validates the packed package as consumers receive it (§27, P-07; the F1 to F4 matrix and the
+// Next.js App Router consumer, P-23 S5b to S7).
 // Run through `npm run validate:package`, which builds the library first.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const PACKAGE_NAME = 'react-elegant-toasts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureDir = path.join(root, 'fixtures', 'consumer-vite');
+const nextFixtureDir = path.join(root, 'fixtures', 'consumer-next');
 const npmFlags = ['--ignore-scripts', '--no-audit', '--no-fund'];
 
 const EXPECTED_FILES = [
@@ -60,6 +62,17 @@ const LEGS = [
   { id: 'F4', manifestDir: path.join(fixtureDir, 'legs', 'f4'), react: 19, typescript: '7.0.2' },
 ];
 const LEG_PACKAGES = ['react', 'react-dom', '@types/react', '@types/react-dom', 'typescript'];
+// The Next.js App Router consumer (§27 step 8, P-23 D0-7): React 19 through Next.js, whose App
+// Router renders with the React canary built into Next.js, and TypeScript 7.0.2 through Next.js's
+// default tsc CLI checker. scripts/check-next-app.js builds, starts and drives it in Chromium.
+const NEXT_LEG = {
+  id: 'N1',
+  sourceDir: nextFixtureDir,
+  manifestDir: nextFixtureDir,
+  react: 19,
+  typescript: '7.0.2',
+  next: '16.4.0',
+};
 
 class ValidationError extends Error {}
 
@@ -183,12 +196,14 @@ function runPackageLinters(tarball) {
 }
 
 function prepareConsumer(tmp, tarball, leg) {
-  step(`${leg.id}: install the tarball into an isolated copy of fixtures/consumer-vite`);
-  const consumer = path.join(tmp, `consumer-vite-${leg.id.toLowerCase()}`);
-  fs.cpSync(fixtureDir, consumer, {
+  const sourceDir = leg.sourceDir ?? fixtureDir;
+  const fixture = path.relative(root, sourceDir);
+  step(`${leg.id}: install the tarball into an isolated copy of ${fixture}`);
+  const consumer = path.join(tmp, `${path.basename(sourceDir)}-${leg.id.toLowerCase()}`);
+  fs.cpSync(sourceDir, consumer, {
     recursive: true,
     filter: source =>
-      !['node_modules', 'dist', 'dist-render', 'legs'].includes(path.basename(source)),
+      !['node_modules', 'dist', 'dist-render', 'legs', '.next'].includes(path.basename(source)),
   });
   for (const name of ['package.json', 'package-lock.json']) {
     fs.copyFileSync(path.join(leg.manifestDir, name), path.join(consumer, name));
@@ -264,6 +279,16 @@ function checkLegVersions(consumer, leg) {
     installed.typescript.version === leg.typescript,
     `${leg.id} must use TypeScript ${leg.typescript}, found ${installed.typescript.version}`
   );
+  if (leg.next) {
+    const nextVersion = readJson(
+      path.join(consumer, 'node_modules', 'next', 'package.json')
+    ).version;
+    assert(
+      nextVersion === leg.next && pins.next === leg.next,
+      `${leg.id} must pin and install Next.js ${leg.next}, found ${pins.next} and ${nextVersion}`
+    );
+    installed.next = { version: nextVersion };
+  }
   // The type packages must declare support for this leg's TypeScript (D0-4).
   for (const name of ['@types/react', '@types/react-dom']) {
     const minimum = installed[name].typeScriptVersion;
@@ -273,8 +298,19 @@ function checkLegVersions(consumer, leg) {
     );
   }
   ok(
-    `${LEG_PACKAGES.map(name => `${name} ${installed[name].version}`).join(', ')} (React ${leg.react}, TypeScript ${leg.typescript})`
+    `${Object.keys(installed)
+      .map(name => `${name} ${installed[name].version}`)
+      .join(', ')} (React ${leg.react}, TypeScript ${leg.typescript})`
   );
+}
+
+function checkNextApp(consumer, leg) {
+  step(`${leg.id}: build, start and drive the Next.js App Router app in Chromium`);
+  run(process.execPath, [path.join(root, 'scripts', 'check-next-app.js'), consumer, CSS_MARKER], {
+    cwd: root,
+    label: 'Next.js App Router check',
+  });
+  ok('the App Router app built, served the empty region and showed a toast in Chromium');
 }
 
 function checkPackedManifest(installed, info) {
@@ -564,7 +600,14 @@ try {
     checkResolution(consumer, installed, leg);
     checkFixture(consumer, installed, leg);
   }
-  console.log(`\nPackage validation passed (${LEGS.map(leg => leg.id).join(', ')}).`);
+  {
+    const { consumer, installed } = prepareConsumer(tmp, tarball, NEXT_LEG);
+    checkLegVersions(consumer, NEXT_LEG);
+    checkResolution(consumer, installed, NEXT_LEG);
+    checkNextApp(consumer, NEXT_LEG);
+  }
+  const ids = [...LEGS, NEXT_LEG].map(leg => leg.id);
+  console.log(`\nPackage validation passed (${ids.join(', ')}).`);
 } catch (error) {
   failed = true;
   console.error(
