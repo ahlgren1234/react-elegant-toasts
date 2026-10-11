@@ -27,9 +27,7 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@vitest/coverage-v8'
         update-types: ['version-update:semver-major']
-      # React 19 and Testing Library 16: the React 18/19 matrix (P-23).
-      - dependency-name: '@testing-library/react'
-        update-types: ['version-update:semver-major']
+      # React 19: the React 18/19 matrix (P-23).
       - dependency-name: react
         update-types: ['version-update:semver-major']
       - dependency-name: react-dom
