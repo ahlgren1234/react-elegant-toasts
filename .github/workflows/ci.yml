@@ -103,8 +103,9 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             fixtures/consumer-vite/package-lock.json
+            fixtures/consumer-vite/legs/*/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      # Builds, packs and validates the tarball, including the packed consumer fixture (§27).
+      # Builds, packs and validates the tarball, including the packed consumer matrix, F1 to F4 (§27).
       - run: npm run validate:package
 
   browser:
