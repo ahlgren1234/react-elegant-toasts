@@ -24,9 +24,19 @@ function ok(message) {
   console.log(`  ✓ ${message}`);
 }
 
+// The one accepted notice: under CI (the `CI` variable), next build advises that `.next/cache` is
+// empty, which it always is in a freshly installed consumer. Only this exact line, its text and
+// its documentation link together, is accepted; any other warning or error, cache-related or not,
+// still fails the check.
+const NO_CACHE_NOTICE =
+  /^\s*⚠ No build cache found\. Please configure build caching for faster rebuilds\. Read more: https:\/\/nextjs\.org\/docs\/messages\/no-cache\s*$/;
+
 /** Lines a Next.js command printed that look like a warning or an error. */
 const problems = output =>
-  output.split('\n').filter(line => /⚠|\bwarn(ing)?\b|\berror\b|\bfailed\b/i.test(line));
+  output
+    .split('\n')
+    .filter(line => /⚠|\bwarn(ing)?\b|\berror\b|\bfailed\b/i.test(line))
+    .filter(line => !NO_CACHE_NOTICE.test(line));
 
 // Next.js rewrites these, or installs packages, when it finds the project incomplete; a build
 // must leave the committed setup exactly as it is.
