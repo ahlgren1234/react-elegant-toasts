@@ -6093,7 +6093,26 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
     No status changes: AC-CI-1 is met for P-23's part, with `browser` still not a required check. The P-16 carry-over is met in jsdom, with real-browser focus on hiding still open.
 
-  - **Carry-forwards:** unchanged, as listed below. Nothing deferred was performed here.
+  - **Carry-forwards:** unchanged, as listed below, apart from the CF-6 hardening that the incident below adds. Nothing deferred was performed here.
+  - **CF-6 CI incident on this record's PR (PR #33, 2026-10-12).** This is a permanent record of the failure. Nothing changed between the two attempts.
+    - **Attempt 1, failed.** Run `38208379251` (`pull_request`, head `f1a2780`, which changes only this document) failed in `browser` job `114676827672`: **279 passed, 1 failed, 20 skipped**. Every other job succeeded.
+      - The failing test was WebKit, `focus.spec.ts:260`, "CF-6: … to the previous toast (§18 step 2)".
+      - It failed at `focus.spec.ts:245`, which requires at least one sampled frame showing the closing toast `inert`.
+      - **What the trace shows:** a sampled frame at 368 ms with `close:b` focused and the toast visible, `Enter` pressed just after, then no animation frame until 495 ms, **a 127 ms gap**. By then focus was on `toast:a` and the toast had been removed.
+      - The 120 ms exit, with `inert` throughout, fell entirely inside the gap. Removal came through the normal `animationend` path, not the 220 ms fallback.
+      - Every sampled frame showed focus on the §18 target, and the page ended in the expected state.
+      - The frame-independent event-log checks of the CF-6 ordering come after line 245, so they did not run in this attempt.
+    - **Attempt 2, passed.** Only the failed job was rerun, once, with the maintainer's approval: `browser` job `114682082319` gave **280 passed, 20 skipped, 0 failed, 0 flaky, 0 retries**, with all three CF-6 tests passing in every engine. The same image (`ubuntu-24.04` 20261004.327.1) and the same browser builds were used. GitHub keeps attempt 1 in the run's history.
+    - **Focused local repeat:** the three CF-6 tests, WebKit only, `CI=1`, one worker, zero retries, `--repeat-each=100`, at `f1a2780`, on 2026-10-12.
+      - **300 of 300 passed:** 0 failed, flaky or retried.
+      - The traces show the largest gap between frames was 30 ms, and every run sampled the `inert` window in 7 or 8 frames.
+      - Local results show the tests pass on this host, not that the CI failure could not happen.
+    - **Assessment.** The evidence points to a timing-sensitive test observation, not a product regression, though it is not proof:
+      - line 245 needs an animation frame inside the 120 ms exit, so a stall in frame delivery on the runner longer than the exit fails it;
+      - at that line the test cannot tell a missing `inert` from a missed frame;
+      - nothing points to a production defect, and the commit under test changes no code.
+    - **Diagnostics,** outside the repository: `~/p23-diagnostics/2026-10-12-cf6-webkit/`, with attempt 1's trace, screenshot, report and log, attempt 2's log, and the local repeat with its frame analysis.
+    - **Follow-up:** the CF-6 test hardening (carry-forwards, below). It is pending and needs separate approval.
   - **Pending, for the maintainer, after this record is merged into `v2`:** closing Issue #17, and updating the Project and the roadmap.
 - **Out of scope:** P-22's deferred manual work and limitations (MC-1, MC-7, real Safari's CF-12 and CF-13, and the P-26, P-29 and §37 carry-forwards), which stay where P-22 put them; the CF-35 sensitivity limits recorded by P-22, unchanged; the `size` job (P-24); the demo (P-25); the README and reference documentation (P-26); Node 26 (Issue #24); React floors other than 18.3.1 and 19.3.0; and a Pages Router fixture.
 - **Carry-forwards and pending actions:**
@@ -6112,6 +6131,13 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Minor follow-ups, not blocking:**
     - `scripts/check-next-app.js` still reports "with no warning" even when it accepted the CI cache advisory.
     - The aggregator cannot detect a deleted matrix leg (S3).
+  - **CF-6 test hardening (pending; needs separate approval).** The CF-6 incident on PR #33 is recorded in the post-merge record.
+    - **The weakness.** CF-6's frame checks need an animation frame inside the 120 ms exit, so a stall in frame delivery can fail `focus.spec.ts:245` before the frame-independent event-log checks run.
+    - **The smallest candidate,** to be decided at approval:
+      - run the event-log checks first;
+      - then make the `inert`-frame check unable to pass or fail without observing anything, either by slowing the public exit token for CF-6 as the H2 tests do, or by requiring `inert` frames only when an exiting frame was sampled.
+    - **Not changed.** The frame checks themselves are kept: they are the only check that focus stays on the target in rendered frames while the toast is `inert`.
+    - **Ownership.** This is a change to P-22's suite, so it is a test-only slice with its own WebKit repeat and soak, like P-22's CF-35 correction (PR #30). P-23 does not make it.
   - **Administrative actions remaining for S9,** each needing the maintainer's approval:
     - PR #32 marked ready and given its final title;
     - its CI;
