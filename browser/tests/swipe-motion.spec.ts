@@ -221,6 +221,78 @@ const stageTime = (page: Page, name: string) =>
     name
   );
 
+/** The bound on the wait for `b`'s `transform` to reach rest, from the start of the wait. */
+const REST_LIMIT_MS = 5000;
+
+/**
+ * Logs `b`'s own `transform` transitions from now on (Issue #40). Installed before the action
+ * that starts the motion, so a transition that runs and ends before the wait is still known.
+ */
+const recordTransforms = (page: Page) =>
+  page.evaluate(() => {
+    const h = window.__retHarness!;
+    const root = h.toastRoot('b')!;
+    for (const type of ['transitionrun', 'transitionend', 'transitioncancel']) {
+      root.addEventListener(type, event => {
+        if (event.target === root && (event as TransitionEvent).propertyName === 'transform') {
+          h.log('transform', type);
+        }
+      });
+    }
+  });
+
+/**
+ * Waits for `b`'s `transform` to reach rest: no `transform` transition left on its root, and the
+ * last one recorded ended rather than being cancelled (Issue #40). Neither `data-swiping` nor a
+ * fixed wait says this: the snap-back's cleanup also runs on a timer, so a stall in frame
+ * delivery can clear the attribute before the transition has even started. Each transition's
+ * `finished` promise is awaited (a cancelled one rejects, and a replacement is found on the next
+ * look), then the root is looked at again; with none left, the wait continues frame by frame until
+ * the `transitionend` arrives. Bounded: it fails by name if no transition ran, or if one is still
+ * running or never ended.
+ */
+async function expectTransformAtRest(page: Page): Promise<void> {
+  const failure = await page.evaluate(async limit => {
+    const h = window.__retHarness!;
+    const root = h.toastRoot('b');
+    if (!root) return 'b is not connected';
+    const transitions = () =>
+      root
+        .getAnimations()
+        .filter(
+          animation =>
+            animation instanceof CSSTransition && animation.transitionProperty === 'transform'
+        );
+    const recorded = () => h.events.filter(event => event.type === 'transform');
+    let timer = 0;
+    const expired = new Promise<'expired'>(resolve => {
+      timer = window.setTimeout(resolve, limit, 'expired');
+    });
+    try {
+      for (;;) {
+        const running = transitions();
+        const events = recorded();
+        if (running.length === 0 && events[events.length - 1]?.detail === 'transitionend') {
+          return null;
+        }
+        const next =
+          running.length > 0
+            ? Promise.allSettled(running.map(animation => animation.finished))
+            : new Promise(resolve => requestAnimationFrame(resolve));
+        if ((await Promise.race([next, expired])) === 'expired') {
+          if (running.length > 0) return `a transform transition still running after ${limit} ms`;
+          return events.length === 0
+            ? 'precondition: a transform transition carries b to rest'
+            : `the last transform transition never ended (${events.map(e => e.detail).join(', ')})`;
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }, REST_LIMIT_MS);
+  expect(failure, "b's transform reaches rest").toBeNull();
+}
+
 /**
  * The activating move's task: `b` just before the library handled it, with its reposition
  * transition's computed timing, and just after.
@@ -470,9 +542,10 @@ test.describe('CF-35: swipe and repositioning compose with no jump', () => {
     await expect(page.locator('.ret-toast.h-a')).toHaveCount(0);
     await page.waitForTimeout(300); // past the repositions the insertion and removal started
     await page.evaluate(() => window.__retHarness!.log('stage', 'release'));
+    await recordTransforms(page);
     await driver.up();
     await expect(page.locator('.ret-toast.h-b')).not.toHaveAttribute('data-swiping', /.*/);
-    await page.waitForTimeout(100);
+    await expectTransformAtRest(page);
     const samples = await stop();
     const release = await stageTime(page, 'release');
     const frozen = samples.filter(sample => sample.time < release);
@@ -518,9 +591,10 @@ test.describe('CF-35: swipe and repositioning compose with no jump', () => {
     await page.evaluate(() => window.__retHarness!.log('stage', 'release'));
     await driver.up();
     await expect(page.locator('.ret-toast.h-b')).toHaveAttribute('data-swiping', 'settle');
+    await recordTransforms(page);
     const measured = await insertMeasured(page, 'n');
     await expect(page.locator('.ret-toast.h-b')).not.toHaveAttribute('data-swiping', /.*/);
-    await page.waitForTimeout(100);
+    await expectTransformAtRest(page);
     const samples = await stop();
     const release = await stageTime(page, 'release');
     const settling = samples.filter(sample => sample.time >= release);
