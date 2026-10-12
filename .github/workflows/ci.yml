@@ -17,9 +17,11 @@ concurrency:
 env:
   NODE_VERSION: '24'
 
+# Pinned to ubuntu-24.04, the image of all the P-22 and P-23 evidence, until the Ubuntu 26.04
+# migration is validated as its own change (V2_PLAN.md, P-23 carry-forwards).
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,7 +42,7 @@ jobs:
   # exact pins, without saving, so the committed manifest and lockfile stay on React 19.
   test-react:
     name: test (react ${{ matrix.react }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -81,7 +83,7 @@ jobs:
     name: test
     needs: test-react
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - env:
@@ -91,7 +93,7 @@ jobs:
           [ "$RESULT" = success ]
 
   build-package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The Next.js App Router consumer adds a Next.js build and a Chromium check (P-23 D0-9).
     timeout-minutes: 15
     steps:
@@ -115,7 +117,7 @@ jobs:
       - run: npm run validate:package
 
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -144,7 +146,7 @@ jobs:
           retention-days: 7
 
   demo:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
