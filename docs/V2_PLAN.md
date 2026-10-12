@@ -6257,6 +6257,80 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-24 Bundle-size baseline and budget**
 
 - Scope: size-limit setup, an optional CSS minifier, the baseline measurement, the budget file and the blocking `size` job.
+- **Status: in progress.** D0, S1 and S2 are accepted, and S3 is this record, on the local branch `feat/p24-size-budget`, which is not yet pushed. The `size` job has not run on GitHub, and it is not a required check. P-24 is not complete: what remains is listed under Pending below.
+- **Starting point (D0, 2026-10-12):** `v2` and `origin/v2` at `5398386`, clean. The post-merge run `38242171096` of PR #38 passed all seven jobs. Ruleset 24353657 requires `quality`, `test`, `build-package`, `demo` and `browser` (GitHub Actions, 15368). The build had no size measurement: `tsup` emits an unminified ESM `dist/index.js` with `"use client"`, a source map and declarations, and `build:css` copies `src/styles.css` to `dist/` byte for byte.
+- **Decisions locked at D0** (approved by the maintainer on 2026-10-12):
+  1. **Tooling:** `size-limit`, `@size-limit/file` and `@size-limit/esbuild` 14.2.0, each pinned exactly, configured in a dedicated `.size-limit.json`. Not `@size-limit/preset-small-lib`, which now bundles with rolldown.
+  2. **Five checks:** the ESM entry minified (compression off), gzip and brotli; the shipped `styles.css` gzip and brotli.
+  3. **React and ReactDOM stay external.**
+  4. **No CSS minifier** (the option §33 left to P-24) and no change to the production build, JS or CSS. Consumers' bundlers minify CSS, and the browser harness checks that it serves `src/styles.css` byte for byte.
+  5. **Budget:** each limit is `ceil((baseline_bytes × 1.05) / 100) × 100`, from the actual S1 measurements, written in bytes.
+  6. **Individual-import measurements** are informational only and not budgeted.
+  7. **Negative checks are local only.** No deliberately failing CI commit.
+  8. **The tree-shaking finding** (below) is outside P-24.
+  9. **CI integration** is S2, and the required-check change is a separate administrative step (S4), each with its own approval.
+- **Measurement method** (`.size-limit.json`, run by `npm run size` after `npm run build`):
+  - **JS:** `dist/index.js` is bundled by `@size-limit/esbuild` (esbuild 0.28.2) with `minifyIdentifiers`, `minifySyntax`, `minifyWhitespace` and `treeShaking`, and no source map. size-limit adds the peers, `react` and `react-dom`, to `ignore`, so they are external; esbuild matches subpaths, so `react/jsx-runtime` is external too. size-limit subtracts its fixed empty-project overhead.
+  - **CSS:** `dist/styles.css` is measured as shipped. `disablePlugins: ["@size-limit/esbuild"]` keeps esbuild, and therefore minification, out of both CSS checks.
+  - **Compression** (`@size-limit/file`): gzip at level 9 (`gzip: true`), brotli at quality 11 (the default), and raw bytes with `brotli: false`.
+  - **Not measured:** declarations and source maps. No check points at them.
+  - **Units:** every limit is written in bytes (`"N B"`). size-limit reads `kB` as 1000 and `KiB` as 1024, and its human-readable output rounds to `kB`; `--json` gives exact bytes.
+- **Baseline and budget** (S1, local, at `origin/v2` `5398386`):
+
+  | Check               | Baseline (B) | × 1.05 (B) | Limit (B) | Headroom (B) |
+  | ------------------- | ------------ | ---------- | --------- | ------------ |
+  | ESM entry, minified | 32,382       | 34,001.10  | 34,100    | 1,718        |
+  | ESM entry, gzip     | 11,785       | 12,374.25  | 12,400    | 615          |
+  | ESM entry, brotli   | 10,705       | 11,240.25  | 11,300    | 595          |
+  | styles.css, gzip    | 7,984        | 8,383.20   | 8,400     | 416          |
+  | styles.css, brotli  | 6,790        | 7,129.50   | 7,200     | 410          |
+
+  The environment was WSL2 Linux with Node 24.21.0 and npm 11.19.0, size-limit and its plugins 14.2.0, esbuild 0.28.2 (in the plugin) and tsup 8.5.1. The figures match an independent reproduction of the plugin's configuration made at D0 with esbuild 0.27.7, byte for byte. Raising a limit requires a reviewed change to `.size-limit.json` (§33).
+
+- **Informational measurements** (D0, on a scratch build of `5398386`; not budgeted). The two import rows reproduce the plugin's configuration with esbuild 0.27.7. The other two apply Node's zlib (gzip 9, brotli 11) to the shipped file, and to `styles.css` after esbuild's CSS minifier:
+
+  | Import                                     | Minified (B) | gzip (B) | brotli (B) |
+  | ------------------------------------------ | ------------ | -------- | ---------- |
+  | `import { Toaster }`                       | 32,363       | 11,770   | 10,709     |
+  | `import { toast }` only                    | 26,467       | 9,770    | 8,951      |
+  | `dist/index.js` as shipped, unminified     | 67,221 raw   | 17,428   | 15,222     |
+  | `styles.css` minified by esbuild (no plan) | 9,663        | 2,314    | 2,004      |
+
+- **Slice records.** S1 and S2 were reviewed and accepted by the maintainer on 2026-10-12.
+  - **S1, tooling, baseline and budget (done, `7b8535b`).**
+    - It adds the three exact dev dependencies, the script `"size": "size-limit"` and `.size-limit.json` with the five checks and their limits. The lockfile change is additions only: the three packages, `nanospinner` 1.2.2, and esbuild 0.28.2 with its `@esbuild/*` platform packages, nested under `@size-limit/esbuild`. `lilconfig` 3.1.3 was already present.
+    - **Positive evidence:** after a clean `npm ci --ignore-scripts` and `npm run build`, all five checks pass, and two `--json` runs give identical output. A bundle saved with `--save-bundle` references only `react` (9 times) and `react/jsx-runtime` (3 times) as externals and contains no React code; the library never imports `react-dom`. The CSS figures equal gzip 9 and brotli 11 of the raw 24,893-byte `dist/styles.css`, with all its comments, and esbuild wrote no CSS output.
+    - **Negative evidence** (local): a missing `dist/`, a missing `dist/styles.css` alone, `--limit "1 B"`, and the CSS gzip limit lowered to 7,900 B ("exceeded by 84 B") each exit 1. The limit was restored, and the checks pass again.
+    - **No regression:** `format:check`, `lint`, `typecheck`, `npm test` (41 files, 1,712 tests) and `validate:package` (F1 to F4 and N1) pass. The tarball has exactly the seven expected files. `dist/index.js`, `index.js.map`, `index.d.ts` and `styles.css` are byte-identical to the `origin/v2` build. `exports`, `files`, `sideEffects` and the peers are unchanged.
+  - **S2, the `size` job (done, `2b95dcf`).**
+    - One new job, `size`, in `ci.yml`, between `build-package` and `browser`: `ubuntu-24.04`, 10 minutes, the SHA-pinned checkout (no persisted credentials) and setup-node (Node 24, npm cache), `npm ci --ignore-scripts --no-audit --no-fund`, `npm run build` and `npm run size`. It has no `name`, `needs`, `if` or `permissions` of its own, so it reports the `size` context and inherits `contents: read`. It runs on the existing `push`, `pull_request` and `workflow_dispatch` triggers.
+    - **Evidence:** the parsed workflow's triggers, permissions, concurrency, `env` and six existing jobs are deep-equal to `origin/v2`, and `size` is the only context of that name. The job's steps, run locally from a clean install, pass all five checks. Prettier and `git diff --check` are clean.
+    - **Limits:** the job has not run on GitHub yet. actionlint was not run.
+  - **S3, this record (awaiting review).** Documentation only.
+- **Acceptance trace:**
+
+  | Requirement                        | Evidence or blocking step                                                                        | Status                                                                  |
+  | ---------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+  | AC-PKG-7                           | the `size` job: `npm run size` against `.size-limit.json`                                        | passes locally (S1, S2); pending its first CI run on the PR and on `v2` |
+  | AC-CI-1, §28 `size`                | the `size` job fails on an exceeded limit or a missing file (S1 negative evidence)               | pending: `size` must become a required check in ruleset 24353657 (S4)   |
+  | §33, budget changes are reviewed   | the limits live only in `.size-limit.json`; CI passes no `--limit`                               | met in the branch                                                       |
+  | P-26, the README size claim (D-35) | the recorded `size-limit --json` values, adjusted for the shim noted below if the claim needs it | carry-forward: P-26 takes the values from the CI-confirmed baseline     |
+  | P-28, full gates before release    | `npm run build` and `npm run size`, as in the `size` job                                         | carry-forward: P-28 includes them in the release workflow's validation  |
+
+- **Limits and carry-forwards:**
+  - **Local evidence only.** Every measurement so far ran on WSL2, not on GitHub's `ubuntu-24.04` runner. The first CI run must reproduce the five values; if one differs, the CI value is recorded as the baseline, and any limit change is a reviewed change to `.size-limit.json`.
+  - **The require shim.** The esbuild plugin sets no `format`, so esbuild emits an IIFE and turns the external `react` imports into a small `require` shim. It adds a constant of about 249 B minified, 104 B gzip and 77 B brotli to each JS figure, and size-limit corrects for it only in `import` checks. The budget includes it. P-26 accounts for it if a README claim needs the library's own size.
+  - **CSS labels.** size-limit's human-readable output describes the CSS checks as "minified and gzipped" or "brotlied". That wording is generic: the CSS is measured as shipped, unminified (S1).
+  - **Individual imports** are informational only (decision 6).
+  - **Tree-shaking (outside P-24, to be handled separately).** A `toast`-only import keeps about 82% of the minified entry. In the built `dist/index.js`, `createContext(null)` (`AnnouncerContext`) and the `memo(...)` calls of `ToastItem` and `PositionList` are top-level calls with no `/* @__PURE__ */` annotation, so bundlers cannot drop them. This works against §32 ("The package tree-shakes"). Fixing it changes production JS, so it needs its own issue and review.
+  - **No CSS minifier** was added, and P-24 changes no production JS or CSS (decision 4).
+  - **Drift.** An esbuild update through Dependabot, or a Node release with a different zlib, can move the figures by a few bytes; the headroom (at least 410 B per check) absorbs that.
+  - **Node 26 (Issue #24) and Ubuntu 26.04 (Issue #37)** stay separate. P-24 runs on Node 24 and `ubuntu-24.04`.
+- **Pending, before P-24 is complete:**
+  - the PR into `v2`, with the `size` job's first GitHub run reproducing the baseline;
+  - the merge and a green post-merge run on `v2`;
+  - **S4 (administrative, separate maintainer approval):** adding `size` to ruleset 24353657's required checks once the post-merge run is green, by one `PUT` built from the configuration fetched immediately before, keeping the five existing checks unchanged, as for `browser` (Issue #25);
+  - a post-merge record, closing Issue #18, and updating the Project and the roadmap.
 
 ### Track F: Documentation and release
 
