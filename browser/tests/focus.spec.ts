@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { FocusEventDetail, FocusState, InertEventDetail } from '../harness/api';
-import { openHarness } from './harness';
+import { openHarness, timeToken } from './harness';
 
 // P-22 S4.1 (V2_PLAN.md, P-22 D2 and S4-H2): focus restoration in real browsers, Class 1 in
 // Chromium, Firefox and WebKit, with trusted Playwright input only.
@@ -242,39 +242,62 @@ function expectFocusHeld(samples: FocusSample[], from: string, to: string) {
     expect(sample.phase).toBe('exiting');
     expect(sample.active).toBe(to);
   }
-  expect(samples.some(sample => sample.inert)).toBe(true);
+  expect(
+    samples.some(sample => sample.inert),
+    'a sampled frame shows the exiting toast inert'
+  ).toBe(true);
   expect(samples[samples.length - 1]?.connected).toBe(false);
 }
 
+/**
+ * CF-6's exit, slowed through the public token (D0-11) so that frames sample the toast's inert
+ * window many times, not once or twice: at 120 ms one stalled frame could span it (Issue #34).
+ */
+const CF6_EXIT_MS = 1000;
+
+async function slowExit(page: Page): Promise<void> {
+  await page.evaluate(
+    css => window.__retHarness!.setStyle(css),
+    `.ret-toaster { --ret-exit-duration: ${CF6_EXIT_MS}ms; }`
+  );
+  expect(await timeToken(page, '--ret-exit-duration'), 'precondition: the exit is slowed').toBe(
+    CF6_EXIT_MS
+  );
+}
+
+// The frame-independent event log is checked first, so a failure in the frames never hides it.
 test.describe('CF-6: restoration before inert, kept through the exit and removal', () => {
   test('to the next toast’s close (§18 step 1)', async ({ page }) => {
     await openHarness(page);
+    await slowExit(page);
     await showToasts(page, ['b', 'a']);
     await tabTo(page, ['close:a']);
     const samples = await closeAndSample(page, 'a');
-    expectFocusHeld(samples, 'close:a', 'close:b');
     expectRestoredBeforeInert(await focusLog(page), 'close:a', 'close:b', 'a');
     expect(await dismissals(page)).toEqual([{ id: 'a', reason: 'close-button' }]);
+    expectFocusHeld(samples, 'close:a', 'close:b');
   });
 
   test('to the previous toast (§18 step 2)', async ({ page }) => {
     await openHarness(page);
+    await slowExit(page);
     await showToasts(page, ['b', 'a']);
     await tabTo(page, ['close:a', 'close:b']);
     const samples = await closeAndSample(page, 'b');
-    expectFocusHeld(samples, 'close:b', 'toast:a');
     expectRestoredBeforeInert(await focusLog(page), 'close:b', 'toast:a', 'b');
     expect(await dismissals(page)).toEqual([{ id: 'b', reason: 'close-button' }]);
+    expectFocusHeld(samples, 'close:b', 'toast:a');
   });
 
   test('to the region (§18 step 3)', async ({ page }) => {
     await openHarness(page);
+    await slowExit(page);
     await showToasts(page, ['a']);
     await tabTo(page, ['close:a']);
     const samples = await closeAndSample(page, 'a');
-    expectFocusHeld(samples, 'close:a', 'region');
     expectRestoredBeforeInert(await focusLog(page), 'close:a', 'region', 'a');
     expect(await dismissals(page)).toEqual([{ id: 'a', reason: 'close-button' }]);
+    expectFocusHeld(samples, 'close:a', 'region');
   });
 });
 

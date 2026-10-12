@@ -6113,14 +6113,75 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - nothing points to a production defect, and the commit under test changes no code.
     - **Diagnostics,** outside the repository: `~/p23-diagnostics/2026-10-12-cf6-webkit/`, with attempt 1's trace, screenshot, report and log, attempt 2's log, and the local repeat with its frame analysis.
     - **Follow-up:** the CF-6 test hardening (carry-forwards, below). It is pending and needs separate approval.
+
+      (Annotation, Issue #34: the hardening is implemented and validated locally; see the CF-6 test hardening record below.)
   - **Pending, for the maintainer, after this record is merged into `v2`:** closing Issue #17, and updating the Project and the roadmap.
+- **The `browser` required check, done (Issue #25, 2026-10-12).** The maintainer approved the change after a read-only preflight.
+  - **The change:** one `PUT` to ruleset 24353657 ("v2 protection"). The payload was built from the configuration fetched immediately before, which matched the preflight, including its `updated_at` (`2026-10-02T10:08:53.671+02:00`). The only difference is one entry added to the required status checks: `browser`, with `integration_id` 15368 (GitHub Actions).
+  - **Verified after the update** (`updated_at` `2026-10-12T08:39:00.791+02:00`): the ruleset equals its earlier configuration plus that entry, field for field. These are unchanged:
+    - enforcement `active` and the target `refs/heads/v2`;
+    - no bypass actors;
+    - the `deletion` and `non_fast_forward` rules;
+    - `strict_required_status_checks_policy: true` and `do_not_enforce_on_create: false`.
+  - **The effective rules on `v2`** (`GET /rules/branches/v2`) come from this ruleset only. They require `quality`, `test`, `build-package`, `demo` and `browser`, all from 15368.
+  - **Not tested:** a deliberately failing `browser` run, which was not authorised. Blocking rests on the verified configuration.
+  - **Issue #25** is closed as completed, with its Project item moved to Done.
+- **CF-6 test hardening record (test-only; Issue #34).** The maintainer approved the design after a read-only review, then local implementation and validation. The branch is `test/issue-34-cf6-hardening`, from `v2` at `60a2876`.
+  - **Scope:** `browser/tests/focus.spec.ts` only. `src/`, the production stylesheet, the public API, the 30 tokens, the harness, the dependencies, `playwright.config.ts` and CI are unchanged, and no CF item was reclassified. No D0-16 report was raised.
+  - **The change, to the three CF-6 tests only:**
+    - **The exit is slowed** to 1000 ms through the public token `--ret-exit-duration` (D0-11), as the H2 tests do. The lifecycle fallback follows the computed animation, so `animationend` and the fallback move with it. Restoration and `inert` stay in one layout effect, so their order does not depend on the duration.
+    - **A named precondition** checks, with `timeToken`, that the computed token is 1000 ms.
+    - **The check order changes:** the frame-independent event-log ordering checks run first, then the dismissal check, then the frame checks. All the data is collected before any check runs, so the order decides only which failure is reported.
+    - **No assertion is removed or weakened.** The `inert`-frame requirement is kept, with the message "a sampled frame shows the exiting toast inert". `closeAndSample`, `expectFocusHeld` and `expectRestoredBeforeInert` are unchanged.
+  - **Rejected:** requiring `inert` frames only when an exiting frame was sampled. A stall would then let the test pass without observing anything.
+  - **Frame margin** (temporary instrumentation, never committed; `CI=1`, one worker, zero retries, every run passed):
+
+    | Run                             | Tests | `inert` frames (min / median / max) | Shortest `inert` span sampled | Largest frame gap |
+    | ------------------------------- | ----- | ----------------------------------- | ----------------------------- | ----------------- |
+    | WebKit, 1000 ms, ×200           | 600   | 61 / 62 / 63                        | 968 ms                        | 36 ms             |
+    | Chromium, 1000 ms, ×50          | 150   | 60 / 61 / 61                        | 983 ms                        | 16.8 ms           |
+    | Firefox, 1000 ms, ×50           | 150   | 59 / 60 / 61                        | 983 ms                        | 33.6 ms           |
+    | WebKit, 120 ms (baseline), ×100 | 300   | 7 / 8 / 8                           | 96 ms                         | 35 ms             |
+
+    At 120 ms, one stall of about 120 ms could miss every `inert` frame; the CI stall was 127 ms. At 1000 ms, missing them all takes a stall of about 970 ms. Each CF-6 test takes about 0.95 s longer (WebKit: 1.93 s against 0.98 s per test).
+
+  - **Not reproduced:** the original frame-delivery stall. Blocking the main thread delays the removal too, so it cannot isolate a gap in frame delivery. The case for the change rests on the margin above, not on a reproduction.
+  - **Focused validation,** the three CF-6 tests on the final code (`CI=1`, one worker, zero retries): WebKit ×500, **1,500 of 1,500**; Chromium ×100, **300 of 300**; Firefox ×100, **300 of 300**. No failed, flaky, retried or skipped test.
+  - **Mutation checks.** Each is a temporary edit, reverted at once, with `src/` checked clean and the spec checked against the implementation's hash. Each was run 10 times per test per engine, 90 runs per row. "Frames only" means the event-log and dismissal checks were temporarily removed from the test, to show that the frame layer detects the defect on its own.
+
+    | Mutation                                   | Chromium | Firefox | WebKit | Detected by                                            |
+    | ------------------------------------------ | -------- | ------- | ------ | ------------------------------------------------------ |
+    | M1: `inert` set before restoration         | 30/30    | 30/30   | 30/30  | the `focusout` reports `targetInert: true`             |
+    | M2: `blur()` 300 ms into the exit          | 30/30    | 30/30   | 30/30  | a focus event follows `inert`                          |
+    | M2, frames only                            | 30/30    | 30/30   | 30/30  | focus off the target at frames 19 to 22                |
+    | M3: focus moved just after removal         | 30/30    | 30/30   | 30/30  | a focus event follows `inert`                          |
+    | M3, frames only                            | 30/30    | 30/30   | 30/30  | focus off the target at frames 62 to 66, after removal |
+    | M4: `inert` never set                      | 30/30    | 30/30   | 30/30  | no `inert` entry after restoration                     |
+    | M4, frames only                            | 30/30    | 30/30   | 30/30  | "a sampled frame shows the exiting toast inert"        |
+    | M5a: the token without a unit (`1000`)     | 30/30    | 30/30   | 30/30  | the precondition: "not a time"                         |
+    | M5b: the style not applied (selector typo) | 30/30    | 30/30   | 30/30  | the precondition: "the exit is slowed"                 |
+
+  - **Full validation** (`CI=1`, one worker, zero retries):
+    - `format:check`, `lint` and `typecheck` pass; `npm test`, 41 files and 1,712 tests;
+    - the blocking suite: **280 passed, 20 named skips** (6.7 min);
+    - **a reduced soak:** the blocking suite with `--repeat-each=3`, **840 passed, 60 named skips, 0 failed, 0 flaky**, each test run once (20.0 min). The skips are only `swipe-touch.spec.ts`'s engine gate in Firefox and WebKit.
+    - **The soak is reduced** to 3 repetitions, by the maintainer's decision, instead of the 20 repetitions in Issue #34's acceptance criteria and P-22's CF-35 precedent. The 20× soak was not run.
+  - **Remaining limits:**
+    - **Production timing:** CF-6 no longer samples frames at the 120 ms production exit. The ordering it checks does not depend on the duration, and the H1-R tests, the H2 double-click test and the lifecycle specs still run at production timing.
+    - **Not deterministic:** a frame-delivery stall of about 1 s would still fail the test, loudly; its diagnosis is this record.
+    - **Ubuntu 26:** all of this ran locally, not on the `webkit-ubuntu-26.04` build (carry-forwards).
+  - **Diagnostics,** outside the repository: `~/p23-diagnostics/2026-10-12-cf6-hardening-issue34/`, with the reports, logs, frame statistics and mutation scripts. `issue25-ruleset/` holds the ruleset before and after the update.
+  - **Status at this commit, before the PR:** validated locally; it has not been through GitHub CI. Next, with the maintainer's approval: a PR into `v2`, its CI with the now-required `browser` check, a merge commit and a green post-merge push CI. Issue #34 stays open until then.
 - **Out of scope:** P-22's deferred manual work and limitations (MC-1, MC-7, real Safari's CF-12 and CF-13, and the P-26, P-29 and §37 carry-forwards), which stay where P-22 put them; the CF-35 sensitivity limits recorded by P-22, unchanged; the `size` job (P-24); the demo (P-25); the README and reference documentation (P-26); Node 26 (Issue #24); React floors other than 18.3.1 and 19.3.0; and a Pages Router fixture.
 - **Carry-forwards and pending actions:**
   - **Server Components and `toast()` (S7, then P-26).** §23 says that calling `toast()` from Server Components or server actions has no effect. Because the whole entry is a `"use client"` module, `toast` imported into a Server Component may be a client reference rather than the function, so the actual behaviour is unverified: it is neither assumed harmless nor assumed to throw. S7 investigates it outside the blocking fixture. If the observed behaviour differs from §23, P-26's documentation carries the correction, and any change to §23 itself is a separate decision. §23 is unchanged at D0.
     - **Finding (S7 spike, Next.js 16.4.0; acknowledged by the maintainer for P-26):** calling `toast()` from a Server Component **throws** at request time: "Attempted to call toast() from the server but toast is on the client. It's not possible to invoke a client function from the server…". The type check and `next build` accept the code beforehand. So §23's "has no effect" does not hold for Server Components under the App Router.
     - It is not asserted in the blocking fixture, and server actions were not investigated.
     - P-26 documents the behaviour. §23, the public contract and the production code are unchanged, and any change to them is a separate decision.
-  - **The `browser` required check (administrative, pending).** The `v2` ruleset does not require `browser`, although P-06 says each phase adds its own job to the required checks. Adding it is a GitHub settings change for the maintainer. It is not authorised at S0, and no P-23 slice makes it. It is still pending at S9.
+  - **The `browser` required check (administrative, done).** The `v2` ruleset did not require `browser`, although P-06 says each phase adds its own job to the required checks. Adding it is a GitHub settings change for the maintainer. It is not authorised at S0, and no P-23 slice makes it. It is still pending at S9.
+
+    (Annotation, Issue #25: done on 2026-10-12. Ruleset 24353657 now requires `browser`; see the record above.)
+
   - **Focus in a hidden toast, in real browsers (open, owner undecided).** This is D0-12 hypothesis 3. jsdom does not blur on `display: none`, and no browser spec hides a focused toast with Activity or Suspense. Adding one changes the P-22 suite and its counts, so it needs a separate decision.
   - **The Ubuntu 26 runner migration (risk, outside P-23).** GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19; the `browser` job carries that notice. Every workflow uses `ubuntu-latest`, and all of P-22's and P-23's CI evidence ran on `ubuntu-24.04`.
     - Playwright 1.63.0 supports `ubuntu26.04-x64`, but there it downloads a different WebKit build (`webkit-ubuntu-26.04`) from the one the evidence used. Firefox and Chromium use the same builds.
@@ -6131,7 +6192,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Minor follow-ups, not blocking:**
     - `scripts/check-next-app.js` still reports "with no warning" even when it accepted the CI cache advisory.
     - The aggregator cannot detect a deleted matrix leg (S3).
-  - **CF-6 test hardening (pending; needs separate approval).** The CF-6 incident on PR #33 is recorded in the post-merge record.
+  - **CF-6 test hardening (Issue #34; validated locally, not yet merged).** The CF-6 incident on PR #33 is recorded in the post-merge record, and the hardening in the CF-6 test hardening record above. The text below is the plan as written before approval.
     - **The weakness.** CF-6's frame checks need an animation frame inside the 120 ms exit, so a stall in frame delivery can fail `focus.spec.ts:245` before the frame-independent event-log checks run.
     - **The smallest candidate,** to be decided at approval:
       - run the event-log checks first;
