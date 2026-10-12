@@ -5817,7 +5817,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - Test `<Activity>`, or whichever React 19 lifecycle hides content while keeping its state, effects or DOM.
   - The record of where focus was before the hotkey must be cleared when ownership or the lifecycle changes, also when effects or DOM are kept. A kept effect must never leave a stale record for Escape to return to.
   - Hiding a toast and showing it again must not run removal restoration, which runs only when a toast starts to exit.
-- **Status: S1 to S8 done; S9 in progress.** D0, the architecture review and decision record, is done (recorded below). The maintainer accepted the final D0 review and approved its decisions, with the clarifications recorded in them, at S0. S0 recorded them on `feat/p23-compat-ssr`, branched from `v2` at `2e6bdcc` (`ded3de3`, documentation only). S1 to S8 are done, each accepted by the maintainer, with two approved hardening slices, S4-H (a production fix) and S7-H (a test-harness fix); they are recorded below under "Slice records". S9.0 (evidence recovery) and S9.1 (this reconciliation) are done. What remains of S9 is the phase PR (#32, a draft against `v2`), its CI, the merge into `v2` with a merge commit, a green post-merge push CI and the post-merge record. Issue #17 stays open until then.
+- **Status: complete.**
+  - P-23 was merged into `v2` through PR #32 with a merge commit, `125630a` (parents `2e6bdcc` and `5c7f4ae`). Its post-merge push CI passed (the post-merge record, below).
+  - Its acceptance work is complete, as the S9 reconciliation and the post-merge record give it. The carry-forwards stay where they are listed below.
+  - Administrative closure is still pending until this post-merge record is merged into `v2`: closing Issue #17, and updating the Project and the roadmap.
+  - The history follows.
+- **Status at `5c7f4ae`, before the merge: S1 to S8 done; S9 in progress.** D0, the architecture review and decision record, is done (recorded below). The maintainer accepted the final D0 review and approved its decisions, with the clarifications recorded in them, at S0. S0 recorded them on `feat/p23-compat-ssr`, branched from `v2` at `2e6bdcc` (`ded3de3`, documentation only). S1 to S8 are done, each accepted by the maintainer, with two approved hardening slices, S4-H (a production fix) and S7-H (a test-harness fix); they are recorded below under "Slice records". S9.0 (evidence recovery) and S9.1 (this reconciliation) are done. What remains of S9 is the phase PR (#32, a draft against `v2`), its CI, the merge into `v2` with a merge commit, a green post-merge push CI and the post-merge record. Issue #17 stays open until then.
 - Acceptance: P-23 completes AC-PKG-2 (the Next.js part), AC-PKG-4 (the Next.js part), AC-PKG-5 (React 19), AC-PKG-8 and AC-PKG-9 (latest TypeScript and `@types/react` 19), and turns `test` into the React 18/19 matrix for AC-CI-1 (§28). Every other criterion must not regress under either React version. D0 changes no criterion and no normative text in §23 to §28 or §36.
 - **Starting point (the D0 review, at `2e6bdcc`, 2026-10-10 and 2026-10-11):**
   - **Repository:** `v2` and `origin/v2` at `2e6bdcc`, clean. Issue #16 (P-22) is closed, Issue #17 (P-23) is open, and Issue #24 (the Node 26 decision) is open. The last push CI on `v2` (run `38063637185`, head `2e6bdcc`) passed all five jobs; on the run before it, `test` took about 42 s, `build-package` about 19 s and `browser` about 8 minutes.
@@ -6054,6 +6059,42 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - The per-leg fixture ignores (D0-3, D0-4, D0-5) and N1's are unchanged.
     - React minor and patch updates are deliberately left as they are, and so is the grouping. Under the exact root pins, a grouped minor update would fail the version checks of R19 and `browser` until `ci.yml` is updated. That fails closed, and any change to it is deferred (carry-forwards).
 
+- **Post-merge record (S9 completion).** The maintainer approved each step on 2026-10-11.
+  - **S9.2, the reconciliation through CI:**
+    - `5c7f4ae` (S9.1) was pushed as a fast-forward.
+    - PR run `38147179544` (`pull_request`, attempt 1, head `5c7f4ae`) passed all seven jobs, GitGuardian and GitHub's Dependabot configuration check:
+      - R18: 1,703 tests;
+      - R19: 1,712 tests;
+      - `browser`: 280 passed and 20 named skips, with no failed, flaky or retried test.
+  - **The PR:** PR #32 was given its final title, "P-23: Compatibility and SSR verification", and its final description (`Refs #17`), and marked ready for review. Marking it ready started no CI run.
+  - **The merge:** PR #32 was merged into `v2` on 2026-10-11 at 15:14:41 UTC.
+    - It used a merge commit, `125630a39fd5cda5cde5c18c96c63696fd21227a` (parents `2e6bdcc` and `5c7f4ae`), pinned to the reviewed head with `--match-head-commit`.
+    - The full branch history is kept, and `feat/p23-compat-ssr` was not deleted.
+    - The `v2` ruleset (no review rule; the four strict required checks, all green) was satisfied, not bypassed.
+  - **Post-merge push CI:** run `38150463252` (`push`, `v2`, head `125630a`, attempt 1) passed, with no rerun.
+
+    | Job                     | Job ID         | Result  | Evidence from the log                                                                                                                                                                  |
+    | ----------------------- | -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | `quality`               | `114502674448` | success | —                                                                                                                                                                                      |
+    | `test (react 18)`       | `114502674357` | success | exactly 18.3.1, 18.3.1, 18.3.18 and 18.3.5; 41 files, **1,703** tests                                                                                                                  |
+    | `test (react 19)`       | `114502674290` | success | all four at 19.3.0; 41 files, **1,712** tests                                                                                                                                          |
+    | `test` (the aggregator) | `114502863233` | success | `test-react: success`                                                                                                                                                                  |
+    | `build-package`         | `114502674334` | success | F1 to F4 and N1 at their pinned versions; 8 native Node ESM SSR passes; 25 blocked deep imports; the N1 Chromium check; "Package validation passed (F1, F2, F3, F4, N1)"               |
+    | `browser`               | `114502674368` | success | React 19.3.0 asserted; **280 passed, 20 named skips, 0 failed, 0 flaky, 0 retries** (6.7 min); Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6 (the `webkit-ubuntu-24.04` build) |
+    | `demo`                  | `114502674188` | success | —                                                                                                                                                                                      |
+    - GitHub's Dependabot configuration check also passed on `125630a`.
+    - **Runner:** every job ran on `ubuntu-24.04`, image version 20261004.327.1, the image of all the earlier P-23 evidence. The Ubuntu 26 migration carry-forward is unchanged.
+    - **GitGuardian** is a GitHub App check on pull requests only. It passed on PR #32's final head, `5c7f4ae`, as on its earlier heads. It does not run on merge commits, and it ran on none of P-22's (`a4a541b`, `1046e7c`) or on `2e6bdcc`.
+
+  - **The acceptance trace, final.** Every row of the S9 acceptance evidence holds on the merged code. The same steps passed on `125630a` in run `38150463252` as in run `38144520183`:
+    - the F1 to F4 and N1 checks in `build-package`;
+    - both legs and the aggregator;
+    - the `browser` suite.
+
+    No status changes: AC-CI-1 is met for P-23's part, with `browser` still not a required check. The P-16 carry-over is met in jsdom, with real-browser focus on hiding still open.
+
+  - **Carry-forwards:** unchanged, as listed below. Nothing deferred was performed here.
+  - **Pending, for the maintainer, after this record is merged into `v2`:** closing Issue #17, and updating the Project and the roadmap.
 - **Out of scope:** P-22's deferred manual work and limitations (MC-1, MC-7, real Safari's CF-12 and CF-13, and the P-26, P-29 and §37 carry-forwards), which stay where P-22 put them; the CF-35 sensitivity limits recorded by P-22, unchanged; the `size` job (P-24); the demo (P-25); the README and reference documentation (P-26); Node 26 (Issue #24); React floors other than 18.3.1 and 19.3.0; and a Pages Router fixture.
 - **Carry-forwards and pending actions:**
   - **Server Components and `toast()` (S7, then P-26).** §23 says that calling `toast()` from Server Components or server actions has no effect. Because the whole entry is a `"use client"` module, `toast` imported into a Server Component may be a client reference rather than the function, so the actual behaviour is unverified: it is neither assumed harmless nor assumed to throw. S7 investigates it outside the blocking fixture. If the observed behaviour differs from §23, P-26's documentation carries the correction, and any change to §23 itself is a separate decision. §23 is unchanged at D0.
@@ -6078,6 +6119,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - the post-merge push CI;
     - a post-merge record, as P-22's was;
     - closing Issue #17 and updating the Project and the roadmap.
+
+    (Annotation, post-merge: the first five are done; see the post-merge record. Closing Issue #17 and updating the Project and the roadmap remain, after this record is merged into `v2`.)
 
 **P-24 Bundle-size baseline and budget**
 
