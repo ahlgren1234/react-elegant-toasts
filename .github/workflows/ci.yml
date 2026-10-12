@@ -116,6 +116,24 @@ jobs:
       # Next.js App Router consumer, N1 (§27).
       - run: npm run validate:package
 
+  # The bundle-size budget (§33, P-24): size-limit measures the built ESM entry and the shipped
+  # styles.css against the limits in .size-limit.json, and fails when one is exceeded.
+  size:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run build
+      - run: npm run size
+
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
