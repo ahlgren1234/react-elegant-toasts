@@ -957,6 +957,7 @@ Every job is **blocking**. No quality gate uses `continue-on-error` (D-31).
 
 - **Triggers:** `push` and `pull_request` on `main` and `v2`, plus `workflow_dispatch` (C-07).
 - **Node:** a single current Active LTS for tooling, pinned explicitly by major (Node 24 since P-06). It is a CI setting only, not an `engines` field. Moving to the next Active LTS is a deliberate, reviewed change (see P-06).
+- **Runner:** every job in `ci.yml` and `deploy-demo.yml` is pinned to `ubuntu-24.04` since PR #36. The pin is temporary: the move to Ubuntu 26.04 is a separate, validated change (Issue #37).
 - **Hygiene:**
   - least-privilege `permissions:`
   - actions pinned to full commit SHAs, with a version comment
@@ -6172,6 +6173,42 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - **Ubuntu 26:** all of this ran locally, not on the `webkit-ubuntu-26.04` build (carry-forwards).
   - **Diagnostics,** outside the repository: `~/p23-diagnostics/2026-10-12-cf6-hardening-issue34/`, with the reports, logs, frame statistics and mutation scripts. `issue25-ruleset/` holds the ruleset before and after the update.
   - **Status at this commit, before the PR:** validated locally; it has not been through GitHub CI. Next, with the maintainer's approval: a PR into `v2`, its CI with the now-required `browser` check, a merge commit and a green post-merge push CI. Issue #34 stays open until then.
+
+    (Annotation, post-merge: done. PR #35 was merged into `v2` and Issue #34 is closed; see the CF-6 hardening post-merge record below.)
+
+- **CF-6 hardening post-merge record (PR #35, Issue #34).** The maintainer approved each step on 2026-10-12.
+  - **PR CI:** run `38231696630` (`pull_request`, head `675a7f7`, attempt 1) passed all seven jobs and GitGuardian:
+    - R18: 1,703 tests;
+    - R19: 1,712 tests;
+    - `browser`: 280 passed and 20 named skips, with no failed, flaky or retried test.
+  - **The merge:** PR #35, "test(browser): harden CF-6 focus assertions against frame stalls" (`Refs #34`), was merged into `v2` on 2026-10-12 at 09:53:41 UTC.
+    - It used a merge commit, `8cdac1675e33b2b6c01e21fa088042d70f593ce1` (parents `60a2876` and `675a7f7`).
+    - `test/issue-34-cf6-hardening` was not deleted.
+    - The `v2` ruleset, with `browser` now among the five required checks, was satisfied, not bypassed.
+  - **Post-merge push CI:** run `38232822497` (`push`, `v2`, head `8cdac16`, attempt 1) passed all seven jobs, with no rerun:
+    - R18: 1,703 tests; R19: 1,712 tests;
+    - `browser`: **280 passed, 20 named skips, 0 failed, 0 flaky, 0 retries** (7.3 min).
+    - **Runner:** every job ran on `ubuntu-24.04`, image version 20261004.327.1, through the `ubuntu-latest` label. `browser` still carried the Ubuntu 26 migration notice.
+  - **Issue #34** was closed as completed on 2026-10-12, with this evidence in its closing comment. By the maintainer's decision it is not added to the Project.
+  - **Unchanged:** the reduced 3× soak and the remaining limits recorded above.
+
+- **Ubuntu 24.04 runner pin record (PR #36).** After a read-only review, the maintainer chose to pin the runners rather than accept the migration, and approved the plan, the PR and the merge on 2026-10-12.
+  - **Why:** GitHub moves `ubuntu-latest` to Ubuntu 26.04 gradually, from 2026-10-19 to 2026-11-19 (actions/runner-images#14748), so during the rollout a required check could run on either image, and the `v2` ruleset has no bypass actors. On Ubuntu 26.04, Playwright 1.63.0 downloads a different WebKit build (`webkit-ubuntu-26.04`), and all of P-22's and P-23's CI evidence ran on `ubuntu-24.04` (carry-forwards).
+  - **The change:** `runs-on: ubuntu-latest` became `ubuntu-24.04` for the six jobs in `ci.yml` and the two in `deploy-demo.yml`, with one comment above `jobs:` in each file.
+    - Triggers, permissions, concurrency, env, steps, job IDs and job names are unchanged: the parsed YAML of all three workflows equals `8cdac16`'s apart from the eight `runs-on` values.
+    - The ruleset, Node 24 and Playwright 1.63.0 are unchanged.
+  - **`release.yml` excluded,** deliberately: it stays on `ubuntu-latest` until P-28 replaces it. No GitHub release exists, the default workflow token is read-only, `0.1.2` is already on npm so the workflow skips publishing, and `publishConfig.provenance: true` without `id-token: write` would make any publish fail.
+  - **PR CI:** run `38237796152` (`pull_request`, head `05c94b8`, attempt 1) passed all seven jobs and GitGuardian, every job on the `ubuntu-24.04` label.
+  - **The merge:** PR #36 was merged into `v2` on 2026-10-12 at 10:50:38 UTC.
+    - It used a merge commit, `22a9f8f2df797346cb39b6cfcb1594376837daf3` (parents `8cdac16` and `05c94b8`), pinned to the reviewed head with `--match-head-commit`.
+    - `ci/pin-ubuntu-24.04` was not deleted.
+  - **Post-merge push CI:** run `38238855515` (`push`, `v2`, head `22a9f8f`, attempt 1) passed all seven jobs, with no rerun:
+    - R18: 1,703 tests; R19: 1,712 tests;
+    - `browser`: **280 passed, 20 named skips, 0 failed, 0 flaky, 0 retries** (7.1 min); Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6 (the `webkit-ubuntu-24.04` build).
+    - **Runner:** every job ran on the `ubuntu-24.04` label, image version 20261004.327.1 (Ubuntu 24.04.5 LTS). No job has an annotation, so the migration notice is gone.
+  - **Not run:** `deploy-demo.yml` was not dispatched (§29). Its change was checked statically, and the `demo` job covers the demo build on the pinned label.
+  - **`main`** is unchanged. Its four workflows still use `ubuntu-latest` and run only on pushes and pull requests to `main`, on a release, or by manual dispatch of its two deploy workflows; the v2 integration (Issue #26) brings the pin with it.
+  - **Follow-up:** the move to Ubuntu 26.04 is Issue #37, a standalone change before P-28.
 - **Out of scope:** P-22's deferred manual work and limitations (MC-1, MC-7, real Safari's CF-12 and CF-13, and the P-26, P-29 and §37 carry-forwards), which stay where P-22 put them; the CF-35 sensitivity limits recorded by P-22, unchanged; the `size` job (P-24); the demo (P-25); the README and reference documentation (P-26); Node 26 (Issue #24); React floors other than 18.3.1 and 19.3.0; and a Pages Router fixture.
 - **Carry-forwards and pending actions:**
   - **Server Components and `toast()` (S7, then P-26).** §23 says that calling `toast()` from Server Components or server actions has no effect. Because the whole entry is a `"use client"` module, `toast` imported into a Server Component may be a client reference rather than the function, so the actual behaviour is unverified: it is neither assumed harmless nor assumed to throw. S7 investigates it outside the blocking fixture. If the observed behaviour differs from §23, P-26's documentation carries the correction, and any change to §23 itself is a separate decision. §23 is unchanged at D0.
@@ -6187,6 +6224,9 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - Playwright 1.63.0 supports `ubuntu26.04-x64`, but there it downloads a different WebKit build (`webkit-ubuntu-26.04`) from the one the evidence used. Firefox and Chromium use the same builds.
     - Given CF-35's recorded WebKit sensitivity, the first runs on the new image are the most likely place for a new failure.
     - P-23 changes no runner. Pinning `ubuntu-24.04`, or accepting the migration, is a separate, reviewed decision.
+
+    (Annotation, PR #36: the runners were pinned to `ubuntu-24.04` on 2026-10-12; see the runner pin record above. The migration to Ubuntu 26.04 is Issue #37.)
+
   - **Dependabot React minor updates and grouping (deferred).** See the S9 Dependabot decision. Dependabot stays inactive until the config reaches `main`.
   - **Node 26 (Issue #24),** unchanged (D0-10).
   - **Minor follow-ups, not blocking:**
@@ -6199,6 +6239,9 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
       - then make the `inert`-frame check unable to pass or fail without observing anything, either by slowing the public exit token for CF-6 as the H2 tests do, or by requiring `inert` frames only when an exiting frame was sampled.
     - **Not changed.** The frame checks themselves are kept: they are the only check that focus stays on the target in rendered frames while the toast is `inert`.
     - **Ownership.** This is a change to P-22's suite, so it is a test-only slice with its own WebKit repeat and soak, like P-22's CF-35 correction (PR #30). P-23 does not make it.
+
+    (Annotation, PR #35: merged and Issue #34 closed; see the CF-6 hardening post-merge record above.)
+
   - **Administrative actions remaining for S9,** each needing the maintainer's approval:
     - PR #32 marked ready and given its final title;
     - its CI;
@@ -6208,6 +6251,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - closing Issue #17 and updating the Project and the roadmap.
 
     (Annotation, post-merge: the first five are done; see the post-merge record. Closing Issue #17 and updating the Project and the roadmap remain, after this record is merged into `v2`.)
+
+    (Annotation, 2026-10-12: Issue #17 is closed, its Project item is Done, and the roadmap is updated.)
 
 **P-24 Bundle-size baseline and budget**
 
