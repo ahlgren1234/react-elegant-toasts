@@ -1,0 +1,195 @@
+name: Node 26 compatibility
+
+# Temporary, non-required evidence for the Node 24 → 26 transition (Issue #24). It mirrors the jobs
+# in ci.yml on Node 26 and is removed by the change that makes Node 26 the primary CI runtime.
+# None of its checks is required by the v2 ruleset, but a failing node26-* job is investigated
+# before a PR is approved. Documentation-only changes do not run it.
+on:
+  push:
+    branches: [v2]
+    paths:
+      - '.github/workflows/node-26-compat.yml'
+      - '.github/workflows/ci.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/**'
+      - 'browser/**'
+      - 'fixtures/**'
+      - 'scripts/**'
+      - 'tsconfig*.json'
+      - 'tsup.config.ts'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+      - 'playwright.config.ts'
+      - 'eslint.config.js'
+      - '.size-limit.json'
+      - '.prettierrc'
+  pull_request:
+    branches: [v2]
+    paths:
+      - '.github/workflows/node-26-compat.yml'
+      - '.github/workflows/ci.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/**'
+      - 'browser/**'
+      - 'fixtures/**'
+      - 'scripts/**'
+      - 'tsconfig*.json'
+      - 'tsup.config.ts'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+      - 'playwright.config.ts'
+      - 'eslint.config.js'
+      - '.size-limit.json'
+      - '.prettierrc'
+  # Usable once this file is on the default branch.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '26'
+
+# Pinned to ubuntu-24.04 like ci.yml. The Ubuntu 26.04 migration (Issue #37) is a separate change.
+jobs:
+  node26-quality:
+    name: node26-quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+
+  # The same React 18 and React 19 legs as ci.yml. There is no aggregating job: nothing here feeds
+  # a required check.
+  node26-test-react:
+    name: node26-test (react ${{ matrix.react }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - react: '18'
+            override: react@18.3.1 react-dom@18.3.1 @types/react@18.3.18 @types/react-dom@18.3.5
+            expect: react@18.3.1 react-dom@18.3.1 @types/react@18.3.18 @types/react-dom@18.3.5
+          - react: '19'
+            override: ''
+            expect: react@19.3.0 react-dom@19.3.0 @types/react@19.3.0 @types/react-dom@19.3.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - if: matrix.override != ''
+        env:
+          OVERRIDE: ${{ matrix.override }}
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund $OVERRIDE
+      - env:
+          EXPECT: ${{ matrix.expect }}
+        run: node scripts/check-react-versions.js $EXPECT
+      - run: npm test
+      - run: npx tsc -p tsconfig.lib.json
+      - run: npx tsc -p tsconfig.test.json
+
+  node26-build-package:
+    name: node26-build-package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            fixtures/consumer-vite/package-lock.json
+            fixtures/consumer-vite/legs/*/package-lock.json
+            fixtures/consumer-next/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run validate:package
+
+  node26-size:
+    name: node26-size
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run build
+      - run: npm run size
+
+  node26-browser:
+    name: node26-browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node scripts/check-react-versions.js react@19.3.0 react-dom@19.3.0
+      - run: npx playwright install --with-deps chromium firefox webkit
+      # Zero retries, from playwright.config.ts.
+      - run: npm run test:browser
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: node26-browser-results
+          path: browser-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  node26-demo:
+    name: node26-demo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run typecheck:demo
+      - run: npm run build:demo
