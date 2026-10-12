@@ -6257,7 +6257,10 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 **P-24 Bundle-size baseline and budget**
 
 - Scope: size-limit setup, an optional CSS minifier, the baseline measurement, the budget file and the blocking `size` job.
-- **Status: in progress.** D0, S1 and S2 are accepted, and S3 is this record, on the local branch `feat/p24-size-budget`, which is not yet pushed. The `size` job has not run on GitHub, and it is not a required check. P-24 is not complete: what remains is listed under Pending below.
+- **Status: technical work done; administrative closeout pending.** D0 and S1 to S4 are done. PR #39 was merged into `v2` (`c6a65f0`); its post-merge run passed after one controlled, browser-only retry; and `size` is a required check in ruleset 24353657 (S4). Issue #18 stays open, with Project #8 status In Progress, until this record is merged and the maintainer closes it (the post-merge record, below).
+
+  (The S3 status, kept for the record: D0, S1 and S2 accepted, S3 on the unpushed local branch `feat/p24-size-budget`; the `size` job had not run on GitHub and was not a required check.)
+
 - **Starting point (D0, 2026-10-12):** `v2` and `origin/v2` at `5398386`, clean. The post-merge run `38242171096` of PR #38 passed all seven jobs. Ruleset 24353657 requires `quality`, `test`, `build-package`, `demo` and `browser` (GitHub Actions, 15368). The build had no size measurement: `tsup` emits an unminified ESM `dist/index.js` with `"use client"`, a source map and declarations, and `build:css` copies `src/styles.css` to `dist/` byte for byte.
 - **Decisions locked at D0** (approved by the maintainer on 2026-10-12):
   1. **Tooling:** `size-limit`, `@size-limit/file` and `@size-limit/esbuild` 14.2.0, each pinned exactly, configured in a dedicated `.size-limit.json`. Not `@size-limit/preset-small-lib`, which now bundles with rolldown.
@@ -6296,7 +6299,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   | `dist/index.js` as shipped, unminified     | 67,221 raw   | 17,428   | 15,222     |
   | `styles.css` minified by esbuild (no plan) | 9,663        | 2,314    | 2,004      |
 
-- **Slice records.** S1 and S2 were reviewed and accepted by the maintainer on 2026-10-12.
+- **Slice records.** S1 to S3 were reviewed and accepted by the maintainer on 2026-10-12; S4 is in the post-merge record.
   - **S1, tooling, baseline and budget (done, `7b8535b`).**
     - It adds the three exact dev dependencies, the script `"size": "size-limit"` and `.size-limit.json` with the five checks and their limits. The lockfile change is additions only: the three packages, `nanospinner` 1.2.2, and esbuild 0.28.2 with its `@esbuild/*` platform packages, nested under `@size-limit/esbuild`. `lilconfig` 3.1.3 was already present.
     - **Positive evidence:** after a clean `npm ci --ignore-scripts` and `npm run build`, all five checks pass, and two `--json` runs give identical output. A bundle saved with `--save-bundle` references only `react` (9 times) and `react/jsx-runtime` (3 times) as externals and contains no React code; the library never imports `react-dom`. The CSS figures equal gzip 9 and brotli 11 of the raw 24,893-byte `dist/styles.css`, with all its comments, and esbuild wrote no CSS output.
@@ -6306,8 +6309,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - One new job, `size`, in `ci.yml`, between `build-package` and `browser`: `ubuntu-24.04`, 10 minutes, the SHA-pinned checkout (no persisted credentials) and setup-node (Node 24, npm cache), `npm ci --ignore-scripts --no-audit --no-fund`, `npm run build` and `npm run size`. It has no `name`, `needs`, `if` or `permissions` of its own, so it reports the `size` context and inherits `contents: read`. It runs on the existing `push`, `pull_request` and `workflow_dispatch` triggers.
     - **Evidence:** the parsed workflow's triggers, permissions, concurrency, `env` and six existing jobs are deep-equal to `origin/v2`, and `size` is the only context of that name. The job's steps, run locally from a clean install, pass all five checks. Prettier and `git diff --check` are clean.
     - **Limits:** the job has not run on GitHub yet. actionlint was not run.
-  - **S3, this record (awaiting review).** Documentation only.
-- **Acceptance trace:**
+  - **S3, this record (done, `9a462cf`).** Documentation only.
+- **Acceptance trace** (as at S3; the final trace is in the post-merge record below):
 
   | Requirement                        | Evidence or blocking step                                                                        | Status                                                                  |
   | ---------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
@@ -6319,6 +6322,9 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 - **Limits and carry-forwards:**
   - **Local evidence only.** Every measurement so far ran on WSL2, not on GitHub's `ubuntu-24.04` runner. The first CI run must reproduce the five values; if one differs, the CI value is recorded as the baseline, and any limit change is a reviewed change to `.size-limit.json`.
+
+    (Annotation, post-merge: CI on `ubuntu-24.04` reproduced the baseline. Four values are byte-exact and the minified one agrees within the CLI's rounding; see the post-merge record.)
+
   - **The require shim.** The esbuild plugin sets no `format`, so esbuild emits an IIFE and turns the external `react` imports into a small `require` shim. It adds a constant of about 249 B minified, 104 B gzip and 77 B brotli to each JS figure, and size-limit corrects for it only in `import` checks. The budget includes it. P-26 accounts for it if a README claim needs the library's own size.
   - **CSS labels.** size-limit's human-readable output describes the CSS checks as "minified and gzipped" or "brotlied". That wording is generic: the CSS is measured as shipped, unminified (S1).
   - **Individual imports** are informational only (decision 6).
@@ -6331,6 +6337,70 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - the merge and a green post-merge run on `v2`;
   - **S4 (administrative, separate maintainer approval):** adding `size` to ruleset 24353657's required checks once the post-merge run is green, by one `PUT` built from the configuration fetched immediately before, keeping the five existing checks unchanged, as for `browser` (Issue #25);
   - a post-merge record, closing Issue #18, and updating the Project and the roadmap.
+
+  (Annotation, post-merge: the PR, the merge with its post-merge run and S4 are done, and this is the post-merge record. Closing Issue #18, the Project's final status and the roadmap remain; see below.)
+
+- **Post-merge record (2026-10-12).** The maintainer approved each step.
+  - **Kinds of evidence.** This record keeps five kinds apart:
+    - **local measurements:** S1's `size-limit --json` on WSL2, which are exact bytes;
+    - **CI measurements:** the `size` job's human-readable output on `ubuntu-24.04`. It prints exact bytes only when a margin under the limit is below 1 kB, so four values are exact and the minified one is rounded;
+    - **rounded values,** marked as such;
+    - **the required-check configuration** as GitHub returned it after S4;
+    - **the administrative closeout** that is still pending.
+  - **The PR:** [PR #39](https://github.com/ahlgren1234/react-elegant-toasts/pull/39), "feat: add P-24 bundle-size budgets and CI gate" (`Refs #18`), from `feat/p24-size-budget` at `9a462cf` (S1 `7b8535b`, S2 `2b95dcf`, S3 `9a462cf`). It changed exactly `.github/workflows/ci.yml`, `.size-limit.json`, `docs/V2_PLAN.md`, `package-lock.json` and `package.json`, all additions.
+  - **The PR's CI:** run `38245828597` (`pull_request`, attempt 1) passed all eight jobs: `quality`, `test (react 18)`, `test (react 19)`, `test`, `build-package`, `size`, `browser` and `demo`. GitGuardian Security Checks passed. The runner was `ubuntu-24.04`, image 20261004.327.1, with Node 24.21.0. `browser`: 300 tests, 280 passed and 20 skipped, with 0 failed, flaky or retried.
+  - **The `size` job in CI** (the same on the PR run and on the post-merge run's attempt 1), against the approved limits:
+
+    | Check               | CI output                           | CI bytes               | Local (S1) | Limit  | Result |
+    | ------------------- | ----------------------------------- | ---------------------- | ---------- | ------ | ------ |
+    | ESM entry, minified | 32.38 kB, "1.72 kB less than limit" | rounded: 32,375–32,384 | 32,382     | 34,100 | pass   |
+    | ESM entry, gzip     | "615 B less than limit"             | 11,785 (exact)         | 11,785     | 12,400 | pass   |
+    | ESM entry, brotli   | "595 B less than limit"             | 10,705 (exact)         | 10,705     | 11,300 | pass   |
+    | styles.css, gzip    | "416 B less than limit"             | 7,984 (exact)          | 7,984      | 8,400  | pass   |
+    | styles.css, brotli  | "410 B less than limit"             | 6,790 (exact)          | 6,790      | 7,200  | pass   |
+
+    The exact CI bytes are the limit minus the printed margin. The minified value is consistent with 32,382 but is not proven to the byte in CI. Its gzip and brotli, which are taken from the same minified bundle, match exactly, and the tsup output sizes match. The `size` step printed no warnings.
+
+  - **The merge:** PR #39 was merged into `v2` with a merge commit, pinned to its head (`--match-head-commit 9a462cf`), on 2026-10-12 at 12:09:06 UTC: `c6a65f0`, with parents `5398386` and `9a462cf`. Its tree is identical to `9a462cf`. The source branch was kept.
+  - **Post-merge push CI:** run `38247222805` (`push`, `v2`, head `c6a65f0`) on `ubuntu-24.04` (image 20261004.327.1, Node 24.21.0, Playwright 1.63.0 with WebKit 26.6, playwright webkit v2359).
+    - **Attempt 1:**
+      - seven jobs passed, `size` among them, with the values above;
+      - `browser` (job `114804042022`) failed with **279 passed, 1 failed, 20 skipped** and zero retries (D2-11);
+      - the failing test was WebKit, `browser/tests/swipe-motion.spec.ts:508`, "CF-35: swipe and repositioning compose with no jump › a reposition during the snap-back keeps X", at its final-rest assertion (line 537, `toBeCloseTo(0, 0)`);
+      - the last settling sample's X was **0.718209 px**, against an allowed difference of < 0.5 px. The test's earlier assertions passed.
+    - **Attempt 2 (one controlled retry of the failed job only, approved by the maintainer):**
+      - `browser` (job `114808545344`) passed with **280 passed, 20 skipped**, and 0 failed, flaky or retried, on the same image and WebKit build;
+      - the other seven jobs in attempt 2 are attempt 1's results, carried over with the same start times and runners. They were not rerun.
+      - The run's final conclusion is success.
+    - **Evidence of the failure,** kept outside the repository and read-only: `~/p24-diagnostics/2026-10-12-cf35-snapback-postmerge/`. It holds the `browser-results` artifact 11746119520 (sha256 `db4a27f8b5e1500476da47bbac9df744a278d3cfd3fad6fb85bb4a2b6ca57772`, equal to GitHub's digest; the HTML report, screenshot, `error-context.md` and `trace.zip`), the logs and metadata of both attempts, and checksums.
+    - **Status:** the failure is unexplained. It is neither a fixed defect nor an established flake. The identical tree passed on the PR run and on the retry. The trace has not been decoded, and a product cause has not been ruled out. The investigation is Issue #40, separate from P-24, and its scope requires examining the trace and the animation lifecycle before any change.
+  - **S4, the `size` required check (done, 2026-10-12).** The maintainer approved it after reviewing the post-merge evidence.
+    - **The change:** one `PUT` to ruleset 24353657 ("v2 protection"). The payload was built from the configuration fetched immediately before. That configuration matched D0's, including its `updated_at` (`2026-10-12T08:39:00.791+02:00`), which was checked again just before the `PUT`. The only difference is one entry added to the required status checks: `size`, with `integration_id` 15368 (GitHub Actions).
+    - **Verified after the update** (`updated_at` `2026-10-12T14:33:45.194+02:00`). The ruleset equals its earlier configuration plus that entry, field for field:
+      - six required contexts: `quality`, `test`, `build-package`, `demo`, `browser` and `size`, all 15368;
+      - `strict_required_status_checks_policy` still `true`, and `do_not_enforce_on_create` still `false`;
+      - `enforcement` still `active`, `bypass_actors` still empty, and `current_user_can_bypass` still `never`;
+      - the target still `refs/heads/v2` only.
+    - **The effective rules on `v2`** (`GET /rules/branches/v2`) come from this ruleset only: deletion, non-fast-forward, and the six required checks.
+    - **Evidence:** `~/p24-diagnostics/2026-10-12-s4-ruleset/` holds the ruleset before and after, the effective rules, the payload and the response.
+    - **Not tested:** a deliberately failing `size` run, which was not authorised (decision 7). That `size` blocks rests on the verified configuration and S1's local negative evidence.
+    - **Project #8:** Issue #18's Status was moved from Backlog to In Progress. Priority (Medium) and Phase (P-24) are unchanged.
+  - **The acceptance trace, final:**
+
+    | Requirement                        | Evidence                                                                                                                                  | Status                                                                                                    |
+    | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+    | AC-PKG-7                           | `size` passed all five budgets on PR run `38245828597` and on post-merge run `38247222805` (attempt 1), with four values byte-exact in CI | **met**                                                                                                   |
+    | AC-CI-1, §28 `size`                | the blocking `size` job, required in ruleset 24353657 since S4; it fails on an exceeded limit or a missing file (S1, local)               | **met for P-24's part**, by configuration; no live failing CI run (decision 7)                            |
+    | §33, budget changes are reviewed   | the limits live only in `.size-limit.json`, and CI passes no `--limit`                                                                    | **met**                                                                                                   |
+    | P-26, the README size claim (D-35) | the measurement method above; S1's exact local values, which CI reproduced (the minified one within the CLI's rounding)                   | carry-forward to P-26, which must state the `require`-shim caveat if a claim needs the library's own size |
+    | P-28, full gates before release    | `npm run build` and `npm run size`, as in the `size` job                                                                                  | carry-forward: P-28's release workflow keeps the `size` gate, and the gate stays required                 |
+
+  - **Carry-forwards,** in addition to those listed above:
+    - **CF-35 snap-back final-rest assertion (Issue #40):** open and separate from P-24. No retry, tolerance or sleep change is made without the evidence its scope requires.
+    - **Exact CI bytes:** the CI job prints the human-readable report only. Printing `size-limit --json` as well would make every CI value byte-exact. That is a possible later improvement, needing a reviewed CI change, and is not part of P-24.
+    - **Node 26 (Issue #24) and Ubuntu 26.04 (Issue #37)** stay separate. A different Node zlib or a different runner image can move the compressed figures slightly; the headroom is described under Drift above.
+    - **Tree-shaking:** unchanged, outside P-24, as recorded above.
+  - **Pending, for the maintainer, after this record is merged into `v2`:** closing Issue #18, moving its Project #8 item to Done, and updating the roadmap (Issue #28). Until then, Issue #18 stays open and its Project status stays In Progress.
 
 ### Track F: Documentation and release
 
