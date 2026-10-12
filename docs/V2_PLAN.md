@@ -5817,7 +5817,12 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - Test `<Activity>`, or whichever React 19 lifecycle hides content while keeping its state, effects or DOM.
   - The record of where focus was before the hotkey must be cleared when ownership or the lifecycle changes, also when effects or DOM are kept. A kept effect must never leave a stale record for Escape to return to.
   - Hiding a toast and showing it again must not run removal restoration, which runs only when a toast starts to exit.
-- **Status: S1 to S8 done; S9 in progress.** D0, the architecture review and decision record, is done (recorded below). The maintainer accepted the final D0 review and approved its decisions, with the clarifications recorded in them, at S0. S0 recorded them on `feat/p23-compat-ssr`, branched from `v2` at `2e6bdcc` (`ded3de3`, documentation only). S1 to S8 are done, each accepted by the maintainer, with two approved hardening slices, S4-H (a production fix) and S7-H (a test-harness fix); they are recorded below under "Slice records". S9.0 (evidence recovery) and S9.1 (this reconciliation) are done. What remains of S9 is the phase PR (#32, a draft against `v2`), its CI, the merge into `v2` with a merge commit, a green post-merge push CI and the post-merge record. Issue #17 stays open until then.
+- **Status: complete.**
+  - P-23 was merged into `v2` through PR #32 with a merge commit, `125630a` (parents `2e6bdcc` and `5c7f4ae`). Its post-merge push CI passed (the post-merge record, below).
+  - Its acceptance work is complete, as the S9 reconciliation and the post-merge record give it. The carry-forwards stay where they are listed below.
+  - Administrative closure is still pending until this post-merge record is merged into `v2`: closing Issue #17, and updating the Project and the roadmap.
+  - The history follows.
+- **Status at `5c7f4ae`, before the merge: S1 to S8 done; S9 in progress.** D0, the architecture review and decision record, is done (recorded below). The maintainer accepted the final D0 review and approved its decisions, with the clarifications recorded in them, at S0. S0 recorded them on `feat/p23-compat-ssr`, branched from `v2` at `2e6bdcc` (`ded3de3`, documentation only). S1 to S8 are done, each accepted by the maintainer, with two approved hardening slices, S4-H (a production fix) and S7-H (a test-harness fix); they are recorded below under "Slice records". S9.0 (evidence recovery) and S9.1 (this reconciliation) are done. What remains of S9 is the phase PR (#32, a draft against `v2`), its CI, the merge into `v2` with a merge commit, a green post-merge push CI and the post-merge record. Issue #17 stays open until then.
 - Acceptance: P-23 completes AC-PKG-2 (the Next.js part), AC-PKG-4 (the Next.js part), AC-PKG-5 (React 19), AC-PKG-8 and AC-PKG-9 (latest TypeScript and `@types/react` 19), and turns `test` into the React 18/19 matrix for AC-CI-1 (§28). Every other criterion must not regress under either React version. D0 changes no criterion and no normative text in §23 to §28 or §36.
 - **Starting point (the D0 review, at `2e6bdcc`, 2026-10-10 and 2026-10-11):**
   - **Repository:** `v2` and `origin/v2` at `2e6bdcc`, clean. Issue #16 (P-22) is closed, Issue #17 (P-23) is open, and Issue #24 (the Node 26 decision) is open. The last push CI on `v2` (run `38063637185`, head `2e6bdcc`) passed all five jobs; on the run before it, `test` took about 42 s, `build-package` about 19 s and `browser` about 8 minutes.
@@ -6054,6 +6059,61 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - The per-leg fixture ignores (D0-3, D0-4, D0-5) and N1's are unchanged.
     - React minor and patch updates are deliberately left as they are, and so is the grouping. Under the exact root pins, a grouped minor update would fail the version checks of R19 and `browser` until `ci.yml` is updated. That fails closed, and any change to it is deferred (carry-forwards).
 
+- **Post-merge record (S9 completion).** The maintainer approved each step on 2026-10-11.
+  - **S9.2, the reconciliation through CI:**
+    - `5c7f4ae` (S9.1) was pushed as a fast-forward.
+    - PR run `38147179544` (`pull_request`, attempt 1, head `5c7f4ae`) passed all seven jobs, GitGuardian and GitHub's Dependabot configuration check:
+      - R18: 1,703 tests;
+      - R19: 1,712 tests;
+      - `browser`: 280 passed and 20 named skips, with no failed, flaky or retried test.
+  - **The PR:** PR #32 was given its final title, "P-23: Compatibility and SSR verification", and its final description (`Refs #17`), and marked ready for review. Marking it ready started no CI run.
+  - **The merge:** PR #32 was merged into `v2` on 2026-10-11 at 15:14:41 UTC.
+    - It used a merge commit, `125630a39fd5cda5cde5c18c96c63696fd21227a` (parents `2e6bdcc` and `5c7f4ae`), pinned to the reviewed head with `--match-head-commit`.
+    - The full branch history is kept, and `feat/p23-compat-ssr` was not deleted.
+    - The `v2` ruleset (no review rule; the four strict required checks, all green) was satisfied, not bypassed.
+  - **Post-merge push CI:** run `38150463252` (`push`, `v2`, head `125630a`, attempt 1) passed, with no rerun.
+
+    | Job                     | Job ID         | Result  | Evidence from the log                                                                                                                                                                  |
+    | ----------------------- | -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | `quality`               | `114502674448` | success | —                                                                                                                                                                                      |
+    | `test (react 18)`       | `114502674357` | success | exactly 18.3.1, 18.3.1, 18.3.18 and 18.3.5; 41 files, **1,703** tests                                                                                                                  |
+    | `test (react 19)`       | `114502674290` | success | all four at 19.3.0; 41 files, **1,712** tests                                                                                                                                          |
+    | `test` (the aggregator) | `114502863233` | success | `test-react: success`                                                                                                                                                                  |
+    | `build-package`         | `114502674334` | success | F1 to F4 and N1 at their pinned versions; 8 native Node ESM SSR passes; 25 blocked deep imports; the N1 Chromium check; "Package validation passed (F1, F2, F3, F4, N1)"               |
+    | `browser`               | `114502674368` | success | React 19.3.0 asserted; **280 passed, 20 named skips, 0 failed, 0 flaky, 0 retries** (6.7 min); Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6 (the `webkit-ubuntu-24.04` build) |
+    | `demo`                  | `114502674188` | success | —                                                                                                                                                                                      |
+    - GitHub's Dependabot configuration check also passed on `125630a`.
+    - **Runner:** every job ran on `ubuntu-24.04`, image version 20261004.327.1, the image of all the earlier P-23 evidence. The Ubuntu 26 migration carry-forward is unchanged.
+    - **GitGuardian** is a GitHub App check on pull requests only. It passed on PR #32's final head, `5c7f4ae`, as on its earlier heads. It does not run on merge commits, and it ran on none of P-22's (`a4a541b`, `1046e7c`) or on `2e6bdcc`.
+
+  - **The acceptance trace, final.** Every row of the S9 acceptance evidence holds on the merged code. The same steps passed on `125630a` in run `38150463252` as in run `38144520183`:
+    - the F1 to F4 and N1 checks in `build-package`;
+    - both legs and the aggregator;
+    - the `browser` suite.
+
+    No status changes: AC-CI-1 is met for P-23's part, with `browser` still not a required check. The P-16 carry-over is met in jsdom, with real-browser focus on hiding still open.
+
+  - **Carry-forwards:** unchanged, as listed below, apart from the CF-6 hardening that the incident below adds. Nothing deferred was performed here.
+  - **CF-6 CI incident on this record's PR (PR #33, 2026-10-12).** This is a permanent record of the failure. Nothing changed between the two attempts.
+    - **Attempt 1, failed.** Run `38208379251` (`pull_request`, head `f1a2780`, which changes only this document) failed in `browser` job `114676827672`: **279 passed, 1 failed, 20 skipped**. Every other job succeeded.
+      - The failing test was WebKit, `focus.spec.ts:260`, "CF-6: … to the previous toast (§18 step 2)".
+      - It failed at `focus.spec.ts:245`, which requires at least one sampled frame showing the closing toast `inert`.
+      - **What the trace shows:** a sampled frame at 368 ms with `close:b` focused and the toast visible, `Enter` pressed just after, then no animation frame until 495 ms, **a 127 ms gap**. By then focus was on `toast:a` and the toast had been removed.
+      - The 120 ms exit, with `inert` throughout, fell entirely inside the gap. Removal came through the normal `animationend` path, not the 220 ms fallback.
+      - Every sampled frame showed focus on the §18 target, and the page ended in the expected state.
+      - The frame-independent event-log checks of the CF-6 ordering come after line 245, so they did not run in this attempt.
+    - **Attempt 2, passed.** Only the failed job was rerun, once, with the maintainer's approval: `browser` job `114682082319` gave **280 passed, 20 skipped, 0 failed, 0 flaky, 0 retries**, with all three CF-6 tests passing in every engine. The same image (`ubuntu-24.04` 20261004.327.1) and the same browser builds were used. GitHub keeps attempt 1 in the run's history.
+    - **Focused local repeat:** the three CF-6 tests, WebKit only, `CI=1`, one worker, zero retries, `--repeat-each=100`, at `f1a2780`, on 2026-10-12.
+      - **300 of 300 passed:** 0 failed, flaky or retried.
+      - The traces show the largest gap between frames was 30 ms, and every run sampled the `inert` window in 7 or 8 frames.
+      - Local results show the tests pass on this host, not that the CI failure could not happen.
+    - **Assessment.** The evidence points to a timing-sensitive test observation, not a product regression, though it is not proof:
+      - line 245 needs an animation frame inside the 120 ms exit, so a stall in frame delivery on the runner longer than the exit fails it;
+      - at that line the test cannot tell a missing `inert` from a missed frame;
+      - nothing points to a production defect, and the commit under test changes no code.
+    - **Diagnostics,** outside the repository: `~/p23-diagnostics/2026-10-12-cf6-webkit/`, with attempt 1's trace, screenshot, report and log, attempt 2's log, and the local repeat with its frame analysis.
+    - **Follow-up:** the CF-6 test hardening (carry-forwards, below). It is pending and needs separate approval.
+  - **Pending, for the maintainer, after this record is merged into `v2`:** closing Issue #17, and updating the Project and the roadmap.
 - **Out of scope:** P-22's deferred manual work and limitations (MC-1, MC-7, real Safari's CF-12 and CF-13, and the P-26, P-29 and §37 carry-forwards), which stay where P-22 put them; the CF-35 sensitivity limits recorded by P-22, unchanged; the `size` job (P-24); the demo (P-25); the README and reference documentation (P-26); Node 26 (Issue #24); React floors other than 18.3.1 and 19.3.0; and a Pages Router fixture.
 - **Carry-forwards and pending actions:**
   - **Server Components and `toast()` (S7, then P-26).** §23 says that calling `toast()` from Server Components or server actions has no effect. Because the whole entry is a `"use client"` module, `toast` imported into a Server Component may be a client reference rather than the function, so the actual behaviour is unverified: it is neither assumed harmless nor assumed to throw. S7 investigates it outside the blocking fixture. If the observed behaviour differs from §23, P-26's documentation carries the correction, and any change to §23 itself is a separate decision. §23 is unchanged at D0.
@@ -6071,6 +6131,13 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Minor follow-ups, not blocking:**
     - `scripts/check-next-app.js` still reports "with no warning" even when it accepted the CI cache advisory.
     - The aggregator cannot detect a deleted matrix leg (S3).
+  - **CF-6 test hardening (pending; needs separate approval).** The CF-6 incident on PR #33 is recorded in the post-merge record.
+    - **The weakness.** CF-6's frame checks need an animation frame inside the 120 ms exit, so a stall in frame delivery can fail `focus.spec.ts:245` before the frame-independent event-log checks run.
+    - **The smallest candidate,** to be decided at approval:
+      - run the event-log checks first;
+      - then make the `inert`-frame check unable to pass or fail without observing anything, either by slowing the public exit token for CF-6 as the H2 tests do, or by requiring `inert` frames only when an exiting frame was sampled.
+    - **Not changed.** The frame checks themselves are kept: they are the only check that focus stays on the target in rendered frames while the toast is `inert`.
+    - **Ownership.** This is a change to P-22's suite, so it is a test-only slice with its own WebKit repeat and soak, like P-22's CF-35 correction (PR #30). P-23 does not make it.
   - **Administrative actions remaining for S9,** each needing the maintainer's approval:
     - PR #32 marked ready and given its final title;
     - its CI;
@@ -6078,6 +6145,8 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - the post-merge push CI;
     - a post-merge record, as P-22's was;
     - closing Issue #17 and updating the Project and the roadmap.
+
+    (Annotation, post-merge: the first five are done; see the post-merge record. Closing Issue #17 and updating the Project and the roadmap remain, after this record is merged into `v2`.)
 
 **P-24 Bundle-size baseline and budget**
 
