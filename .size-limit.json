@@ -1,0 +1,32 @@
+[
+  {
+    "name": "ESM entry, minified",
+    "path": "dist/index.js",
+    "limit": "34100 B",
+    "brotli": false
+  },
+  {
+    "name": "ESM entry, gzip",
+    "path": "dist/index.js",
+    "limit": "12400 B",
+    "gzip": true
+  },
+  {
+    "name": "ESM entry, brotli",
+    "path": "dist/index.js",
+    "limit": "11300 B"
+  },
+  {
+    "name": "styles.css, gzip",
+    "path": "dist/styles.css",
+    "limit": "8400 B",
+    "gzip": true,
+    "disablePlugins": ["@size-limit/esbuild"]
+  },
+  {
+    "name": "styles.css, brotli",
+    "path": "dist/styles.css",
+    "limit": "7200 B",
+    "disablePlugins": ["@size-limit/esbuild"]
+  }
+]
