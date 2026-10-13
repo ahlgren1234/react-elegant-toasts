@@ -540,7 +540,8 @@ body {
 }
 
 .d-section__lede kbd,
-.d-boundary kbd {
+.d-boundary kbd,
+.d-keys kbd {
   padding: 1px 6px;
   border: 1px solid var(--d-border);
   border-block-end-width: 2px;
@@ -985,6 +986,8 @@ body {
 }
 
 .d-recipe__body code,
+.d-a11y code,
+.d-keys code,
 .d-log code,
 .d-section__lede code,
 .d-field__hint code {
@@ -1131,6 +1134,182 @@ body {
 
 .d-boundary__list li + li {
   margin-block-start: var(--d-space-1);
+}
+
+/*
+ * Accessibility (P-25 S6a): the practice bar, the four topics and the labels recipe. Logical
+ * properties only, so the section mirrors in RTL; nothing in it moves.
+ */
+.d-a11y-try {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--d-space-3) var(--d-space-5);
+  margin-block-end: var(--d-space-6);
+  padding: var(--d-space-4);
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius-md);
+  background: var(--d-surface);
+}
+
+.d-a11y-try__text {
+  flex: 1 1 20rem;
+  margin: 0;
+  color: var(--d-text-muted);
+}
+
+.d-a11y {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--d-space-5);
+}
+
+@media (min-width: 1024px) {
+  .d-a11y {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--d-space-6) var(--d-space-7);
+  }
+}
+
+.d-a11y__topic {
+  min-width: 0;
+  padding-block-start: var(--d-space-5);
+  border-block-start: 1px solid var(--d-border);
+}
+
+.d-a11y__body,
+.d-a11y__note {
+  margin: var(--d-space-2) 0 0;
+  color: var(--d-text-muted);
+}
+
+.d-a11y__note {
+  margin-block-start: var(--d-space-4);
+  font-size: 0.875rem;
+}
+
+.d-a11y a {
+  color: var(--d-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.d-a11y__list {
+  margin: var(--d-space-2) 0 0;
+  padding-inline-start: var(--d-space-5);
+  color: var(--d-text-muted);
+}
+
+.d-a11y__list li + li {
+  margin-block-start: var(--d-space-1);
+}
+
+.d-a11y__subtitle {
+  margin: var(--d-space-4) 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.d-a11y__status {
+  margin: var(--d-space-3) 0 0;
+  padding: var(--d-space-2) var(--d-space-3);
+  border-radius: var(--d-radius-sm);
+  background: var(--d-sunken);
+  font-size: 0.875rem;
+}
+
+/* Each key or situation above its effect; side by side once there is room. */
+.d-keys {
+  margin: var(--d-space-3) 0 0;
+}
+
+.d-keys__row {
+  display: grid;
+  gap: var(--d-space-1) var(--d-space-4);
+  padding-block: var(--d-space-3);
+  border-block-start: 1px solid var(--d-border);
+}
+
+.d-keys__row:first-child {
+  border-block-start: 0;
+  padding-block-start: 0;
+}
+
+@media (min-width: 480px) {
+  .d-keys__row {
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+  }
+}
+
+.d-keys__term {
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.9;
+}
+
+.d-keys__text {
+  margin: 0;
+  color: var(--d-text-muted);
+}
+
+.d-a11y__table {
+  inline-size: 100%;
+  margin-block-start: var(--d-space-4);
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.d-a11y__caption {
+  margin-block-end: var(--d-space-2);
+  color: var(--d-text-muted);
+  text-align: start;
+}
+
+.d-a11y__table th,
+.d-a11y__table td {
+  padding: var(--d-space-2) var(--d-space-3);
+  border-block-end: 1px solid var(--d-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.d-a11y__table th:first-child,
+.d-a11y__table td:first-child {
+  padding-inline-start: 0;
+}
+
+.d-a11y__table thead th {
+  color: var(--d-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.d-a11y__table tbody th {
+  font-weight: 600;
+}
+
+/* The swipe hint is for touch screens only (P-25 S6a); the guidance above it is for everyone. */
+.d-a11y__touch-hint {
+  display: none;
+  margin: var(--d-space-4) 0 0;
+  padding: var(--d-space-2) var(--d-space-3);
+  border-inline-start: 3px solid var(--d-accent);
+  background: var(--d-accent-wash);
+  font-size: 0.875rem;
+}
+
+@media (pointer: coarse) {
+  .d-a11y__touch-hint {
+    display: block;
+  }
+}
+
+.d-a11y__labels {
+  margin-block-start: var(--d-space-7);
+  padding-block-start: var(--d-space-5);
+  border-block-start: 1px solid var(--d-border);
 }
 
 /* No page motion under reduced motion. Scoped to the page, so the toasts keep their own rules. */
