@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
 import { toast, type ToastTheme } from 'react-elegant-toasts';
-import { showToast } from '../utils/invoke';
+import { showBurst, showToast } from '../utils/invoke';
 import {
+  BURST_SIZE,
   DURATIONS,
+  MAX_VISIBLE_CHOICES,
   TOAST_TYPES,
   durationApplies,
+  persists,
   progressBlocker,
   toInvocation,
   toToasterSettings,
@@ -65,6 +68,7 @@ export function Playground({ config, onChange, theme }: PlaygroundProps) {
   );
   const hasDuration = durationApplies(config.type);
   const progressBlocked = progressBlocker(config);
+  const persistent = persists(config);
 
   return (
     <section id="playground" className="d-section" aria-labelledby="playground-heading">
@@ -103,6 +107,29 @@ export function Playground({ config, onChange, theme }: PlaygroundProps) {
             </fieldset>
 
             <PositionPicker value={config.position} onChange={value => set('position', value)} />
+
+            <fieldset className="d-field" aria-describedby="max-visible-hint">
+              <legend className="d-field__legend">Visible per position</legend>
+              <div className="d-segmented d-segmented--fill">
+                {MAX_VISIBLE_CHOICES.map(value => (
+                  <label key={value} className="d-segmented__option">
+                    <input
+                      type="radio"
+                      name="max-visible"
+                      value={value}
+                      className="d-visually-hidden"
+                      checked={config.maxVisible === value}
+                      onChange={() => set('maxVisible', value)}
+                    />
+                    <span className="d-segmented__face">{value}</span>
+                  </label>
+                ))}
+              </div>
+              <p id="max-visible-hint" className="d-field__hint">
+                More toasts wait their turn, oldest first. Lowering the limit closes nothing: it
+                applies as shown toasts leave.
+              </p>
+            </fieldset>
 
             <fieldset className="d-field">
               <legend className="d-field__legend">Content</legend>
@@ -187,11 +214,26 @@ export function Playground({ config, onChange, theme }: PlaygroundProps) {
               <button
                 type="button"
                 className="d-button d-button--secondary"
+                onClick={() => showBurst(invocation)}
+                aria-describedby={persistent ? 'burst-hint' : undefined}
+              >
+                Show a burst
+              </button>
+              <button
+                type="button"
+                className="d-button d-button--secondary"
                 onClick={() => toast.dismiss()}
               >
                 Dismiss all
               </button>
             </div>
+            {/* Persistent toasts keep their slots, so a burst of them never promotes on its own. */}
+            {persistent && (
+              <p id="burst-hint" className="d-field__hint">
+                These toasts stay until closed, so the rest of a burst of {BURST_SIZE} waits for a
+                free slot. Close one, or use Dismiss all.
+              </p>
+            )}
           </div>
 
           <div className="d-playground__code">

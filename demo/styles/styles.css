@@ -637,16 +637,17 @@ body {
   border-block-start: 1px solid var(--d-border);
 }
 
+/* The two ways to show toasts side by side, and the reset below them, full width. */
 .d-playground__actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--d-space-2);
   padding-block-start: var(--d-space-4);
   border-block-start: 1px solid var(--d-border);
 }
 
-.d-playground__actions > .d-button--primary {
-  flex: 1 1 auto;
+.d-playground__actions > .d-button:last-child {
+  grid-column: 1 / -1;
 }
 
 /* Type choices: native radios, one per toast type. */

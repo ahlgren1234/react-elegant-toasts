@@ -2,10 +2,15 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import type { ToastPosition, ToastTheme } from 'react-elegant-toasts';
 import {
+  BURST_SIZE,
   DEFAULT_CONFIG,
   DURATIONS,
+  MAX_VISIBLE_CHOICES,
   TOAST_TYPES,
+  burstMessage,
+  persists,
   progressBlocker,
+  toToastOptions,
   toInvocation,
   toToasterSettings,
   type PlaygroundConfig,
@@ -30,8 +35,105 @@ const snippet = (overrides: Partial<PlaygroundConfig> = {}, theme: ToastTheme = 
 /** The body of `showToast()`, without the surrounding function. */
 const call = (overrides: Partial<PlaygroundConfig> = {}) => {
   const text = snippet(overrides);
-  return text.slice(text.indexOf('function showToast() {\n') + 23, text.indexOf('}\n\nexport'));
+  return text.slice(
+    text.indexOf('function showToast() {\n') + 23,
+    text.indexOf('}\n\nfunction showBurst')
+  );
 };
+
+/** The body of `showBurst()`'s loop, without the loop. */
+const burstCall = (overrides: Partial<PlaygroundConfig> = {}) => {
+  const text = snippet(overrides);
+  const start = text.indexOf('; i++) {\n') + 9;
+  return text.slice(start, text.indexOf('  }\n}\n\nexport'));
+};
+
+interface RecordedCall {
+  method: string;
+  message: unknown;
+  options: Record<string, unknown> | undefined;
+}
+
+/**
+ * Runs the snippet's `showToast()` or `showBurst()` against a recording `toast`, so a test sees the
+ * calls the code shown would make. The snippet is compiled with TypeScript; nothing from the
+ * package is imported.
+ */
+function runSnippet(source: string, entry: 'showToast' | 'showBurst'): RecordedCall[] {
+  const calls: RecordedCall[] = [];
+  const record =
+    (method: string) =>
+    (message: unknown, options?: Record<string, unknown>): void => {
+      calls.push({ method, message, options });
+    };
+  const fakeToast = Object.assign(record('default'), {
+    success: record('success'),
+    error: record('error'),
+    warning: record('warning'),
+    info: record('info'),
+    loading: record('loading'),
+  });
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
+  });
+  const modules: Record<string, unknown> = {
+    'react-elegant-toasts': { toast: fakeToast, Toaster: () => null },
+    'react-elegant-toasts/styles.css': {},
+    'react/jsx-runtime': { jsx: () => null, jsxs: () => null, Fragment: null },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const load = new Function(
+    'require',
+    'exports',
+    `${outputText}\nreturn { showToast, showBurst };`
+  ) as (
+    require: (id: string) => unknown,
+    exports: object
+  ) => Record<'showToast' | 'showBurst', () => void>;
+  load(id => modules[id], {})[entry]();
+  return calls;
+}
+
+interface NormalCall {
+  method: string;
+  message: unknown;
+  options: Record<string, unknown>;
+  /** The action's label and the toasts its click shows, as [method, message] pairs. */
+  click?: { label: unknown; shows: unknown[][] };
+}
+
+/** The snippet's calls, with each action's click run against the same recording `toast`. */
+function normaliseSnippetCalls(calls: RecordedCall[]): NormalCall[] {
+  return [...calls].map(({ method, message, options }) => {
+    const { action, ...rest } = options ?? {};
+    if (!action) return { method, message, options: rest };
+    const { label, onClick } = action as { label: unknown; onClick: () => void };
+    const before = calls.length;
+    onClick();
+    const shows = calls.splice(before).map(call => [call.method, call.message]);
+    return { method, message, options: rest, click: { label, shows } };
+  });
+}
+
+/** The calls the demo makes for `config`, built as invoke.ts builds them. */
+function demoCalls(config: PlaygroundConfig, burst: boolean): NormalCall[] {
+  const invocation = toInvocation(config);
+  const messages = burst
+    ? Array.from({ length: BURST_SIZE }, (_, i) => burstMessage(invocation.message, i + 1))
+    : [invocation.message];
+  return messages.map(message => {
+    const shows: unknown[][] = [];
+    const { action, ...rest } = toToastOptions(invocation, shown => shows.push(['default', shown]));
+    const options = rest as Record<string, unknown>;
+    if (!action) return { method: invocation.type, message, options };
+    action.onClick(undefined as never);
+    return { method: invocation.type, message, options, click: { label: action.label, shows } };
+  });
+}
 
 describe('snippet generation', () => {
   it('writes the whole example for the default configuration', () => {
@@ -45,11 +147,20 @@ function showToast() {
   });
 }
 
+function showBurst() {
+  for (let i = 1; i <= 8; i++) {
+    toast.success(\`Profile saved (\${i} of 8)\`, {
+      description: 'Changes are synced to all of your devices.',
+    });
+  }
+}
+
 export function App() {
   return (
     <>
       <Toaster />
       <button onClick={showToast}>Show toast</button>
+      <button onClick={showBurst}>Show a burst</button>
     </>
   );
 }
@@ -200,23 +311,44 @@ export function App() {
       description: 'C:\\temp',
       action: { label: "It's fine", result: 'Line one\nline two' },
     };
-    const text = snippetText(snippetTokens(invocation, { position: 'top-right', theme: 'system' }));
+    const text = snippetText(
+      snippetTokens(invocation, { position: 'top-right', theme: 'system', maxVisible: 4 })
+    );
     expect(text).toContain("toast.info('Don\\'t panic', {");
     expect(text).toContain("description: 'C:\\\\temp',");
     expect(text).toContain("label: 'It\\'s fine',");
     expect(text).toContain("onClick: () => toast('Line one\\nline two'),");
   });
 
+  it('escapes the burst message as template-literal text', () => {
+    const message = 'Tick ` ${x} \\ $ { } \n\r\u2028\u2029 end';
+    const invocation: ToastInvocation = { type: 'default', message };
+    const text = snippetText(
+      snippetTokens(invocation, { position: 'top-right', theme: 'system', maxVisible: 4 })
+    );
+    expect(text).toContain(
+      'toast(`Tick \\` \\${x} \\\\ $ { } \\n\\r\\u2028\\u2029 end (${i} of 8)`);'
+    );
+    // Run, the snippet shows exactly the demo's messages.
+    expect(runSnippet(text, 'showBurst').map(call => call.message)).toEqual(
+      Array.from({ length: BURST_SIZE }, (_, i) => burstMessage(message, i + 1))
+    );
+  });
+
   it('marks strings, keywords and tags for highlighting', () => {
     const tokens = snippetTokens(toInvocation({ ...MINIMAL, action: true }), {
       position: 'bottom-left',
       theme: 'dark',
+      maxVisible: 2,
     });
     const of = (kind: string) => tokens.filter(t => t.kind === kind).map(t => t.text);
     expect(of('string')).toEqual([
       "'react-elegant-toasts'",
       "'react-elegant-toasts/styles.css'",
       "'Profile saved'",
+      "'Undo'",
+      "'Change undone'",
+      '`Profile saved (${i} of 8)`',
       "'Undo'",
       "'Change undone'",
       '"bottom-left"',
@@ -227,47 +359,224 @@ export function App() {
       'from',
       'import',
       'function',
+      'function',
+      'for',
+      'let',
       'export',
       'function',
       'return',
     ]);
-    expect(of('attribute')).toEqual(['position', 'theme', 'onClick']);
-    expect(of('tag')).toEqual(['<>', '<Toaster', '/>', '<button', '>', '</button>', '</>']);
+    expect(of('literal')).toEqual(['1', '8', '2']);
+    expect(of('attribute')).toEqual(['position', 'maxVisible', 'theme', 'onClick', 'onClick']);
+    expect(of('tag')).toEqual([
+      '<>',
+      '<Toaster',
+      '/>',
+      '<button',
+      '>',
+      '</button>',
+      '<button',
+      '>',
+      '</button>',
+      '</>',
+    ]);
   });
 
-  it('produces valid TSX for every combination of options', () => {
+  // The toast options and the Toaster props are written independently (`does not change the toast
+  // calls`, below), so each is swept in full with the other fixed, rather than as one product.
+  const expectValidTsx = (source: string) => {
+    const { diagnostics } = ts.transpileModule(source, {
+      fileName: 'App.tsx',
+      reportDiagnostics: true,
+      compilerOptions: { jsx: ts.JsxEmit.ReactJSX },
+    });
+    expect(diagnostics ?? [], source).toEqual([]);
+  };
+
+  it('produces valid TSX for every combination of toast options', () => {
     const flags = [false, true];
+    let checked = 0;
     for (const { value: type } of TOAST_TYPES) {
       for (const { value: duration } of DURATIONS) {
         for (const description of flags) {
           for (const action of flags) {
             for (const closeButton of flags) {
               for (const progress of flags) {
-                const source = snippet(
-                  {
-                    type,
-                    duration,
-                    description,
-                    action,
-                    closeButton,
-                    progress,
-                    position: 'bottom-center',
-                  },
-                  'dark'
+                expectValidTsx(
+                  snippet(
+                    {
+                      type,
+                      duration,
+                      description,
+                      action,
+                      closeButton,
+                      progress,
+                      maxVisible: 6,
+                      position: 'bottom-center',
+                    },
+                    'dark'
+                  )
                 );
-                const { diagnostics } = ts.transpileModule(source, {
-                  fileName: 'App.tsx',
-                  reportDiagnostics: true,
-                  compilerOptions: { jsx: ts.JsxEmit.ReactJSX },
-                });
-                expect(diagnostics ?? [], source).toEqual([]);
+                checked++;
               }
             }
           }
         }
       }
     }
+    expect(checked).toBe(288);
   });
+
+  it('produces valid TSX for every combination of Toaster props', () => {
+    const positions: ToastPosition[] = [
+      'top-left',
+      'top-center',
+      'top-right',
+      'bottom-left',
+      'bottom-center',
+      'bottom-right',
+    ];
+    const themes: ToastTheme[] = ['system', 'light', 'dark'];
+    let checked = 0;
+    for (const maxVisible of MAX_VISIBLE_CHOICES) {
+      for (const position of positions) {
+        for (const theme of themes) {
+          expectValidTsx(snippet({ maxVisible, position, action: true }, theme));
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBe(90);
+  });
+});
+
+describe('maxVisible', () => {
+  it('offers 1, 2, 3, 4 and 6, with 4 as the default', () => {
+    expect(MAX_VISIBLE_CHOICES).toEqual([1, 2, 3, 4, 6]);
+    expect(DEFAULT_CONFIG.maxVisible).toBe(4);
+  });
+
+  it.each([
+    [1, '<Toaster maxVisible={1} />'],
+    [2, '<Toaster maxVisible={2} />'],
+    [3, '<Toaster maxVisible={3} />'],
+    [4, '<Toaster />'],
+    [6, '<Toaster maxVisible={6} />'],
+  ] as const)('writes maxVisible %i on the Toaster', (maxVisible, expected) => {
+    expect(snippet({ maxVisible })).toContain(`      ${expected}\n`);
+  });
+
+  it('passes the same value to the Toaster', () => {
+    for (const maxVisible of MAX_VISIBLE_CHOICES) {
+      expect(toToasterSettings({ ...MINIMAL, maxVisible }, 'system').maxVisible).toBe(maxVisible);
+    }
+  });
+
+  it('writes the Toaster props in a fixed order', () => {
+    expect(snippet({ position: 'bottom-left', maxVisible: 6 }, 'light')).toContain(
+      '<Toaster position="bottom-left" maxVisible={6} theme="light" />'
+    );
+  });
+
+  it('does not change the toast calls', () => {
+    expect(call({ maxVisible: 1 })).toBe(call({ maxVisible: 4 }));
+    expect(burstCall({ maxVisible: 1 })).toBe(burstCall({ maxVisible: 4 }));
+  });
+});
+
+describe('burst', () => {
+  it('numbers eight toasts in order', () => {
+    expect(BURST_SIZE).toBe(8);
+    expect(Array.from({ length: BURST_SIZE }, (_, i) => burstMessage('Saved', i + 1))).toEqual([
+      'Saved (1 of 8)',
+      'Saved (2 of 8)',
+      'Saved (3 of 8)',
+      'Saved (4 of 8)',
+      'Saved (5 of 8)',
+      'Saved (6 of 8)',
+      'Saved (7 of 8)',
+      'Saved (8 of 8)',
+    ]);
+  });
+
+  it('writes the same call as the single toast, with the numbered message', () => {
+    const config = { description: true, action: true, duration: '10s', progress: true } as const;
+    const single = call(config);
+    const burst = burstCall(config);
+    expect(burst).toBe(
+      single
+        .split('\n')
+        .map(line => (line ? `  ${line}` : line))
+        .join('\n')
+        .replace("'Profile saved'", '`Profile saved (${i} of 8)`')
+    );
+  });
+
+  it('uses the current position through the Toaster, not per toast', () => {
+    const text = snippet({ position: 'bottom-center' });
+    expect(text).toContain('<Toaster position="bottom-center" />');
+    expect(burstCall({ position: 'bottom-center' })).not.toContain('position');
+  });
+
+  it('keeps loading toasts persistent, with no duration or progress', () => {
+    expect(burstCall({ type: 'loading', duration: '10s', progress: true })).toBe(
+      '    toast.loading(`Uploading report… (${i} of 8)`);\n'
+    );
+  });
+
+  it('writes the persistent duration on every toast of a persistent burst', () => {
+    expect(burstCall({ duration: 'persistent', progress: true })).toBe(
+      '    toast.success(`Profile saved (${i} of 8)`, {\n      duration: Infinity,\n    });\n'
+    );
+  });
+
+  it('knows which bursts keep their slots until closed', () => {
+    expect(persists({ ...MINIMAL, duration: '5s' })).toBe(false);
+    expect(persists({ ...MINIMAL, duration: '10s' })).toBe(false);
+    expect(persists({ ...MINIMAL, duration: 'persistent' })).toBe(true);
+    for (const { value: duration } of DURATIONS) {
+      expect(persists({ ...MINIMAL, type: 'loading', duration })).toBe(true);
+    }
+  });
+});
+
+describe("the snippet, run, makes the demo's calls", () => {
+  const flags = [false, true];
+  const configs: PlaygroundConfig[] = [];
+  for (const { value: type } of TOAST_TYPES) {
+    for (const { value: duration } of DURATIONS) {
+      for (const description of flags) {
+        for (const action of flags) {
+          for (const closeButton of flags) {
+            for (const progress of flags) {
+              configs.push({
+                ...MINIMAL,
+                type,
+                duration,
+                description,
+                action,
+                closeButton,
+                progress,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  it.each(['showToast', 'showBurst'] as const)(
+    '%s, for every combination of toast options',
+    entry => {
+      expect(configs).toHaveLength(288);
+      for (const config of configs) {
+        const source = snippet(config);
+        expect(normaliseSnippetCalls(runSnippet(source, entry)), JSON.stringify(config)).toEqual(
+          demoCalls(config, entry === 'showBurst')
+        );
+      }
+    }
+  );
 });
 
 describe('toInvocation', () => {
