@@ -539,7 +539,8 @@ body {
   color: var(--d-text-muted);
 }
 
-.d-section__lede kbd {
+.d-section__lede kbd,
+.d-boundary kbd {
   padding: 1px 6px;
   border: 1px solid var(--d-border);
   border-block-end-width: 2px;
@@ -984,7 +985,9 @@ body {
 }
 
 .d-recipe__body code,
-.d-log code {
+.d-log code,
+.d-section__lede code,
+.d-field__hint code {
   font-family: var(--d-font-mono);
   font-size: 0.875em;
 }
@@ -1080,6 +1083,54 @@ body {
 .d-code--comment {
   color: var(--d-text-muted);
   font-style: italic;
+}
+
+/* Custom toast (P-25 S5b): the recipe row, with both of its files and the responsibility split. */
+.d-custom__field {
+  margin-block-start: var(--d-space-4);
+}
+
+.d-custom__code {
+  display: grid;
+  gap: var(--d-space-4);
+  min-width: 0;
+}
+
+.d-boundary {
+  display: grid;
+  gap: var(--d-space-3);
+  margin-block-start: var(--d-space-5);
+}
+
+/* Side by side only while the recipe text spans the page; beside the code it is too narrow. */
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .d-boundary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.d-boundary__column {
+  padding: var(--d-space-3) var(--d-space-4);
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius-md);
+  background: var(--d-surface);
+}
+
+.d-boundary__title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.d-boundary__list {
+  margin: var(--d-space-2) 0 0;
+  padding-inline-start: var(--d-space-4);
+  color: var(--d-text-muted);
+  font-size: 0.875rem;
+}
+
+.d-boundary__list li + li {
+  margin-block-start: var(--d-space-1);
 }
 
 /* No page motion under reduced motion. Scoped to the page, so the toasts keep their own rules. */

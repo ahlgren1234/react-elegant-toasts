@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Toaster, type ToastTheme } from 'react-elegant-toasts';
+import { CustomToast } from './components/CustomToast';
 import { Hero } from './components/Hero';
 import { Lifecycle } from './components/Lifecycle';
 import { Playground } from './components/Playground';
@@ -30,6 +31,7 @@ export function App() {
           <Hero />
           <Playground config={config} onChange={setConfig} theme={theme} />
           <Lifecycle />
+          <CustomToast />
         </main>
         <SiteFooter />
       </div>
