@@ -31,6 +31,8 @@ export interface PlaygroundConfig {
   action: boolean;
   closeButton: boolean;
   duration: DurationChoice;
+  /** Kept while the progress bar cannot show, so it returns when it can (see progressBlocker). */
+  progress: boolean;
 }
 
 export const DEFAULT_CONFIG: PlaygroundConfig = {
@@ -40,6 +42,7 @@ export const DEFAULT_CONFIG: PlaygroundConfig = {
   action: false,
   closeButton: true,
   duration: '5s',
+  progress: false,
 };
 
 /** The `<Toaster />` defaults the snippet leaves out. */
@@ -96,6 +99,8 @@ export interface ToastInvocation {
   /** Only `false`: the close button is on by default. */
   closeButton?: false;
   duration?: number;
+  /** Only `true`: progress is off by default. */
+  progress?: true;
 }
 
 /** The `<Toaster />` props the playground controls. */
@@ -107,6 +112,16 @@ export interface ToasterSettings {
 /** Loading toasts are always persistent, so the duration does not apply to them. */
 export const durationApplies = (type: PlaygroundType): boolean => type !== 'loading';
 
+/**
+ * Why the progress bar cannot show for `config`, or `null` when it can. The library shows it only
+ * on a toast with a finite duration, and loading toasts are always persistent.
+ */
+export function progressBlocker(config: PlaygroundConfig): 'loading' | 'persistent' | null {
+  if (!durationApplies(config.type)) return 'loading';
+  if (config.duration === 'persistent') return 'persistent';
+  return null;
+}
+
 export function toInvocation(config: PlaygroundConfig): ToastInvocation {
   const copy = COPY[config.type];
   const invocation: ToastInvocation = { type: config.type, message: copy.message };
@@ -115,6 +130,7 @@ export function toInvocation(config: PlaygroundConfig): ToastInvocation {
   if (!config.closeButton) invocation.closeButton = false;
   const duration = DURATIONS.find(option => option.value === config.duration)?.milliseconds;
   if (duration !== undefined && durationApplies(config.type)) invocation.duration = duration;
+  if (config.progress && progressBlocker(config) === null) invocation.progress = true;
   return invocation;
 }
 

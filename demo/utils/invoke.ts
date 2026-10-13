@@ -11,6 +11,7 @@ export function toToastOptions(invocation: ToastInvocation): ToastOptions {
   }
   if (invocation.closeButton === false) options.closeButton = false;
   if (invocation.duration !== undefined) options.duration = invocation.duration;
+  if (invocation.progress) options.progress = true;
   return options;
 }
 

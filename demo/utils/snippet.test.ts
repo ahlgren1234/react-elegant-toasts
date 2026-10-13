@@ -5,6 +5,7 @@ import {
   DEFAULT_CONFIG,
   DURATIONS,
   TOAST_TYPES,
+  progressBlocker,
   toInvocation,
   toToasterSettings,
   type PlaygroundConfig,
@@ -18,6 +19,7 @@ const MINIMAL: PlaygroundConfig = {
   action: false,
   closeButton: true,
   duration: '5s',
+  progress: false,
 };
 
 const snippet = (overrides: Partial<PlaygroundConfig> = {}, theme: ToastTheme = 'system') => {
@@ -130,7 +132,7 @@ export function App() {
 
   it('writes the options in a fixed order', () => {
     expect(
-      call({ description: true, action: true, closeButton: false, duration: 'persistent' })
+      call({ description: true, action: true, closeButton: false, duration: '10s', progress: true })
     ).toBe(
       `  toast.success('Profile saved', {
     description: 'Changes are synced to all of your devices.',
@@ -139,10 +141,32 @@ export function App() {
       onClick: () => toast('Change undone'),
     },
     closeButton: false,
-    duration: Infinity,
+    duration: 10000,
+    progress: true,
   });
 `
     );
+  });
+
+  it('writes progress only when it is turned on', () => {
+    expect(call({ progress: false })).not.toContain('progress');
+    expect(call({ progress: true })).toBe(
+      "  toast.success('Profile saved', {\n    progress: true,\n  });\n"
+    );
+    expect(call({ progress: true, duration: '10s' })).toBe(
+      "  toast.success('Profile saved', {\n    duration: 10000,\n    progress: true,\n  });\n"
+    );
+  });
+
+  it('leaves out progress where the toast has no countdown to show', () => {
+    expect(call({ progress: true, duration: 'persistent' })).toBe(
+      "  toast.success('Profile saved', {\n    duration: Infinity,\n  });\n"
+    );
+    for (const { value } of DURATIONS) {
+      expect(call({ type: 'loading', duration: value, progress: true })).toBe(
+        "  toast.loading('Uploading report…');\n"
+      );
+    }
   });
 
   it.each([
@@ -218,16 +242,26 @@ export function App() {
         for (const description of flags) {
           for (const action of flags) {
             for (const closeButton of flags) {
-              const source = snippet(
-                { type, duration, description, action, closeButton, position: 'bottom-center' },
-                'dark'
-              );
-              const { diagnostics } = ts.transpileModule(source, {
-                fileName: 'App.tsx',
-                reportDiagnostics: true,
-                compilerOptions: { jsx: ts.JsxEmit.ReactJSX },
-              });
-              expect(diagnostics ?? [], source).toEqual([]);
+              for (const progress of flags) {
+                const source = snippet(
+                  {
+                    type,
+                    duration,
+                    description,
+                    action,
+                    closeButton,
+                    progress,
+                    position: 'bottom-center',
+                  },
+                  'dark'
+                );
+                const { diagnostics } = ts.transpileModule(source, {
+                  fileName: 'App.tsx',
+                  reportDiagnostics: true,
+                  compilerOptions: { jsx: ts.JsxEmit.ReactJSX },
+                });
+                expect(diagnostics ?? [], source).toEqual([]);
+              }
             }
           }
         }
@@ -245,5 +279,48 @@ describe('toInvocation', () => {
 
   it('includes only the options that differ from the defaults', () => {
     expect(toInvocation(MINIMAL)).toEqual({ type: 'success', message: 'Profile saved' });
+  });
+
+  it('agrees with the configuration and the snippet on progress, for every type and duration', () => {
+    for (const { value: type } of TOAST_TYPES) {
+      for (const { value: duration } of DURATIONS) {
+        for (const progress of [false, true]) {
+          const config = { ...MINIMAL, type, duration, progress };
+          const shows = progress && type !== 'loading' && duration !== 'persistent';
+          expect(toInvocation(config).progress, JSON.stringify(config)).toBe(
+            shows ? true : undefined
+          );
+          expect(call(config).includes('    progress: true,\n'), JSON.stringify(config)).toBe(
+            shows
+          );
+        }
+      }
+    }
+  });
+});
+
+describe('progressBlocker', () => {
+  it('allows progress on every finite duration of a normal type', () => {
+    for (const { value: type } of TOAST_TYPES.filter(({ value }) => value !== 'loading')) {
+      expect(progressBlocker({ ...MINIMAL, type, duration: '5s' })).toBeNull();
+      expect(progressBlocker({ ...MINIMAL, type, duration: '10s' })).toBeNull();
+    }
+  });
+
+  it('blocks progress on a persistent toast', () => {
+    expect(progressBlocker({ ...MINIMAL, duration: 'persistent' })).toBe('persistent');
+  });
+
+  it('blocks progress on a loading toast, whatever the duration', () => {
+    for (const { value: duration } of DURATIONS) {
+      expect(progressBlocker({ ...MINIMAL, type: 'loading', duration })).toBe('loading');
+    }
+  });
+
+  it('does not depend on whether progress is turned on', () => {
+    expect(progressBlocker({ ...MINIMAL, progress: true })).toBeNull();
+    expect(progressBlocker({ ...MINIMAL, progress: true, duration: 'persistent' })).toBe(
+      'persistent'
+    );
   });
 });

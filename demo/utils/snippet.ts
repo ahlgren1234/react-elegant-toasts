@@ -82,6 +82,13 @@ export function snippetTokens(invocation: ToastInvocation, toaster: ToasterSetti
       plain(',\n');
     });
   }
+  if (invocation.progress) {
+    options.push(() => {
+      plain('    progress: ');
+      token('literal', 'true');
+      plain(',\n');
+    });
+  }
 
   if (options.length === 0) {
     plain(');\n');
