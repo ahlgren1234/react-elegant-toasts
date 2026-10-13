@@ -427,8 +427,23 @@ function CustomContent({ id }: { readonly id: string }) {
   );
 }
 
-/** A toast's text: `label` when given, else its type; then its ID. */
-type Overrides = Partial<Settings> & { readonly label?: string };
+/**
+ * A toast's text: `content` when given, verbatim; else `label` or its type, then its ID. A
+ * `descriptionText` replaces the generated description.
+ */
+type Overrides = Partial<Settings> & {
+  readonly label?: string;
+  readonly content?: string;
+  readonly descriptionText?: string;
+};
+
+// Long content, moved from the demo (P-25): it must wrap inside the card, never widen it or be cut.
+const LONG_TEXT =
+  'Your export of 1,284 records finished, but 3 rows were skipped because their dates could not be parsed. https://example.com/a-very-long-unbroken-link-to-the-export-report-that-must-wrap';
+const LONG_TITLE =
+  'Your weekly analytics summary for the Marketing, Sales and Customer Success workspaces is ready to download';
+const UNBROKEN_URL =
+  'https://example.com/shared/reports/2026/q3/a-very-long-unbroken-path-segment-without-any-spaces-at-all';
 
 function create(settings: Settings, overrides: Overrides = {}): string {
   const s = { ...settings, ...overrides };
@@ -469,12 +484,15 @@ function create(settings: Settings, overrides: Overrides = {}): string {
   const options: ToastOptions = {
     ...common,
     progress: s.progress,
-    ...(s.description
-      ? { description: `Description for ${id}, long enough to wrap on a narrow phone screen.` }
-      : {}),
+    ...(s.descriptionText !== undefined
+      ? { description: s.descriptionText }
+      : s.description
+        ? { description: `Description for ${id}, long enough to wrap on a narrow phone screen.` }
+        : {}),
     ...(s.action ? { action: { label: 'Undo', onClick: () => log('action-click', { id }) } } : {}),
   };
-  const content: ReactNode = `${s.label ?? `${s.kind[0]!.toUpperCase()}${s.kind.slice(1)}`} ${id}`;
+  const content: ReactNode =
+    s.content ?? `${s.label ?? `${s.kind[0]!.toUpperCase()}${s.kind.slice(1)}`} ${id}`;
   if (s.kind === 'default') toast(content, options);
   else toast[s.kind](content, options);
   return id;
@@ -832,6 +850,59 @@ function Panel() {
           Swipe a toast horizontally (past half its width, or a short flick), release early to
           spring back, drag vertically from a toast to scroll, try diagonals, and pinch-zoom on a
           toast and on the page. Drags that start on a button never swipe.
+        </p>
+      </section>
+
+      <section aria-labelledby="mq-long-title">
+        <h2 id="mq-long-title">Long content (ignores the type, duration and options above)</h2>
+        <div className="mq-row">
+          <button
+            type="button"
+            data-qa="long-text"
+            onClick={preset({
+              kind: 'warning',
+              duration: 'persistent',
+              action: false,
+              progress: false,
+              content: LONG_TEXT,
+              descriptionText: LONG_TEXT,
+            })}
+          >
+            Long text
+          </button>
+          <button
+            type="button"
+            data-qa="long-title"
+            onClick={preset({
+              kind: 'default',
+              duration: 'persistent',
+              description: false,
+              action: false,
+              progress: false,
+              content: LONG_TITLE,
+            })}
+          >
+            Long title
+          </button>
+          <button
+            type="button"
+            data-qa="unbroken-url"
+            onClick={preset({
+              kind: 'info',
+              duration: 'persistent',
+              action: false,
+              progress: false,
+              content: 'Link copied',
+              descriptionText: UNBROKEN_URL,
+            })}
+          >
+            Unbroken URL
+          </button>
+        </div>
+        <p className="mq-note">
+          Title and description wrap inside the card, unbroken URLs included: the card never grows
+          wider than its stack, nothing is cut off or hidden, the page never scrolls sideways, and
+          the close button stays in its corner. Check each at the narrowest viewport and in RTL.
         </p>
       </section>
 
