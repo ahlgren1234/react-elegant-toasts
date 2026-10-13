@@ -10,12 +10,11 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
-  // The demo is linted from P-25. Fixtures are excluded from the library's lint (§27).
+  // Fixtures are excluded from the library's lint (§27).
   globalIgnores([
     'dist/',
     'coverage/',
     'demo-dist/',
-    'demo/',
     'fixtures/',
     'browser-dist/',
     'browser-results/',
@@ -31,7 +30,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'browser/harness/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'browser/harness/**/*.{ts,tsx}', 'demo/**/*.{ts,tsx}'],
     extends: [
       react.configs.flat.recommended,
       react.configs.flat['jsx-runtime'],

@@ -29,16 +29,16 @@
     "test:browser:evidence": "playwright test --grep @evidence",
     "browser:serve": "vite build --config browser/vite.config.ts && vite preview --config browser/vite.config.ts",
     "typecheck": "tsc -p tsconfig.lib.json && tsc -p tsconfig.test.json && tsc -p tsconfig.tooling.json && tsc -p tsconfig.browser.json",
-    "typecheck:demo": "tsc -p demo/tsconfig.json",
-    "lint": "eslint . --max-warnings 0 && node scripts/check-styles.js",
-    "lint:fix": "eslint . --fix",
+    "typecheck:demo": "npm run build && tsc -p demo/tsconfig.json",
+    "lint": "npm run build && eslint . --max-warnings 0 && node scripts/check-styles.js",
+    "lint:fix": "npm run build && eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "validate:package": "npm run build && node scripts/validate-package.js",
     "size": "size-limit",
     "prepublishOnly": "npm run build",
-    "demo": "vite",
-    "build:demo": "vite build"
+    "demo": "npm run build && vite",
+    "build:demo": "npm run build && vite build"
   },
   "keywords": [
     "react",

@@ -1,7 +1,10 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": []
+    "types": [],
+    "paths": {
+      "react-elegant-toasts": ["../dist/index.d.ts"]
+    }
   },
   "include": ["."]
 }
