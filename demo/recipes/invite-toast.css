@@ -1,0 +1,102 @@
+/*
+ * The invitation toast. A custom toast has no card of its own, so every style here is the
+ * example's, hung on the `className` it passes. The colours are the library's public tokens, so
+ * the card follows the Toaster's theme (light, dark or system). Spacing is logical, so it mirrors
+ * in right-to-left pages.
+ */
+
+/* The toast root. Its colour is also the library close button's colour, when it is shown. */
+.invite-toast {
+  padding: 14px;
+  border: 1px solid var(--ret-border);
+  border-radius: var(--ret-radius);
+  background: var(--ret-surface);
+  box-shadow: var(--ret-shadow);
+  color: var(--ret-text);
+  font-family: var(--ret-font-family);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* Room for the library close button, which sits in the inline-end top corner. */
+.invite-toast--close {
+  padding-inline-end: 40px;
+}
+
+.invite-toast__body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 12px;
+}
+
+.invite-toast__icon {
+  display: grid;
+  grid-row: span 3;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: 8px;
+  background: #6d28d9;
+  color: #ffffff;
+}
+
+.invite-toast__title {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.invite-toast__message {
+  margin: 2px 0 0;
+  color: var(--ret-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.invite-toast__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 12px;
+}
+
+.invite-toast__button {
+  min-block-size: 32px;
+  min-inline-size: 32px;
+  padding-inline: 12px;
+  border: 1px solid var(--ret-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.invite-toast__button:hover {
+  background: var(--ret-border);
+}
+
+/* White on this violet is 7.1:1, so the button reads the same in every theme. */
+.invite-toast__button--primary {
+  border-color: #6d28d9;
+  background: #6d28d9;
+  color: #ffffff;
+}
+
+.invite-toast__button--primary:hover {
+  border-color: #5b21b6;
+  background: #5b21b6;
+}
+
+/* The library's focus colour, which meets 3:1 against its surface in every theme. */
+.invite-toast__button:focus-visible {
+  outline: 2px solid var(--ret-focus);
+  outline-offset: 2px;
+}
+
+/* Only when motion is welcome. The library already handles the toast's own motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .invite-toast__button {
+    transition: background-color 150ms ease;
+  }
+}
