@@ -97,39 +97,9 @@ describe('the labels recipe, with the library', () => {
   });
 });
 
+// No type-check here: `typecheck:demo` already compiles this file against the package's public
+// types (an unknown label key fails it), so a second TypeScript program would only repeat that work.
 describe('the recipe source', () => {
-  it('type-checks against the library’s public types', () => {
-    const file = resolve(ROOT, 'demo/__snippets__/LocalizedToaster.tsx');
-    const options: ts.CompilerOptions = {
-      strict: true,
-      noEmit: true,
-      skipLibCheck: true,
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      jsx: ts.JsxEmit.ReactJSX,
-      lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
-      types: [],
-      baseUrl: ROOT,
-      paths: { 'react-elegant-toasts': ['src/index.ts'] },
-    };
-    const host = ts.createCompilerHost(options);
-    const fileExists = host.fileExists.bind(host);
-    const readFile = host.readFile.bind(host);
-    const getSourceFile = host.getSourceFile.bind(host);
-    host.fileExists = name => name === file || fileExists(name);
-    host.readFile = name => (name === file ? SOURCE : readFile(name));
-    host.getSourceFile = (name, version, ...rest) =>
-      name === file
-        ? ts.createSourceFile(name, SOURCE, version)
-        : getSourceFile(name, version, ...rest);
-    const program = ts.createProgram([file], options, host);
-    const diagnostics = ts
-      .getPreEmitDiagnostics(program, program.getSourceFile(file))
-      .map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
-    expect(diagnostics).toEqual([]);
-  });
-
   it('copies exactly as written', () => {
     expect(snippetText(highlight(SOURCE))).toBe(SOURCE);
   });
