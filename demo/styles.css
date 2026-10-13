@@ -235,8 +235,8 @@ body {
   }
 }
 
-/* P-17 D1 review harness (interim; P-25 rebuilds the demo). */
-.demo-prototype h2 {
+/* The interim playground (P-25 S2 onwards replaces it). */
+.demo-playground h2 {
   margin: 0 0 0.5rem;
 }
 
@@ -259,14 +259,14 @@ body {
   align-items: center;
 }
 
-.demo-prototype .demo-button {
+.demo-playground .demo-button {
   min-width: 0;
   padding: 10px 16px;
   background-color: #2563eb;
   color: white;
 }
 
-.demo-prototype .demo-button.danger {
+.demo-playground .demo-button.danger {
   background-color: #b91c1c;
 }
 
@@ -324,11 +324,6 @@ body {
   color: #eef2ff;
 }
 
-/* The D1 prototype's close button has a fixed colour, so the prototype view overrides it. */
-html:not(.demo-production-css) .demo-custom-toast + .ret-toast__close {
-  color: #c7d2fe;
-}
-
 .demo-custom-toast + .ret-toast__close:hover {
   background: rgb(255 255 255 / 0.12);
   color: white;
@@ -338,10 +333,4 @@ html:not(.demo-production-css) .demo-custom-toast + .ret-toast__close {
   .demo-note {
     color: #aaa;
   }
-}
-
-/* P-17 review aid for `?production-css`: a dotted outline shows each list's hit area. The toasts
-   themselves show the production card from S3 on. Demo only. */
-.demo-production-css .ret-toaster__list {
-  outline: 1px dotted #d946ef;
 }
