@@ -7,6 +7,7 @@ import { Lifecycle } from './components/Lifecycle';
 import { Playground } from './components/Playground';
 import { SiteFooter } from './components/SiteFooter';
 import { SiteHeader } from './components/SiteHeader';
+import { Theming } from './components/Theming';
 import { DEFAULT_CONFIG, toToasterSettings, type PlaygroundConfig } from './utils/playground';
 import { useDocumentSettings, type Direction } from './utils/useDocumentSettings';
 
@@ -33,6 +34,7 @@ export function App() {
           <Playground config={config} onChange={setConfig} theme={theme} />
           <Lifecycle />
           <CustomToast />
+          <Theming />
           <Accessibility />
         </main>
         <SiteFooter />

@@ -1137,6 +1137,131 @@ body {
 }
 
 /*
+ * Theming (P-25 S6b): the token reference below the branded toast. Each token is one row, stacked
+ * on narrow screens and in three columns from 768px. Logical properties only, so it mirrors in
+ * RTL; token names and values are code, isolated left to right so their hyphens stay in place.
+ */
+.d-tokens {
+  margin-block-start: var(--d-space-6);
+  padding-block-start: var(--d-space-6);
+  border-block-start: 1px solid var(--d-border);
+}
+
+.d-tokens__intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--d-space-5);
+  margin-block-end: var(--d-space-6);
+}
+
+@media (min-width: 1024px) {
+  .d-tokens__intro {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: start;
+  }
+}
+
+.d-token-groups {
+  display: grid;
+  gap: var(--d-space-6);
+}
+
+.d-token-group__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.d-token-group__summary {
+  margin: var(--d-space-1) 0 0;
+  color: var(--d-text-muted);
+  font-size: 0.875rem;
+}
+
+.d-token-list {
+  margin: var(--d-space-3) 0 0;
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius-md);
+  background: var(--d-surface);
+}
+
+.d-token {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--d-space-1);
+  padding: var(--d-space-3) var(--d-space-4);
+}
+
+.d-token + .d-token {
+  border-block-start: 1px solid var(--d-border);
+}
+
+@media (min-width: 768px) {
+  .d-token {
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr) minmax(0, 15rem);
+    gap: var(--d-space-4);
+  }
+}
+
+.d-token__name,
+.d-token__purpose,
+.d-token__values {
+  margin: 0;
+}
+
+.d-token code {
+  font-family: var(--d-font-mono);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.d-token__name code {
+  font-weight: 600;
+}
+
+.d-token__purpose {
+  color: var(--d-text-muted);
+  font-size: 0.875rem;
+}
+
+.d-token__note {
+  display: block;
+  margin-block-start: 2px;
+  font-size: 0.8125rem;
+}
+
+.d-token__values {
+  display: grid;
+  gap: 2px;
+}
+
+.d-token__value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--d-space-2);
+  min-inline-size: 0;
+}
+
+.d-token__theme {
+  flex: none;
+  min-inline-size: 4.5rem;
+  color: var(--d-text-muted);
+  font-size: 0.75rem;
+}
+
+.d-token__swatch {
+  flex: none;
+  align-self: center;
+  inline-size: 12px;
+  block-size: 12px;
+  border: 1px solid var(--d-control-border);
+  border-radius: 3px;
+}
+
+/*
  * Accessibility (P-25 S6a): the practice bar, the four topics and the labels recipe. Logical
  * properties only, so the section mirrors in RTL; nothing in it moves.
  */
