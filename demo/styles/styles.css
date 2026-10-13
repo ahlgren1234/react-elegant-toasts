@@ -1,0 +1,940 @@
+/*
+ * Demo page styles. Every rule is scoped to a `d-` class, so no page style reaches the library's
+ * toasts: the Toaster is rendered outside `.d-page`, and no rule names a `ret-` class. The only element selectors are `html` and `body`,
+ * for the page background and margin. The toasts inherit the font family on purpose
+ * (`--ret-font-family: inherit`), as they would in an application.
+ *
+ * Breakpoints: below 640px one column and a two-row header; from 640px a one-row header; from
+ * 1024px a two-column playground with full header labels.
+ */
+
+html {
+  background: var(--d-bg);
+  color: var(--d-text);
+  font-family: var(--d-font-sans);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+.d-page {
+  min-height: 100vh;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.d-page *,
+.d-page *::before,
+.d-page *::after {
+  box-sizing: border-box;
+}
+
+.d-page :focus-visible {
+  outline: 2px solid var(--d-focus);
+  outline-offset: 2px;
+}
+
+.d-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.d-skip-link {
+  position: absolute;
+  inset-block-start: var(--d-space-2);
+  inset-inline-start: var(--d-space-2);
+  z-index: 20;
+  padding: var(--d-space-2) var(--d-space-4);
+  border-radius: var(--d-radius-md);
+  background: var(--d-accent);
+  color: var(--d-on-accent);
+  font-weight: 600;
+  text-decoration: none;
+  translate: 0 -200%;
+}
+
+.d-skip-link:focus-visible {
+  translate: none;
+}
+
+.d-container {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-inline: var(--d-space-4);
+}
+
+@media (min-width: 640px) {
+  .d-container {
+    padding-inline: var(--d-space-5);
+  }
+}
+
+@media (min-width: 1024px) {
+  .d-container {
+    padding-inline: var(--d-space-6);
+  }
+}
+
+/* Text hidden until the wide header layout; it stays the control's accessible name. */
+@media (max-width: 1023.98px) {
+  .d-compact-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Header */
+
+.d-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+  border-block-end: 1px solid var(--d-border);
+  background: var(--d-header-bg);
+  backdrop-filter: saturate(1.4) blur(12px);
+}
+
+.d-header__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--d-space-2);
+  min-height: var(--d-header-height);
+  padding-block: var(--d-space-2);
+}
+
+.d-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--d-space-2);
+  min-width: 0;
+}
+
+.d-brand__mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, var(--d-accent), var(--d-accent-hover));
+  box-shadow: inset 0 -5px 0 rgb(255 255 255 / 0.28);
+}
+
+.d-brand__name {
+  font-family: var(--d-font-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.d-badge {
+  padding: 1px var(--d-space-2);
+  border-radius: var(--d-radius-pill);
+  background: var(--d-accent-subtle);
+  color: var(--d-accent-subtle-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+}
+
+/* Below 640px the links share the first row with the brand and the settings take the second. */
+.d-header__links {
+  display: flex;
+  gap: var(--d-space-1);
+  margin-inline-start: auto;
+}
+
+.d-header__settings {
+  display: flex;
+  order: 3;
+  flex-basis: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--d-space-3);
+}
+
+@media (min-width: 640px) {
+  .d-brand__name {
+    font-size: 0.875rem;
+  }
+
+  .d-header__inner {
+    flex-wrap: nowrap;
+  }
+
+  .d-header__settings {
+    order: 0;
+    flex-basis: auto;
+    margin-inline-start: auto;
+  }
+
+  .d-header__links {
+    margin-inline-start: 0;
+    padding-inline-start: var(--d-space-3);
+    border-inline-start: 1px solid var(--d-border);
+  }
+}
+
+.d-icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--d-space-2);
+  min-width: 36px;
+  height: 40px;
+  padding-inline: var(--d-space-2);
+  border-radius: var(--d-radius-md);
+  color: var(--d-text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    color var(--d-duration) var(--d-easing),
+    background-color var(--d-duration) var(--d-easing);
+}
+
+.d-icon-link:hover {
+  background: var(--d-hover);
+  color: var(--d-text);
+}
+
+/* Segmented control: native radios, so arrow keys move the selection. */
+.d-segmented {
+  display: inline-flex;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius-md);
+  background: var(--d-sunken);
+}
+
+.d-segmented__option {
+  position: relative;
+  cursor: pointer;
+}
+
+.d-segmented__face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 36px;
+  height: 32px;
+  padding-inline: var(--d-space-2);
+  border-radius: 7px;
+  color: var(--d-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition:
+    color var(--d-duration) var(--d-easing),
+    background-color var(--d-duration) var(--d-easing);
+}
+
+.d-segmented__option:hover .d-segmented__face {
+  color: var(--d-text);
+}
+
+.d-segmented--fill {
+  display: flex;
+  width: 100%;
+}
+
+.d-segmented--fill > .d-segmented__option {
+  flex: 1 1 0;
+}
+
+.d-segmented--fill .d-segmented__face {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.d-field:disabled .d-segmented {
+  opacity: 0.55;
+}
+
+.d-field:disabled .d-segmented__option {
+  cursor: not-allowed;
+}
+
+/* The selected option has a surface, an edge and a heavier weight, not only a colour. */
+.d-segmented input:checked + .d-segmented__face {
+  background: var(--d-surface);
+  box-shadow:
+    0 0 0 1px var(--d-control-border),
+    0 1px 2px rgb(0 0 0 / 0.08);
+  color: var(--d-text);
+  font-weight: 650;
+}
+
+.d-segmented input:focus-visible + .d-segmented__face {
+  outline: 2px solid var(--d-focus);
+  outline-offset: 2px;
+}
+
+/* Switch: a native checkbox with `role="switch"`; the thumb moves to the inline end. */
+.d-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--d-space-2);
+  min-height: 40px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.d-switch--row {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.d-switch__track {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  border: 1px solid var(--d-control-border);
+  border-radius: var(--d-radius-pill);
+  background: var(--d-surface);
+  transition:
+    background-color var(--d-duration) var(--d-easing),
+    border-color var(--d-duration) var(--d-easing);
+}
+
+.d-switch__thumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--d-control-border);
+  transition:
+    inset-inline-start var(--d-duration) var(--d-easing),
+    background-color var(--d-duration) var(--d-easing);
+}
+
+.d-switch input:checked + .d-switch__track {
+  border-color: var(--d-accent);
+  background: var(--d-accent);
+}
+
+.d-switch input:checked + .d-switch__track .d-switch__thumb {
+  inset-inline-start: 18px;
+  background: var(--d-on-accent);
+}
+
+.d-switch input:focus-visible + .d-switch__track {
+  outline: 2px solid var(--d-focus);
+  outline-offset: 2px;
+}
+
+/* Buttons */
+
+.d-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--d-space-2);
+  min-height: 40px;
+  margin: 0;
+  padding: var(--d-space-2) var(--d-space-4);
+  border: 1px solid transparent;
+  border-radius: var(--d-radius-md);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 550;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--d-duration) var(--d-easing),
+    background-color var(--d-duration) var(--d-easing),
+    border-color var(--d-duration) var(--d-easing);
+}
+
+.d-button--large {
+  min-height: 48px;
+  padding-inline: var(--d-space-5);
+  font-size: 1rem;
+}
+
+.d-button--primary {
+  background: var(--d-accent);
+  color: var(--d-on-accent);
+}
+
+.d-button--primary:hover {
+  background: var(--d-accent-hover);
+}
+
+.d-button--secondary {
+  border-color: var(--d-button-border);
+  background: var(--d-button-bg);
+  color: var(--d-text);
+  box-shadow: var(--d-shadow);
+}
+
+.d-button--secondary:hover {
+  border-color: var(--d-control-border);
+}
+
+.d-button--ghost {
+  background: transparent;
+  color: var(--d-text-muted);
+}
+
+.d-button--ghost:hover {
+  background: var(--d-hover);
+  color: var(--d-text);
+}
+
+/* Hero */
+
+.d-hero {
+  position: relative;
+  overflow: hidden;
+  padding-block: var(--d-space-8) var(--d-space-6);
+}
+
+/* A faint accent wash behind the headline. Decorative only. */
+.d-hero::before {
+  content: '';
+  position: absolute;
+  inset: -40% 0 auto;
+  height: 120%;
+  background: radial-gradient(60% 50% at 50% 40%, var(--d-accent-wash), transparent 70%);
+  pointer-events: none;
+}
+
+.d-hero__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.d-hero__title {
+  max-width: 14ch;
+  margin: 0;
+  font-size: clamp(2.25rem, 1.6rem + 3vw, 3.75rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.d-hero__lede {
+  max-width: 54ch;
+  margin: var(--d-space-5) 0 0;
+  color: var(--d-text-muted);
+  font-size: 1.125rem;
+  text-wrap: pretty;
+}
+
+.d-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--d-space-3);
+  margin-block-start: var(--d-space-6);
+}
+
+.d-install {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--d-space-2);
+  max-width: 100%;
+  margin: var(--d-space-5) 0 0;
+  padding: var(--d-space-2) var(--d-space-4);
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius-pill);
+  background: var(--d-surface);
+  font-family: var(--d-font-mono);
+  font-size: 0.8125rem;
+  overflow-x: auto;
+}
+
+.d-install code {
+  font: inherit;
+  white-space: nowrap;
+}
+
+.d-install__prompt {
+  color: var(--d-accent);
+  font-weight: 700;
+}
+
+@media (min-width: 1024px) {
+  .d-hero {
+    padding-block: var(--d-space-9) var(--d-space-7);
+  }
+}
+
+/* Sections */
+
+.d-section {
+  padding-block: var(--d-space-6) var(--d-space-8);
+  scroll-margin-block-start: var(--d-header-height);
+}
+
+.d-section__header {
+  max-width: 65ch;
+  margin-block-end: var(--d-space-6);
+}
+
+.d-eyebrow {
+  margin: 0 0 var(--d-space-2);
+  color: var(--d-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.d-section__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.d-section__lede {
+  margin: var(--d-space-3) 0 0;
+  color: var(--d-text-muted);
+}
+
+.d-section__lede kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--d-border);
+  border-block-end-width: 2px;
+  border-radius: var(--d-radius-sm);
+  background: var(--d-surface);
+  color: var(--d-text);
+  font-family: var(--d-font-mono);
+  font-size: 0.8125rem;
+}
+
+@media (min-width: 1024px) {
+  .d-section {
+    padding-block: var(--d-space-7) var(--d-space-9);
+  }
+
+  .d-section__title {
+    font-size: 1.75rem;
+  }
+}
+
+/* Playground */
+
+.d-playground {
+  display: grid;
+  /* minmax(0, …) lets the code panel scroll instead of widening the page. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--d-space-5);
+}
+
+@media (min-width: 1024px) {
+  .d-playground {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: start;
+  }
+
+  .d-playground__code {
+    position: sticky;
+    inset-block-start: calc(var(--d-header-height) + var(--d-space-5));
+  }
+}
+
+.d-card {
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius-lg);
+  background: var(--d-surface);
+  box-shadow: var(--d-shadow);
+}
+
+.d-playground__controls {
+  display: grid;
+  gap: var(--d-space-5);
+  padding: var(--d-space-4);
+}
+
+@media (min-width: 640px) {
+  .d-playground__controls {
+    padding: var(--d-space-5);
+  }
+}
+
+.d-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.d-field__legend {
+  margin: 0 0 var(--d-space-2);
+  padding: 0;
+  color: var(--d-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.d-field__hint {
+  margin: var(--d-space-2) 0 0;
+  color: var(--d-text-muted);
+  font-size: 0.8125rem;
+}
+
+.d-switch-list {
+  display: grid;
+  border-block: 1px solid var(--d-border);
+}
+
+.d-switch-list > .d-switch + .d-switch {
+  border-block-start: 1px solid var(--d-border);
+}
+
+.d-playground__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--d-space-2);
+  padding-block-start: var(--d-space-4);
+  border-block-start: 1px solid var(--d-border);
+}
+
+.d-playground__actions > .d-button--primary {
+  flex: 1 1 auto;
+}
+
+/* Type choices: native radios, one per toast type. */
+.d-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--d-space-2);
+}
+
+/* Positioned, like every label wrapping a visually hidden input, so the input sits inside its
+   label and focusing it scrolls to the control. */
+.d-choice {
+  position: relative;
+  cursor: pointer;
+}
+
+.d-choice__face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: var(--d-space-2);
+  border: 1px solid var(--d-button-border);
+  border-radius: var(--d-radius-md);
+  background: var(--d-button-bg);
+  color: var(--d-text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition:
+    color var(--d-duration) var(--d-easing),
+    background-color var(--d-duration) var(--d-easing),
+    border-color var(--d-duration) var(--d-easing);
+}
+
+.d-choice:hover .d-choice__face {
+  border-color: var(--d-control-border);
+  color: var(--d-text);
+}
+
+/* Selected: the accent edge, a tint and a heavier weight, not only a colour. */
+.d-choice input:checked + .d-choice__face {
+  border-color: var(--d-accent);
+  background: var(--d-accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--d-accent);
+  color: var(--d-accent-subtle-text);
+  font-weight: 650;
+}
+
+.d-choice input:focus-visible + .d-choice__face {
+  outline: 2px solid var(--d-focus);
+  outline-offset: 2px;
+}
+
+/* Position map: a miniature screen; the selected corner shows a toast. */
+.d-position-map {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(64px, auto));
+  gap: var(--d-space-1);
+  padding: var(--d-space-1);
+  border: 1px solid var(--d-border);
+  border-radius: 12px;
+  background: var(--d-sunken);
+}
+
+.d-position {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--d-space-2);
+  border-radius: var(--d-radius-sm);
+  cursor: pointer;
+  transition: background-color var(--d-duration) var(--d-easing);
+}
+
+.d-position:hover {
+  background: var(--d-hover);
+}
+
+.d-position:nth-child(3n + 1) {
+  align-items: flex-start;
+}
+
+.d-position:nth-child(3n + 2) {
+  align-items: center;
+}
+
+.d-position:nth-child(3n) {
+  align-items: flex-end;
+}
+
+/* The bottom row puts the glyph under its label, at the screen's bottom edge. */
+.d-position:nth-child(n + 4) {
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+}
+
+.d-position__glyph {
+  width: min(56px, 70%);
+  height: 10px;
+  border: 1px dashed var(--d-control-border);
+  border-radius: 3px;
+  transition:
+    background-color var(--d-duration) var(--d-easing),
+    border-color var(--d-duration) var(--d-easing);
+}
+
+.d-position__label {
+  color: var(--d-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.d-position:has(input:checked) {
+  background: var(--d-surface);
+  box-shadow: 0 0 0 1px var(--d-control-border);
+}
+
+.d-position input:checked ~ .d-position__glyph {
+  border-style: solid;
+  border-color: var(--d-accent);
+  background: var(--d-accent);
+}
+
+.d-position input:checked ~ .d-position__label {
+  color: var(--d-text);
+  font-weight: 650;
+}
+
+.d-position:has(input:focus-visible) {
+  outline: 2px solid var(--d-focus);
+  outline-offset: 2px;
+}
+
+/* Code panel */
+
+.d-code-panel {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius-lg);
+  background: var(--d-sunken);
+}
+
+.d-code-panel__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--d-space-3);
+  padding: var(--d-space-2) var(--d-space-4);
+  border-block-end: 1px solid var(--d-border);
+  background: var(--d-surface);
+}
+
+.d-code-panel__dots {
+  display: flex;
+  gap: 6px;
+}
+
+.d-code-panel__dots > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--d-border);
+}
+
+.d-code-panel__file {
+  flex: 1;
+  color: var(--d-text-muted);
+  font-family: var(--d-font-mono);
+  font-size: 0.8125rem;
+}
+
+/* Code reads left to right whatever the page's direction. */
+.d-code-panel__pre {
+  margin: 0;
+  padding: var(--d-space-4);
+  overflow-x: auto;
+  color: var(--d-code-text);
+  font-family: var(--d-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  direction: ltr;
+  text-align: left;
+  tab-size: 2;
+}
+
+.d-code-panel__pre code {
+  font: inherit;
+}
+
+.d-code--keyword {
+  color: var(--d-code-keyword);
+}
+
+.d-code--string {
+  color: var(--d-code-string);
+}
+
+.d-code--tag {
+  color: var(--d-code-tag);
+}
+
+.d-code--attribute {
+  color: var(--d-code-attribute);
+}
+
+.d-code--literal {
+  color: var(--d-code-keyword);
+}
+
+.d-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  padding-inline: var(--d-space-3);
+  border: 1px solid var(--d-button-border);
+  border-radius: var(--d-radius-md);
+  background: var(--d-button-bg);
+  color: var(--d-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: border-color var(--d-duration) var(--d-easing);
+}
+
+.d-copy-button:hover {
+  border-color: var(--d-control-border);
+}
+
+.d-code-panel__status {
+  margin: 0;
+  padding: var(--d-space-2) var(--d-space-4);
+  border-block-end: 1px solid var(--d-border);
+  background: var(--d-surface);
+  color: var(--d-text);
+  font-size: 0.8125rem;
+}
+
+@media (min-width: 640px) {
+  .d-code-panel__pre {
+    padding: var(--d-space-5);
+  }
+}
+
+/* Footer */
+
+.d-footer {
+  border-block-start: 1px solid var(--d-border);
+}
+
+.d-footer__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--d-space-3);
+  padding-block: var(--d-space-5);
+}
+
+.d-footer__note {
+  margin: 0;
+  color: var(--d-text-muted);
+  font-size: 0.875rem;
+}
+
+.d-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--d-space-2);
+}
+
+.d-footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--d-space-2);
+  min-height: 40px;
+  padding-inline: var(--d-space-3);
+  border: 1px solid var(--d-border);
+  border-radius: var(--d-radius-pill);
+  color: var(--d-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: border-color var(--d-duration) var(--d-easing);
+}
+
+.d-footer-link:hover {
+  border-color: var(--d-control-border);
+}
+
+.d-footer-link--coffee svg {
+  color: #b45309;
+}
+
+/* No page motion under reduced motion. Scoped to the page, so the toasts keep their own rules. */
+@media (prefers-reduced-motion: reduce) {
+  .d-page *,
+  .d-page *::before,
+  .d-page *::after {
+    transition: none !important;
+  }
+}

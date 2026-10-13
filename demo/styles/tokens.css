@@ -1,0 +1,123 @@
+/*
+ * Demo design tokens ("Calm instrument", P-25 S2 D0). The page frames the library's default
+ * toasts, so its neutrals are the zinc scale the toasts use and the one accent is violet, clear of
+ * the four semantic toast hues. The focus colours equal the default `--ret-focus`, so the page and
+ * the toasts share one focus indicator.
+ *
+ * `system` is resolved in CSS, as the Toaster resolves it (§21): the page follows the operating
+ * system without JavaScript or a reload. Text pairs meet 4.5:1 and control edges 3:1 (D0 report).
+ */
+:root {
+  color-scheme: light;
+
+  --d-bg: #fafafa;
+  --d-surface: #ffffff;
+  --d-sunken: #f4f4f5;
+  --d-border: #e4e4e7;
+  --d-control-border: #71717a;
+  --d-button-bg: #ffffff;
+  --d-button-border: #d4d4d8;
+  --d-text: #18181b;
+  --d-text-muted: #52525b;
+  --d-accent: #6d28d9;
+  --d-accent-hover: #5b21b6;
+  --d-on-accent: #ffffff;
+  --d-accent-subtle: #ede9fe;
+  --d-accent-subtle-text: #5b21b6;
+  --d-accent-wash: rgb(109 40 217 / 0.07);
+  --d-focus: #2563eb;
+  --d-hover: rgb(24 24 27 / 0.05);
+  --d-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --d-header-bg: rgb(250 250 250 / 0.85);
+
+  --d-code-text: #27272a;
+  --d-code-keyword: #6d28d9;
+  --d-code-string: #047857;
+  --d-code-tag: #b45309;
+  --d-code-attribute: #1d4ed8;
+
+  --d-font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --d-font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+
+  --d-space-1: 4px;
+  --d-space-2: 8px;
+  --d-space-3: 12px;
+  --d-space-4: 16px;
+  --d-space-5: 24px;
+  --d-space-6: 32px;
+  --d-space-7: 48px;
+  --d-space-8: 64px;
+  --d-space-9: 96px;
+
+  --d-radius-sm: 6px;
+  --d-radius-md: 10px;
+  --d-radius-lg: 16px;
+  --d-radius-pill: 999px;
+
+  --d-header-height: 56px;
+  --d-duration: 150ms;
+  --d-easing: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] {
+    color-scheme: dark;
+
+    --d-bg: #09090b;
+    --d-surface: #18181b;
+    --d-sunken: #111113;
+    --d-border: #27272a;
+    --d-control-border: #8b8b94;
+    --d-button-bg: #1f1f23;
+    --d-button-border: #52525b;
+    --d-text: #fafafa;
+    --d-text-muted: #a1a1aa;
+    --d-accent: #a78bfa;
+    --d-accent-hover: #c4b5fd;
+    --d-on-accent: #18181b;
+    --d-accent-subtle: #2e1065;
+    --d-accent-subtle-text: #ddd6fe;
+    --d-accent-wash: rgb(167 139 250 / 0.1);
+    --d-focus: #93c5fd;
+    --d-hover: rgb(250 250 250 / 0.06);
+    --d-shadow: none;
+    --d-header-bg: rgb(9 9 11 / 0.8);
+
+    --d-code-text: #e4e4e7;
+    --d-code-keyword: #c4b5fd;
+    --d-code-string: #6ee7b7;
+    --d-code-tag: #fcd34d;
+    --d-code-attribute: #93c5fd;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --d-bg: #09090b;
+  --d-surface: #18181b;
+  --d-sunken: #111113;
+  --d-border: #27272a;
+  --d-control-border: #8b8b94;
+  --d-button-bg: #1f1f23;
+  --d-button-border: #52525b;
+  --d-text: #fafafa;
+  --d-text-muted: #a1a1aa;
+  --d-accent: #a78bfa;
+  --d-accent-hover: #c4b5fd;
+  --d-on-accent: #18181b;
+  --d-accent-subtle: #2e1065;
+  --d-accent-subtle-text: #ddd6fe;
+  --d-accent-wash: rgb(167 139 250 / 0.1);
+  --d-focus: #93c5fd;
+  --d-hover: rgb(250 250 250 / 0.06);
+  --d-shadow: none;
+  --d-header-bg: rgb(9 9 11 / 0.8);
+
+  --d-code-text: #e4e4e7;
+  --d-code-keyword: #c4b5fd;
+  --d-code-string: #6ee7b7;
+  --d-code-tag: #fcd34d;
+  --d-code-attribute: #93c5fd;
+}

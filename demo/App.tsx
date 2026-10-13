@@ -1,0 +1,39 @@
+import { useState } from 'react';
+import { Toaster, type ToastTheme } from 'react-elegant-toasts';
+import { Hero } from './components/Hero';
+import { Playground } from './components/Playground';
+import { SiteFooter } from './components/SiteFooter';
+import { SiteHeader } from './components/SiteHeader';
+import { DEFAULT_CONFIG, toToasterSettings, type PlaygroundConfig } from './utils/playground';
+import { useDocumentSettings, type Direction } from './utils/useDocumentSettings';
+
+export function App() {
+  const [theme, setTheme] = useState<ToastTheme>('system');
+  const [direction, setDirection] = useState<Direction>('ltr');
+  const [config, setConfig] = useState<PlaygroundConfig>(DEFAULT_CONFIG);
+  useDocumentSettings(theme, direction);
+
+  return (
+    <>
+      <div className="d-page">
+        <a className="d-skip-link" href="#playground">
+          Skip to the playground
+        </a>
+        <SiteHeader
+          theme={theme}
+          onThemeChange={setTheme}
+          direction={direction}
+          onDirectionChange={setDirection}
+        />
+        <main>
+          <Hero />
+          <Playground config={config} onChange={setConfig} theme={theme} />
+        </main>
+        <SiteFooter />
+      </div>
+      {/* A sibling of the page, so no page style reaches the toasts. Its props are the ones the
+          playground's code shows. */}
+      <Toaster {...toToasterSettings(config, theme)} />
+    </>
+  );
+}
