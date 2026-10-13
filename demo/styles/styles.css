@@ -351,6 +351,16 @@ body {
   outline-offset: 2px;
 }
 
+/* Like the disabled segmented control; its hint, outside the switch, keeps full contrast. */
+.d-switch--disabled {
+  cursor: not-allowed;
+}
+
+.d-switch--disabled > .d-switch__label,
+.d-switch--disabled > .d-switch__track {
+  opacity: 0.55;
+}
+
 /* Buttons */
 
 .d-button {
@@ -611,6 +621,11 @@ body {
   margin: var(--d-space-2) 0 0;
   color: var(--d-text-muted);
   font-size: 0.8125rem;
+}
+
+.d-field__row {
+  margin-block-start: var(--d-space-2);
+  border-block-start: 1px solid var(--d-border);
 }
 
 .d-switch-list {

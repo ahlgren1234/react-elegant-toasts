@@ -5,6 +5,7 @@ import {
   DURATIONS,
   TOAST_TYPES,
   durationApplies,
+  progressBlocker,
   toInvocation,
   toToasterSettings,
   type PlaygroundConfig,
@@ -23,16 +24,27 @@ interface OptionSwitchProps {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  /** The ID of the text that explains why the switch is disabled. */
+  describedBy?: string | undefined;
 }
 
-const OptionSwitch = ({ label, checked, onChange }: OptionSwitchProps) => (
-  <label className="d-switch d-switch--row">
+const OptionSwitch = ({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+  describedBy,
+}: OptionSwitchProps) => (
+  <label className={`d-switch d-switch--row${disabled ? ' d-switch--disabled' : ''}`}>
     <span className="d-switch__label">{label}</span>
     <input
       type="checkbox"
       role="switch"
       className="d-visually-hidden"
       checked={checked}
+      disabled={disabled}
+      aria-describedby={describedBy}
       onChange={e => onChange(e.target.checked)}
     />
     <span className="d-switch__track" aria-hidden="true">
@@ -52,6 +64,7 @@ export function Playground({ config, onChange, theme }: PlaygroundProps) {
     [invocation, config, theme]
   );
   const hasDuration = durationApplies(config.type);
+  const progressBlocked = progressBlocker(config);
 
   return (
     <section id="playground" className="d-section" aria-labelledby="playground-heading">
@@ -133,9 +146,32 @@ export function Playground({ config, onChange, theme }: PlaygroundProps) {
                   </label>
                 ))}
               </div>
+              {/* Shown as off while it cannot apply, as the toast and the code have no progress then;
+                  the choice itself is kept for when it can. */}
+              <div className="d-field__row">
+                <OptionSwitch
+                  label="Progress bar"
+                  checked={config.progress && progressBlocked === null}
+                  onChange={value => set('progress', value)}
+                  disabled={progressBlocked !== null}
+                  describedBy={
+                    progressBlocked === 'loading'
+                      ? 'duration-hint'
+                      : progressBlocked === 'persistent'
+                        ? 'progress-hint'
+                        : undefined
+                  }
+                />
+              </div>
               {!hasDuration && (
                 <p id="duration-hint" className="d-field__hint">
-                  Loading toasts stay until they are updated or dismissed.
+                  Loading toasts stay until they are updated or dismissed, so they have no duration
+                  or progress bar.
+                </p>
+              )}
+              {progressBlocked === 'persistent' && (
+                <p id="progress-hint" className="d-field__hint">
+                  Persistent toasts have no countdown, so they show no progress bar.
                 </p>
               )}
             </fieldset>
