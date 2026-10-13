@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { ToastPosition, ToastTheme } from 'react-elegant-toasts';
 import {
   BURST_SIZE,
@@ -59,6 +59,44 @@ interface RecordedCall {
  * calls the code shown would make. The snippet is compiled with TypeScript; nothing from the
  * package is imported.
  */
+/** Each snippet's CommonJS output, by its source. */
+const compiled = new Map<string, string>();
+
+/**
+ * Compiles every source not compiled yet in one program emit, rather than one `transpileModule`
+ * (a program each) per source. Emitting needs no types, so there is no lib and no resolution.
+ */
+function compileAll(sources: readonly string[]): void {
+  const files = new Map(
+    [...new Set(sources)]
+      .filter(source => !compiled.has(source))
+      .map((source, index) => [`/run-${compiled.size + index}.tsx`, source])
+  );
+  if (files.size === 0) return;
+  const options: ts.CompilerOptions = {
+    noLib: true,
+    noResolve: true,
+    isolatedModules: true,
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2022,
+    jsx: ts.JsxEmit.ReactJSX,
+  };
+  const host = ts.createCompilerHost(options);
+  host.fileExists = name => files.has(name);
+  host.readFile = name => files.get(name);
+  host.getSourceFile = (name, version) => {
+    const source = files.get(name);
+    return source === undefined
+      ? undefined
+      : ts.createSourceFile(name, source, version, false, ts.ScriptKind.TSX);
+  };
+  const program = ts.createProgram([...files.keys()], options, host);
+  program.emit(undefined, (name, text) => {
+    const source = files.get(name.replace(/\.js$/, '.tsx'));
+    if (source !== undefined) compiled.set(source, text);
+  });
+}
+
 function runSnippet(source: string, entry: 'showToast' | 'showBurst'): RecordedCall[] {
   const calls: RecordedCall[] = [];
   const record =
@@ -73,13 +111,8 @@ function runSnippet(source: string, entry: 'showToast' | 'showBurst'): RecordedC
     info: record('info'),
     loading: record('loading'),
   });
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-      jsx: ts.JsxEmit.ReactJSX,
-    },
-  });
+  compileAll([source]);
+  const outputText = compiled.get(source) ?? '';
   const modules: Record<string, unknown> = {
     'react-elegant-toasts': { toast: fakeToast, Toaster: () => null },
     'react-elegant-toasts/styles.css': {},
@@ -384,25 +417,43 @@ export function App() {
 
   // The toast options and the Toaster props are written independently (`does not change the toast
   // calls`, below), so each is swept in full with the other fixed, rather than as one product.
-  const expectValidTsx = (source: string) => {
-    const { diagnostics } = ts.transpileModule(source, {
-      fileName: 'App.tsx',
-      reportDiagnostics: true,
-      compilerOptions: { jsx: ts.JsxEmit.ReactJSX },
-    });
-    expect(diagnostics ?? [], source).toEqual([]);
+  // Syntax errors of many sources at once: one program that only parses, with no lib and no
+  // module resolution. It reports what `transpileModule` reports (syntax only), without compiling
+  // each source separately.
+  const syntaxErrors = (sources: readonly string[]): string[] => {
+    const files = new Map(sources.map((source, index) => [`/snippet-${index}.tsx`, source]));
+    const options: ts.CompilerOptions = { noLib: true, noResolve: true, jsx: ts.JsxEmit.ReactJSX };
+    const host = ts.createCompilerHost(options);
+    host.fileExists = name => files.has(name);
+    host.readFile = name => files.get(name);
+    host.getSourceFile = (name, version) => {
+      const source = files.get(name);
+      return source === undefined
+        ? undefined
+        : ts.createSourceFile(name, source, version, false, ts.ScriptKind.TSX);
+    };
+    const program = ts.createProgram([...files.keys()], options, host);
+    return [...files.keys()].flatMap(name =>
+      program
+        .getSyntacticDiagnostics(program.getSourceFile(name))
+        .map(d => `${files.get(name)}\n→ ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`)
+    );
   };
+
+  it('reports a syntax error when there is one', () => {
+    expect(syntaxErrors(['const a = (;'])).toHaveLength(1);
+  });
 
   it('produces valid TSX for every combination of toast options', () => {
     const flags = [false, true];
-    let checked = 0;
+    const sources: string[] = [];
     for (const { value: type } of TOAST_TYPES) {
       for (const { value: duration } of DURATIONS) {
         for (const description of flags) {
           for (const action of flags) {
             for (const closeButton of flags) {
               for (const progress of flags) {
-                expectValidTsx(
+                sources.push(
                   snippet(
                     {
                       type,
@@ -417,14 +468,14 @@ export function App() {
                     'dark'
                   )
                 );
-                checked++;
               }
             }
           }
         }
       }
     }
-    expect(checked).toBe(288);
+    expect(sources).toHaveLength(288);
+    expect(syntaxErrors(sources)).toEqual([]);
   });
 
   it('produces valid TSX for every combination of Toaster props', () => {
@@ -437,16 +488,16 @@ export function App() {
       'bottom-right',
     ];
     const themes: ToastTheme[] = ['system', 'light', 'dark'];
-    let checked = 0;
+    const sources: string[] = [];
     for (const maxVisible of MAX_VISIBLE_CHOICES) {
       for (const position of positions) {
         for (const theme of themes) {
-          expectValidTsx(snippet({ maxVisible, position, action: true }, theme));
-          checked++;
+          sources.push(snippet({ maxVisible, position, action: true }, theme));
         }
       }
     }
-    expect(checked).toBe(90);
+    expect(sources).toHaveLength(90);
+    expect(syntaxErrors(sources)).toEqual([]);
   });
 });
 
@@ -564,6 +615,10 @@ describe("the snippet, run, makes the demo's calls", () => {
       }
     }
   }
+
+  beforeAll(() => {
+    compileAll(configs.map(config => snippet(config)));
+  });
 
   it.each(['showToast', 'showBurst'] as const)(
     '%s, for every combination of toast options',

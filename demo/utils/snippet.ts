@@ -9,7 +9,7 @@ import {
 // as a list of tokens, so it is highlighted without a parser or a dependency; the copied text is
 // the tokens' text joined.
 
-export type TokenKind = 'keyword' | 'string' | 'tag' | 'attribute' | 'literal';
+export type TokenKind = 'keyword' | 'string' | 'tag' | 'attribute' | 'literal' | 'comment';
 
 export interface Token {
   readonly kind: TokenKind | null;
@@ -40,7 +40,7 @@ const TEMPLATE_ESCAPES: Record<string, string> = {
 };
 
 /** `value` as the literal text of a template literal: no character in it ends or interpolates. */
-const templateText = (value: string): string =>
+export const templateText = (value: string): string =>
   value.replace(/\\|`|\$\{|[\n\r\u2028\u2029]/g, match => TEMPLATE_ESCAPES[match] ?? match);
 
 /** A number literal, including `Infinity`. */
