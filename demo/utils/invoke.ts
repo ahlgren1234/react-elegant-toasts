@@ -1,21 +1,15 @@
-import { toast, type ToastOptions } from 'react-elegant-toasts';
-import type { ToastInvocation } from './playground';
+import { toast } from 'react-elegant-toasts';
+import { BURST_SIZE, burstMessage, toToastOptions, type ToastInvocation } from './playground';
 
-// Turns an invocation into the public API call the snippet shows, field for field.
-export function toToastOptions(invocation: ToastInvocation): ToastOptions {
-  const options: ToastOptions = {};
-  if (invocation.description !== undefined) options.description = invocation.description;
-  if (invocation.action) {
-    const { label, result } = invocation.action;
-    options.action = { label, onClick: () => toast(result) };
-  }
-  if (invocation.closeButton === false) options.closeButton = false;
-  if (invocation.duration !== undefined) options.duration = invocation.duration;
-  if (invocation.progress) options.progress = true;
-  return options;
+// The public API calls the snippet shows: `showToast()` and `showBurst()`.
+export function showToast(invocation: ToastInvocation, message = invocation.message): void {
+  const create = invocation.type === 'default' ? toast : toast[invocation.type];
+  create(message, toToastOptions(invocation, toast));
 }
 
-export function showToast(invocation: ToastInvocation): void {
-  const create = invocation.type === 'default' ? toast : toast[invocation.type];
-  create(invocation.message, toToastOptions(invocation));
+// The same toast, numbered, BURST_SIZE times in order.
+export function showBurst(invocation: ToastInvocation): void {
+  for (let index = 1; index <= BURST_SIZE; index++) {
+    showToast(invocation, burstMessage(invocation.message, index));
+  }
 }
