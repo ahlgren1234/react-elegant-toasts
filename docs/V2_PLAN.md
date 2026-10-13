@@ -1131,7 +1131,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - remove the temporary `verbatimModuleSyntax: false` override from `tsconfig.test.json` (added in P-02)
   - port the 0.x tests mechanically only if needed to keep the gate green until P-08
 - Decisions made in P-04:
-  - **Vitest 3.2.x** (with `@vitest/coverage-v8` at the same version) was chosen on purpose. Vitest 4 and later declare `vite` ≥6 as a peer, so using them would have turned P-04 into a migration of the root Vite. Vite 4 and `@vitejs/plugin-react` 4 are therefore unchanged in P-04. Vitest 3 brings its own nested Vite, and P-25 evaluates the upgrade.
+  - **Vitest 3.2.x** (with `@vitest/coverage-v8` at the same version) was chosen on purpose. Vitest 4 and later declare `vite` ≥6 as a peer, so using them would have turned P-04 into a migration of the root Vite. Vite 4 and `@vitejs/plugin-react` 4 are therefore unchanged in P-04. Vitest 3 brings its own nested Vite, and P-25 evaluates the upgrade. (Status, 2026-10-13: P-25 S0 moved the root Vite to 8 and `@vitejs/plugin-react` to 6. Vitest stays at 3.2.x; P-25 S8 evaluates it, and any migration is a separate issue.)
   - `vitest-axe` is pinned exactly to `1.0.0-pre.5`. The stable `0.1.0` extends the obsolete global `Vi` namespace, so `toHaveNoViolations` does not type-check with current Vitest. The pinned prerelease augments the `vitest` module correctly and was verified to run and type-check.
   - The standalone `vitest.config.ts` uses jsdom and no globals: tests import from `vitest` explicitly. The setup file runs Testing Library's `cleanup()` and `vi.useRealTimers()` after every test.
   - The fake-timer setup is this: a test opts in with `vi.useFakeTimers()`, and the shared `afterEach` always restores real timers.
@@ -1156,7 +1156,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - `jsx-a11y/click-events-have-key-events` in `src/Toast.tsx`: click-to-dismiss on a `div` (D-17)
   - `reportUnusedDisableDirectives` is `error`, so these directives fail lint once P-08 removes the code they cover.
   - `lint` runs `eslint .`, and `format` and `format:check` run Prettier on the whole repository. `.prettierignore` excludes `dist/`, `coverage/`, `demo-dist/` and `package-lock.json`.
-  - The demo is formatted but not linted. Demo linting belongs to P-25.
+  - The demo is formatted but not linted. Demo linting belongs to P-25. (Status, 2026-10-13: P-25 S1 lints `demo/`.)
   - Fixtures are formatted but not linted (§27). The ESLint config already ignores `fixtures/` in preparation for P-07.
   - Prettier is upgraded to 3.9.x and the deprecated `jsxBracketSameLine` option is removed. Markdown files set `embeddedLanguageFormatting: "off"`, so Prettier formats the documents but does not rewrite the code examples in them.
   - P-05 does not add `--max-warnings 0`. P-06 sets the final warning policy.
@@ -1173,7 +1173,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - `ci.yml` has four blocking jobs: `quality` (`format:check`, `lint`, `typecheck`), `test`, `build-package` and `demo`. No step uses `continue-on-error`, and CI never runs Prettier in write mode. Triggers are `push` and `pull_request` on `main` and `v2`, plus `workflow_dispatch`.
   - The job is named `build-package` from P-06 on, as in §28. In P-06 it only proves that `npm run build` succeeds. P-07 adds the package validation to the same job without renaming it.
   - `test` is a single React 18 job. The React 18/19 matrix, the Testing Library upgrade, the SSR smoke test and the Next.js fixture stay in P-23.
-  - The `demo` job runs `typecheck:demo` and `build:demo` and never deploys. It keeps the demo compiling from P-08 on. Demo linting stays in P-25.
+  - The `demo` job runs `typecheck:demo` and `build:demo` and never deploys. It keeps the demo compiling from P-08 on. Demo linting stays in P-25. (Status, 2026-10-13: since P-25 S1, `npm run lint` in the `quality` job covers `demo/`; the `demo` job is unchanged.)
   - Node is pinned explicitly with `NODE_VERSION: '24'` in each workflow, not `lts/*`. There is still no `engines`, `packageManager`, `.nvmrc` or `.node-version`. Node 24 leaves Active LTS on 2026-10-20 and Node 26 becomes Active LTS on 2026-10-28. Node 26 replaces Node 24 in a deliberate, reviewed change after that date and before the final 2.0 release.
   - CI installs with `npm ci --ignore-scripts --no-audit --no-fund`. Every gate was verified green without dependency install scripts: esbuild then uses its JS shim and the platform binary from `optionalDependencies`. There is no repository `.npmrc`, `allowScripts` or `strict-allow-scripts`. The repository-level install-script policy is deferred to the supply-chain and release work (§34, P-28).
   - npm audit and deprecation output is not a CI gate. The dev-only audit findings are left to Dependabot. P-08 decides whether unexpected `console.error` output in tests fails the suite. Build output validation belongs to P-07.
@@ -1188,7 +1188,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - no debug steps
   - `deploy-demo.yml` runs only through `workflow_dispatch`, and the `github-pages` environment still accepts deployments only from `main`. It no longer runs lint, typecheck or tests, because `ci.yml` owns those gates. P-29 reconnects it to the final 2.0.0 release (§29).
   - `release.yml` is unchanged. It is a deliberate, temporary exception to the pinning and permissions policy until P-28 replaces it. It cannot publish in the meantime (§29).
-  - Dependabot, not Renovate, opens weekly `npm` and `github-actions` updates against `v2`. Minor and patch dev-dependency updates are grouped, and so are action updates. Major updates of the deliberately pinned tooling are ignored until their owning phases: ESLint and `@eslint/js` (P-05), Vite, `@vitejs/plugin-react`, Vitest and `@vitest/coverage-v8` (P-25), React, ReactDOM, their types and `@testing-library/react` (P-23). `vitest-axe` is ignored entirely (P-04). (P-23 S1 lifted the `@testing-library/react` ignore. P-23 S9 kept the React, ReactDOM and type major ignores after P-23, for the reason its S9 record gives.) `.github/dependabot.yml` exists only on `v2`. Dependabot reads it only from the default branch, so version updates stay inactive until the file reaches `main`.
+  - Dependabot, not Renovate, opens weekly `npm` and `github-actions` updates against `v2`. Minor and patch dev-dependency updates are grouped, and so are action updates. Major updates of the deliberately pinned tooling are ignored until their owning phases: ESLint and `@eslint/js` (P-05), Vite, `@vitejs/plugin-react`, Vitest and `@vitest/coverage-v8` (P-25), React, ReactDOM, their types and `@testing-library/react` (P-23). `vitest-axe` is ignored entirely (P-04). (P-23 S1 lifted the `@testing-library/react` ignore. P-23 S9 kept the React, ReactDOM and type major ignores after P-23, for the reason its S9 record gives.) `.github/dependabot.yml` exists only on `v2`. Dependabot reads it only from the default branch, so version updates stay inactive until the file reaches `main`. (Status, 2026-10-13: the Vite, `@vitejs/plugin-react`, Vitest and `@vitest/coverage-v8` major ignores are unchanged after P-25 S0; P-25 decides them at S9.)
   - `demo-dist/` is git-ignored, so `build:demo` leaves the working tree clean.
   - The required status checks (`quality`, `test`, `build-package`, `demo`) are configured in GitHub only after the first green pushed run shows that those check names exist. Each later phase adds its own job.
   - AC-CI-1 is met only for the gates that exist at a given phase. P-06 makes every existing gate blocking, and later phases add the remaining §28 gates.
@@ -1276,7 +1276,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     P-09 to P-14 replace these bodies without changing a signature. The temporary `src/__tests__/skeleton.test.tsx` documents this contract and is replaced in P-09 and P-14.
 
   - Behavioural TSDoc arrives with the behaviour: P-12 for `toast`, P-14 for `Toaster`. P-26 checks completeness (§31). P-08 has short source comments only.
-  - The demo is a minimal placeholder until P-25: a heading, a note, the four existing header links (GitHub, npm, portfolio, Buy Me a Coffee, with unchanged URLs), one `toast()` button and `<Toaster />`. The README still describes 0.x until P-26.
+  - The demo is a minimal placeholder until P-25: a heading, a note, the four existing header links (GitHub, npm, portfolio, Buy Me a Coffee, with unchanged URLs), one `toast()` button and `<Toaster />`. The README still describes 0.x until P-26. (Status, 2026-10-13: P-25 S1 and S2 replaced the placeholder. The four links keep their URLs: GitHub and npm are in the header, Portfolio and Buy Me a Coffee in the footer.)
   - `fixtures/consumer-vite` uses the v2 API. It still has React 18, TypeScript 5.0.4, Vite 8.3.2 and no rendering, and its `package.json` and lockfile are unchanged. It contains:
     - `Toaster` through `createElement`
     - every `toast` method, in an exported function that is never invoked
@@ -6404,9 +6404,56 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 ### Track F: Documentation and release
 
-**P-25 Demo rebuild** (§31). It deploys only at 2.0.0. After P-04 the demo still builds with Vite 4 and `@vitejs/plugin-react` 4, which were kept on purpose (see P-04). P-25 evaluates upgrading them, together with whether Vitest can then move past 3.x.
+**P-25 Demo rebuild** (§31). It deploys only at 2.0.0. After P-04 the demo still builds with Vite 4 and `@vitejs/plugin-react` 4, which were kept on purpose (see P-04). P-25 evaluates upgrading them, together with whether Vitest can then move past 3.x. (Status, 2026-10-13: S0 moved the demo to Vite 8 and `@vitejs/plugin-react` 6; Vitest is S8.)
 
 - Carried over from P-19 (S2): the demo needs a substantial visual and UX redesign before v2 is released. The goal is a modern v2 showcase and playground that presents the product, separate from internal edge-case and checkpoint harnesses, which do not belong in it. This is a pre-release requirement, and no phase before P-25 implements it.
+- **Status: in progress.** S0, S1, the long-content QA follow-up and S2 are merged into `v2`. S3 to S9 remain. Issue #19 stays open, with Project #8 status In Progress.
+- **Plan history:** the D0 discovery (2026-10-12, at `2051e5d`) defined slices S0 to S9. The reconciliation of 2026-10-13, at `70de073`, compared that plan with the merged code and revised the remaining slices; the maintainer approved it with the decisions below. The numbering is kept.
+- **Delivery:** each slice is its own PR into `v2`, merged with a merge commit after a maintainer checkpoint. There is no single phase PR. Each remaining slice's PR adds its own short record here.
+- **Completed:**
+  - **S0, toolchain** (PR #44, `3b7bc26`): Vite 4.5.9 → 8.3.4 and `@vitejs/plugin-react` 4.3.4 → 6.1.2, in `package.json` and the lockfile only. The root Vite also builds the browser harness, so the required `browser` check covered the change. Vitest is unchanged (3.2.7, with its own nested Vite 7.3.6). `build.cssTarget` in `vite.config.ts` raises Chrome and Edge to 120, so the demo build keeps `:dir(rtl)`. Found in S0 and kept separate from P-25: Issue #45 (bundlers lower the stylesheet's `:dir(rtl)` in consumer builds) and Issue #46 (an event-order assumption in a lifecycle browser test).
+  - **S1, package consumption and lint** (PR #47, `0699665`):
+    - The demo imports only `react-elegant-toasts` and `react-elegant-toasts/styles.css`. `vite.config.ts` aliases them to `dist/`, as the `exports` map does, and fails with a message when `dist/` is missing. `demo/tsconfig.json` maps the types to `dist/index.d.ts`.
+    - `demo`, `build:demo`, `typecheck:demo`, `lint` and `lint:fix` build the package first; `ci.yml` is unchanged.
+    - `demo/**` is linted with the React, hooks and jsx-a11y rules of `src/`.
+    - The P-17 prototype stylesheet, the `?production-css` switch and the focus-review aid are removed.
+  - **Long-content QA follow-up** (PR #48, `c8fa43f`): the Long text, Long title and Unbroken URL presets moved to the internal manual QA page, `browser/harness/manual.tsx`, before the demo dropped them.
+  - **S2, visual foundation and playground** (PR #49, `70de073`), as two slices, each approved at a visual checkpoint. The "Calm instrument" direction was approved at S2 D0.
+    - **S2a-1:**
+      - `--d-*` tokens for light and dark: zinc neutrals, a violet accent (`#6d28d9` light, `#a78bfa` dark), and `--ret-focus` as the page's focus colour. System fonts only.
+      - One theme control for the page and the Toaster. RTL applies to `<html dir>`, and toast positions stay physical (§20). Nothing is persisted.
+      - A header with the package name, a static v2 badge and the GitHub and npm links; the hero; and a footer with the Portfolio and Buy Me a Coffee links.
+      - Scoped CSS: `d-` classes only, no `.ret-*` selector, and `html` and `body` as the only element selectors. The `<Toaster>` is a sibling of the page root.
+    - **S2a-2:**
+      - The playground: six types, six positions, description, action, close button and duration (5s, 10s, persistent; loading toasts are always persistent).
+      - A typed configuration (`demo/utils/playground.ts`) from which both the call that runs and the code shown are derived. The snippet leaves out defaults and is highlighted without a dependency. Copy has an announced status and a manual fallback.
+      - 33 demo tests (`demo/utils/snippet.test.ts`, `demo/components/CodePanel.test.tsx`). Vitest's `include` adds `demo/**/*.test.{ts,tsx}`; coverage stays on `src/`.
+      - The interim examples (promise, custom, stack, all types, all positions) and `maxVisible={6}` are removed. Their features return in S4 to S5b.
+  - **Done earlier than the D0 plan placed it,** and not repeated: S3's types, positions, content options, duration, live code, copy and snippet tests; S4's theme, RTL and Toaster position; S5's action and dismiss all; S6's hotkey note; and S7's checks of the S2 page (no horizontal scroll at 360, 768 and 1280 px, axe clean, keyboard only, reduced motion).
+- **Decisions** (maintainer, 2026-10-13):
+  1. The S3 to S9 numbering is kept. S5 is split into S5a and S5b, and S6 into S6a and S6b.
+  2. No free-text message or description fields for now; the playground keeps its fixed copy per type.
+  3. The custom toast gets its own section, not a playground type.
+  4. `maxVisible` is a segmented control with 1, 2, 3, 4 and 6.
+  5. The queue burst creates eight toasts.
+  6. Feature snippets come from typed recipes, derived from the same source as their behaviour.
+  7. Control targets: 40 px preferred, 24 × 24 px minimum.
+  8. Discreet in-page navigation is added in S7.
+  9. Demo tests target pure logic and never import the built package at runtime: CI's `test` job does not build `dist/`, and Vitest has no alias for the package.
+  10. S8 is an evaluation only. Any Vitest migration needs its own issue and PR.
+  11. The Dependabot major-version ignores for Vite, `@vitejs/plugin-react`, Vitest and `@vitest/coverage-v8` are decided at S9.
+  12. No CI job smoke-tests the built demo in P-25.
+  13. Issues #45 and #46 stay separate from P-25.
+- **Remaining slices.** Each ends at a maintainer checkpoint, then its PR. Every slice passes `format:check`, `lint`, `typecheck`, `typecheck:demo`, `build:demo` and `npm test`.
+  - **S3, progress:** a progress control in the playground configuration, the call and the snippet. Progress shows only on normal toasts with a finite duration, so the control is disabled, with a hint, for Persistent and Loading. Tests: snippet cases and the syntax check over the larger option space. Manual: the built demo (`build:demo`, then `vite preview`), in LTR and RTL, light and dark.
+  - **S4, queue:** the `maxVisible` control (decision 4), shown in the snippet only when it differs from the default of 4, and a burst of eight toasts at the selected position. Acceptance: exactly `maxVisible` toasts per position, the next one promoted on dismiss, other positions unaffected. Manual: promotion after close, Escape and timeout, and RTL.
+  - **S5a, lifecycle:** the feature-section pattern (text, a Run button and a recipe snippet); promise with resolve and reject; loading → success with the same `id`; dismissing one toast by `id`; and a visible log of the `onDismiss` reasons and `onAutoClose`, which is not a live region. Tests: each recipe's snippet. Manual: each dismissal reason by hand.
+  - **S5b, accessible custom toast:** a `toast.custom` example that meets the §17.3 boundary (named controls, keyboard operable, its own dismiss), with and without the library close button, styled only through its own `className`. Manual: a screen-reader spot check by the maintainer (NVDA or VoiceOver), and keyboard only.
+  - **S6a, accessibility guidance:** Alt+T and Escape; how to try reduced motion (the OS setting and DevTools emulation); swipe on touch, with the hint shown only on `pointer: coarse`; optionally a `labels` example. The copy claims nothing beyond the P-16 and P-22 evidence (D-22) and links no P-26 document before it exists. Manual: Alt+T and Escape in Chromium and Firefox, and reduced-motion emulation.
+  - **S6b, tokens and theming:** a reference of the 30 public `--ret-*` tokens, with a test that it matches the tokens declared in `src/styles.css`, and a branded toast through `className` and scoped token overrides. Manual: light, dark and RTL.
+  - **S7, hardening:** install-command copy, sharing the copy logic now in `CodePanel`; the in-page navigation; and a full-page pass: no horizontal scroll at 320 px, targets as in decision 7, forced colours, 200% zoom, axe clean in both themes and directions, keyboard only. Manual: a real phone (touch and swipe) and the final visual sign-off.
+  - **S8, Vitest evaluation:** time-boxed, in a throwaway worktree, with nothing committed and no dependency change. It answers whether Vitest 4.x or 5.x and `@vitest/coverage-v8` dedupe onto the root Vite 8 and what the lockfile delta is; what configuration changes; whether `vitest-axe` 1.0.0-pre.5 still works; whether the full suite passes on React 19.3.0 and 18.3.1 with identical counts and unchanged fake-timer behaviour; whether it runs on Node 24 and 26 (Issue #24); and the CI runtime. The outcome is a recorded recommendation: migrate through a separate issue, or stay on 3.x with the reason.
+  - **S9, reconciliation:** the §31 trace against the merged demo, the S8 outcome, the Dependabot decision (decision 11) and the closing status. Then, for the maintainer: closing Issue #19, moving its Project #8 item to Done, and updating the roadmap (Issue #28).
 
 **P-26 README and reference docs** (§31), including the accessibility boundary and the ESM-only guidance. Defects: D-22, D-35.
 
