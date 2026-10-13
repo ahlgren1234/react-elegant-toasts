@@ -1,5 +1,5 @@
 import type { ToastTheme } from 'react-elegant-toasts';
-import type { Direction } from '../lib/useDocumentSettings';
+import type { Direction } from '../utils/useDocumentSettings';
 import { ExternalLink } from './ExternalLink';
 import { GitHubIcon, MoonIcon, NpmIcon, SunIcon, SystemIcon } from './icons';
 

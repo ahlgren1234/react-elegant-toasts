@@ -1,6 +1,6 @@
 import type { ToastPosition } from 'react-elegant-toasts';
 
-export const POSITIONS = [
+const POSITIONS = [
   { value: 'top-left', label: 'Top left' },
   { value: 'top-center', label: 'Top center' },
   { value: 'top-right', label: 'Top right' },

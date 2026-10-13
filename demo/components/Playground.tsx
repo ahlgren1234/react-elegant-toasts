@@ -1,11 +1,22 @@
-import { useId, useState } from 'react';
-import { toast, type ToastOptions, type ToastPosition } from 'react-elegant-toasts';
+import { useMemo } from 'react';
+import { toast, type ToastTheme } from 'react-elegant-toasts';
+import { showToast } from '../utils/invoke';
+import {
+  DURATIONS,
+  TOAST_TYPES,
+  durationApplies,
+  toInvocation,
+  toToasterSettings,
+  type PlaygroundConfig,
+} from '../utils/playground';
+import { snippetTokens } from '../utils/snippet';
 import { CodePanel } from './CodePanel';
-import { POSITIONS, PositionPicker } from './PositionPicker';
+import { PositionPicker } from './PositionPicker';
 
 interface PlaygroundProps {
-  position: ToastPosition;
-  onPositionChange: (position: ToastPosition) => void;
+  config: PlaygroundConfig;
+  onChange: (config: PlaygroundConfig) => void;
+  theme: ToastTheme;
 }
 
 interface OptionSwitchProps {
@@ -30,49 +41,17 @@ const OptionSwitch = ({ label, checked, onChange }: OptionSwitchProps) => (
   </label>
 );
 
-// The playground shell: it drives the toast API with a few options. The full configuration model
-// and the code generated from it arrive in a later slice.
-export function Playground({ position, onPositionChange }: PlaygroundProps) {
-  const [description, setDescription] = useState(true);
-  const [action, setAction] = useState(false);
-  const [closeButton, setCloseButton] = useState(true);
-  const [persistent, setPersistent] = useState(false);
-  const typesId = useId();
-  const moreId = useId();
+export function Playground({ config, onChange, theme }: PlaygroundProps) {
+  const set = <K extends keyof PlaygroundConfig>(key: K, value: PlaygroundConfig[K]) =>
+    onChange({ ...config, [key]: value });
 
-  const options = (at: ToastPosition = position): ToastOptions => ({
-    position: at,
-    closeButton,
-    ...(persistent ? { duration: Infinity } : {}),
-    ...(description ? { description: 'Changes are synced to all of your devices.' } : {}),
-    ...(action ? { action: { label: 'Undo', onClick: () => undefined } } : {}),
-  });
-
-  const custom = (withClose: boolean) => {
-    const id = `custom-${Date.now()}`;
-    toast.custom(
-      <div className="demo-custom-toast">
-        <span className="demo-custom-avatar" aria-hidden="true">
-          AL
-        </span>
-        <div>
-          <strong>Ada Lovelace invited you</strong>
-          <p>Join the Analytics workspace to view shared reports.</p>
-          <button type="button" onClick={() => toast.dismiss(id)}>
-            View invitation
-          </button>
-        </div>
-      </div>,
-      {
-        id,
-        position,
-        closeButton: withClose,
-        // The consumer's foreground on the toast root, which the library close button inherits.
-        className: 'demo-custom-root',
-        ...(persistent ? { duration: Infinity } : {}),
-      }
-    );
-  };
+  // The toast that "Show toast" creates and the code shown are both derived from `config`.
+  const invocation = useMemo(() => toInvocation(config), [config]);
+  const tokens = useMemo(
+    () => snippetTokens(invocation, toToasterSettings(config, theme)),
+    [invocation, config, theme]
+  );
+  const hasDuration = durationApplies(config.type);
 
   return (
     <section id="playground" className="d-section" aria-labelledby="playground-heading">
@@ -80,163 +59,107 @@ export function Playground({ position, onPositionChange }: PlaygroundProps) {
         <header className="d-section__header">
           <p className="d-eyebrow">Playground</p>
           <h2 id="playground-heading" className="d-section__title">
-            Try every toast
+            Configure a toast
           </h2>
           <p className="d-section__lede">
-            Pick a position and a few options, then fire a toast. Press <kbd>Alt</kbd>+<kbd>T</kbd>{' '}
-            to move focus to the first toast, <kbd>Tab</kbd> to reach its action and close button,
-            and <kbd>Escape</kbd> to return.
+            Every change updates the code beside it. Press <kbd>Alt</kbd>+<kbd>T</kbd> to move focus
+            to the first toast, <kbd>Tab</kbd> to reach its action and close button, and{' '}
+            <kbd>Escape</kbd> to return.
           </p>
         </header>
 
         <div className="d-playground">
           <div className="d-card d-playground__controls">
-            <PositionPicker value={position} onChange={onPositionChange} />
-
             <fieldset className="d-field">
-              <legend className="d-field__legend">Options</legend>
-              <div className="d-switch-list">
-                <OptionSwitch label="Description" checked={description} onChange={setDescription} />
-                <OptionSwitch label="Action" checked={action} onChange={setAction} />
-                <OptionSwitch
-                  label="Close button"
-                  checked={closeButton}
-                  onChange={setCloseButton}
-                />
-                <OptionSwitch label="Persistent" checked={persistent} onChange={setPersistent} />
+              <legend className="d-field__legend">Type</legend>
+              <div className="d-choice-grid">
+                {TOAST_TYPES.map(({ value, label }) => (
+                  <label key={value} className="d-choice">
+                    <input
+                      type="radio"
+                      name="toast-type"
+                      value={value}
+                      className="d-visually-hidden"
+                      checked={config.type === value}
+                      onChange={() => set('type', value)}
+                    />
+                    <span className="d-choice__face">{label}</span>
+                  </label>
+                ))}
               </div>
             </fieldset>
 
-            <div className="d-field" role="group" aria-labelledby={typesId}>
-              <p id={typesId} className="d-field__legend">
-                Types
-              </p>
-              <div className="d-button-grid">
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => toast('Event has been created', options())}
-                >
-                  Default
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => toast.success('Profile saved', options())}
-                >
-                  Success
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => toast.error('Payment failed', options())}
-                >
-                  Error
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => toast.warning('Storage almost full', options())}
-                >
-                  Warning
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => toast.info('New version available', options())}
-                >
-                  Info
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => toast.loading('Uploading report…', options())}
-                >
-                  Loading
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() =>
-                    toast.promise(
-                      () => new Promise<void>(resolve => setTimeout(resolve, 2000)),
-                      { loading: 'Publishing…', success: 'Published', error: 'Could not publish' },
-                      options()
-                    )
-                  }
-                >
-                  Promise
-                </button>
-              </div>
-            </div>
+            <PositionPicker value={config.position} onChange={value => set('position', value)} />
 
-            <div className="d-field" role="group" aria-labelledby={moreId}>
-              <p id={moreId} className="d-field__legend">
-                More examples
-              </p>
-              <div className="d-button-grid">
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => custom(false)}
-                >
-                  Custom
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => custom(true)}
-                >
-                  Custom + close
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => {
-                    toast.info('First (oldest)', options());
-                    toast.success('Second', options());
-                    toast.error('Third (newest)', options());
-                  }}
-                >
-                  Stack of three
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() => {
-                    toast('Default: event created', options());
-                    toast.success('Success: profile saved', options());
-                    toast.error('Error: payment failed', options());
-                    toast.warning('Warning: storage almost full', options());
-                    toast.info('Info: new version available', options());
-                    toast.loading('Loading: uploading report', options());
-                  }}
-                >
-                  All types
-                </button>
-                <button
-                  type="button"
-                  className="d-button d-button--secondary"
-                  onClick={() =>
-                    POSITIONS.forEach(({ value }) => toast.success(value, options(value)))
-                  }
-                >
-                  All six positions
-                </button>
+            <fieldset className="d-field">
+              <legend className="d-field__legend">Content</legend>
+              <div className="d-switch-list">
+                <OptionSwitch
+                  label="Description"
+                  checked={config.description}
+                  onChange={value => set('description', value)}
+                />
+                <OptionSwitch
+                  label="Action"
+                  checked={config.action}
+                  onChange={value => set('action', value)}
+                />
+                <OptionSwitch
+                  label="Close button"
+                  checked={config.closeButton}
+                  onChange={value => set('closeButton', value)}
+                />
               </div>
-            </div>
+            </fieldset>
 
-            <button
-              type="button"
-              className="d-button d-button--ghost d-playground__dismiss"
-              onClick={() => toast.dismiss()}
+            <fieldset
+              className="d-field"
+              disabled={!hasDuration}
+              aria-describedby={hasDuration ? undefined : 'duration-hint'}
             >
-              Dismiss all toasts
-            </button>
+              <legend className="d-field__legend">Duration</legend>
+              <div className="d-segmented d-segmented--fill">
+                {DURATIONS.map(({ value, label }) => (
+                  <label key={value} className="d-segmented__option">
+                    <input
+                      type="radio"
+                      name="duration"
+                      value={value}
+                      className="d-visually-hidden"
+                      checked={config.duration === value}
+                      onChange={() => set('duration', value)}
+                    />
+                    <span className="d-segmented__face">{label}</span>
+                  </label>
+                ))}
+              </div>
+              {!hasDuration && (
+                <p id="duration-hint" className="d-field__hint">
+                  Loading toasts stay until they are updated or dismissed.
+                </p>
+              )}
+            </fieldset>
+
+            <div className="d-playground__actions">
+              <button
+                type="button"
+                className="d-button d-button--primary"
+                onClick={() => showToast(invocation)}
+              >
+                Show toast
+              </button>
+              <button
+                type="button"
+                className="d-button d-button--secondary"
+                onClick={() => toast.dismiss()}
+              >
+                Dismiss all
+              </button>
+            </div>
           </div>
 
           <div className="d-playground__code">
-            <CodePanel />
+            <CodePanel tokens={tokens} fileName="App.tsx" />
           </div>
         </div>
       </div>

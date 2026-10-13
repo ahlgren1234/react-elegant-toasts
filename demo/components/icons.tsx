@@ -70,3 +70,16 @@ export const MoonIcon = ({ size = 16 }: IconProps) => (
     <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" {...stroke} />
   </svg>
 );
+
+export const CopyIcon = ({ size = 15 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <rect x="9" y="9" width="12" height="12" rx="2" {...stroke} />
+    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" {...stroke} />
+  </svg>
+);
+
+export const CheckIcon = ({ size = 15 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M5 12.5l4.5 4.5L19 7.5" {...stroke} />
+  </svg>
+);
