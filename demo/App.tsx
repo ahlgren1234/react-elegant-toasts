@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Toaster, type ToastTheme } from 'react-elegant-toasts';
 import { Hero } from './components/Hero';
+import { Lifecycle } from './components/Lifecycle';
 import { Playground } from './components/Playground';
 import { SiteFooter } from './components/SiteFooter';
 import { SiteHeader } from './components/SiteHeader';
@@ -28,6 +29,7 @@ export function App() {
         <main>
           <Hero />
           <Playground config={config} onChange={setConfig} theme={theme} />
+          <Lifecycle />
         </main>
         <SiteFooter />
       </div>
