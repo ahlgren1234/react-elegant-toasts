@@ -550,12 +550,21 @@ describe('the toast card, content and controls (§17.2, OQ-24, P-17 S3)', () => 
       'min-inline-size': '0px',
       'overflow-wrap': 'anywhere',
     });
-    // Toast parts only: the visually hidden live regions clip by design (S5).
+    // Toast parts only: the visually hidden live regions clip by design (S5). Narrowed by Issue
+    // #45: the decorative progress strip, which holds no text, clips its fill with
+    // `overflow: clip`, and no other toast part sets any overflow.
     for (const rule of rules.filter(r => /ret-toast(?!er)/.test(r.selector))) {
       const css = declarations(rule.style);
       expect(css['white-space']).toBeUndefined();
       expect(css['text-overflow']).toBeUndefined();
-      expect(Object.keys(css).filter(p => /line-clamp|^overflow(-x|-y)?$/.test(p))).toEqual([]);
+      const clipping = Object.keys(css).filter(p => /line-clamp|^overflow(-x|-y)?$/.test(p));
+      if (rule.selector === ':where(.ret-toast__progress)' && rule.media === null) {
+        expect(Object.fromEntries(clipping.map(p => [p, css[p]])), rule.selector).toEqual({
+          overflow: 'clip',
+        });
+      } else {
+        expect(clipping, rule.selector).toEqual([]);
+      }
     }
   });
 
@@ -1660,6 +1669,7 @@ describe('progress (§20, §22, P-20 S3, D1 candidate B)', () => {
     'block-size': 'var(--ret-progress-height)',
     'clip-path':
       'inset(calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 max(0px, var(--ret-radius) - 1px) max(0px, var(--ret-radius) - 1px) )',
+    overflow: 'clip',
     'pointer-events': 'none',
   };
   // Issue #45: twice the strip's inline size, centred on its inline-start edge, scaled about its
@@ -1696,6 +1706,23 @@ describe('progress (§20, §22, P-20 S3, D1 candidate B)', () => {
   it('lays a static, clipped strip over the block-end edge, out of flow, with no track', () => {
     const { host, strip } = progressIn('visible');
     expect(squashed(declared(strip))).toEqual(STRIP);
+    host.remove();
+  });
+
+  // Issue #45: the fill is twice the strip's width, and its outer half must not reach any scroll
+  // container's overflow. `clip`, never `hidden` or `auto`: the strip clips without becoming a
+  // scroll container of its own, and only the strip clips; the fill, the toast and the lists do not.
+  it('clips the fill with overflow: clip on the strip alone, never a scroll container', () => {
+    const { host, item, strip, fill } = progressIn('visible');
+    expect(declared(strip)).toMatchObject({ overflow: 'clip' });
+    expect(Object.keys(declared(strip)).filter(p => /^overflow-/.test(p))).toEqual([]);
+    for (const element of [fill, item, ...POSITIONS.map(listAt), regionOf()]) {
+      expect(Object.keys(declared(element)).filter(p => /^overflow/.test(p))).toEqual([]);
+    }
+    for (const media of [REDUCED, FORCED]) {
+      const own = rules.filter(r => r.media === media && strip.matches(r.selector));
+      expect(own.flatMap(r => Object.keys(declarations(r.style)))).not.toContain('overflow');
+    }
     host.remove();
   });
 

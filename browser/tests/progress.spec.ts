@@ -360,3 +360,75 @@ for (const direction of DIRECTION_CASES) {
     }
   });
 }
+
+// Issue #45: the fill's outer half overhangs the toast toward its inline start. A scroll container
+// that is the fixed lists' containing block (a transform, or paint containment) holds that
+// overhang, and when the Toaster's direction differs from the container's, it lies on the side
+// the container scrolls to. The strip must keep it out of the container's scrollable overflow.
+const CONTAINING_SCROLLERS = {
+  transform: 'transform: translateZ(0)',
+  'contain: paint': 'contain: paint',
+} as const;
+const MIXED_DIRECTIONS = [
+  { page: 'ltr', toaster: 'rtl', position: 'top-right' },
+  { page: 'ltr', toaster: 'rtl', position: 'top-left' },
+  { page: 'rtl', toaster: 'ltr', position: 'top-left' },
+  { page: 'rtl', toaster: 'ltr', position: 'top-right' },
+] as const;
+
+for (const [name, containing] of Object.entries(CONTAINING_SCROLLERS)) {
+  test(`keeps the fill out of a scroll container's overflow, with ${name} on it`, async ({
+    page,
+  }) => {
+    for (const layout of MIXED_DIRECTIONS) {
+      await openHarness(page);
+      await page.evaluate(
+        ({ containing, layout }) => {
+          document.documentElement.dir = layout.page;
+          const scroller = document.createElement('div');
+          scroller.id = 'h-scroller';
+          scroller.style.cssText = `inline-size: 600px; block-size: 400px; overflow: auto; ${containing}`;
+          const root = document.getElementById('root')!;
+          root.dir = layout.toaster;
+          root.replaceWith(scroller);
+          scroller.append(root);
+          const h = window.__retHarness!;
+          h.mount({ position: layout.position });
+          h.toast('Saved', { id: 'a', className: 'h-a', duration: 60000, progress: true });
+        },
+        { containing, layout }
+      );
+      await expect(page.locator('.ret-toast.h-a')).toHaveAttribute('data-phase', 'visible');
+      const what = `${name}: ${layout.page} page, ${layout.toaster} Toaster at ${layout.position}`;
+      const measured = await page.evaluate(
+        () =>
+          new Promise<{ list: string; scrollWidth: number; clientWidth: number; moved: number[] }>(
+            resolve =>
+              requestAnimationFrame(() => {
+                const scroller = document.getElementById('h-scroller')!;
+                const list = document.querySelector('.ret-toast.h-a')!.closest('ol')!;
+                // Any horizontal scroll range at all would let these move it.
+                const moved = [10_000, -10_000].map(left => {
+                  scroller.scrollLeft = left;
+                  const at = scroller.scrollLeft;
+                  scroller.scrollLeft = 0;
+                  return at;
+                });
+                resolve({
+                  // The lists are fixed to the scroller only if it is their containing block.
+                  list: list.offsetParent === scroller ? 'scroller' : 'other',
+                  scrollWidth: scroller.scrollWidth,
+                  clientWidth: scroller.clientWidth,
+                  moved,
+                });
+              })
+          )
+      );
+      expect(measured.list, `${what}: the scroller contains the fixed list`).toBe('scroller');
+      expect(measured.scrollWidth, `${what}: no horizontal overflow`).toBeLessThanOrEqual(
+        measured.clientWidth
+      );
+      expect(measured.moved, `${what}: no horizontal scroll range`).toEqual([0, 0]);
+    }
+  });
+}

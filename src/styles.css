@@ -541,6 +541,8 @@
     calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 max(0px, var(--ret-radius) - 1px)
       max(0px, var(--ret-radius) - 1px)
   );
+  /* The fill's outer half stays out of any scroll container's overflow (Issue #45). */
+  overflow: clip;
   pointer-events: none;
 }
 
