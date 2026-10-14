@@ -1,26 +1,65 @@
 // Public types (§6.6). These are exactly the types exported from the package entry (§6.7).
 import type { MouseEvent, ReactNode } from 'react';
 
+/**
+ * Identifies a toast: the `id` passed in the options, or one the library generates. A generated ID
+ * never matches a toast that already exists; its format is not part of the API.
+ */
 export type ToastId = string;
 
+/**
+ * Where a toast is shown: one of six fixed spots on the screen. Each position has its own stack
+ * and its own queue. Positions are physical: `left` and `right` keep their meaning in a
+ * right-to-left layout.
+ */
 export type ToastPosition =
   'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
+/**
+ * A toast's kind, set by the call that created or last replaced it: `"default"` by `toast()`,
+ * `"custom"` by `toast.custom`, and the others by the method of the same name. A `toast.promise`
+ * toast is `"loading"` until the promise settles, then `"success"` or `"error"`.
+ */
 export type ToastType = 'default' | 'success' | 'error' | 'warning' | 'info' | 'loading' | 'custom';
 
+/**
+ * The colour theme of the toasts: `"light"`, `"dark"`, or `"system"`, which follows the user's
+ * light or dark colour-scheme preference through the stylesheet.
+ */
 export type ToastTheme = 'light' | 'dark' | 'system';
 
+/**
+ * Why a toast was dismissed, as passed to `onDismiss`:
+ *
+ * - `"timeout"`: its duration ran out. The only reason that also calls `onAutoClose`.
+ * - `"close-button"`: the library close button was pressed.
+ * - `"swipe"`: it was swiped away by touch or pen.
+ * - `"programmatic"`: `toast.dismiss` was called, or a `toast.promise` `error` function threw.
+ * - `"action"`: its action button was clicked and `onClick` did not call `preventDefault()`.
+ */
 export type DismissReason = 'timeout' | 'close-button' | 'swipe' | 'programmatic' | 'action';
 
+/** The one action button of a normal toast, shown after its content. */
 export interface ToastAction {
+  /** The button's content. It also names the button for assistive technology. */
   label: ReactNode;
+  /**
+   * Called when the button is clicked. The toast is then dismissed with the reason `"action"`,
+   * unless the handler calls `event.preventDefault()`. If the handler throws, the toast stays.
+   */
   onClick: (event: MouseEvent<HTMLButtonElement>) => void;
 }
 
+/**
+ * A read-only view of a toast, passed to `onDismiss` and `onAutoClose`. It reflects the toast's
+ * latest definition, after any replacement.
+ */
 export interface ToastSnapshot {
   readonly id: ToastId;
   readonly type: ToastType;
+  /** The content the toast shows. */
   readonly content: ReactNode;
+  /** The toast's description; absent when it has none. */
   readonly description?: ReactNode;
 }
 
@@ -136,6 +175,11 @@ export interface ToasterProps {
    * not move toasts that already have a position.
    */
   position?: ToastPosition | undefined;
+  /**
+   * The colour theme: `"light"`, `"dark"` or `"system"`, the default, which follows the user's
+   * light or dark colour-scheme preference. Any other value counts as `"system"`. The theme is
+   * applied by the stylesheet alone, so server-rendered markup and the first client render match.
+   */
   theme?: ToastTheme | undefined;
   /**
    * How many toasts each position shows at once: a whole number of at least 1, 4 by default. More
