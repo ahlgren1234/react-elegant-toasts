@@ -1,4 +1,5 @@
 import { toast } from 'react-elegant-toasts';
+import { InstallCommand } from './InstallCommand';
 
 export const Hero = () => (
   <section className="d-hero" aria-labelledby="hero-heading">
@@ -26,12 +27,7 @@ export const Hero = () => (
           Open the playground
         </a>
       </div>
-      <p className="d-install">
-        <span className="d-install__prompt" aria-hidden="true">
-          $
-        </span>
-        <code>npm install react-elegant-toasts</code>
-      </p>
+      <InstallCommand />
     </div>
   </section>
 );

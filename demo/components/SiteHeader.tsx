@@ -1,7 +1,10 @@
+import { useRef } from 'react';
 import type { ToastTheme } from 'react-elegant-toasts';
 import type { Direction } from '../utils/useDocumentSettings';
+import { useHeaderOffset } from '../utils/useHeaderOffset';
 import { ExternalLink } from './ExternalLink';
 import { GitHubIcon, MoonIcon, NpmIcon, SunIcon, SystemIcon } from './icons';
+import { SectionNav } from './SectionNav';
 
 const THEMES = [
   { value: 'system', label: 'System', icon: <SystemIcon /> },
@@ -22,8 +25,11 @@ export function SiteHeader({
   direction,
   onDirectionChange,
 }: SiteHeaderProps) {
+  const headerRef = useRef<HTMLElement>(null);
+  useHeaderOffset(headerRef);
+
   return (
-    <header className="d-header">
+    <header ref={headerRef} className="d-header">
       <div className="d-container d-header__inner">
         <div className="d-brand">
           <span className="d-brand__mark" aria-hidden="true" />
@@ -87,6 +93,7 @@ export function SiteHeader({
           </ExternalLink>
         </nav>
       </div>
+      <SectionNav />
     </header>
   );
 }
