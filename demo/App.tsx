@@ -20,8 +20,8 @@ export function App() {
   return (
     <>
       <div className="d-page">
-        <a className="d-skip-link" href="#playground">
-          Skip to the playground
+        <a className="d-skip-link" href="#main">
+          Skip to content
         </a>
         <SiteHeader
           theme={theme}
@@ -29,7 +29,7 @@ export function App() {
           direction={direction}
           onDirectionChange={setDirection}
         />
-        <main>
+        <main id="main">
           <Hero />
           <Playground config={config} onChange={setConfig} theme={theme} />
           <Lifecycle />
