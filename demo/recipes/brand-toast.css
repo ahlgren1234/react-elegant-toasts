@@ -1,0 +1,58 @@
+/*
+ * The branded toast. It sets only the library's public tokens, on the class the toast passes as
+ * its `className`. Tokens are inherited, so the card and everything in it take the brand values,
+ * and every other toast keeps the defaults. Nothing here selects the toast's inner markup, adds
+ * motion or uses a physical direction, so the library's RTL mirroring, reduced-motion handling and
+ * focus rings stay as they are.
+ *
+ * Each pair keeps the library's contrast: text 4.5:1 or more on its background, and the icon
+ * glyph, focus ring and progress fill 3:1 or more on theirs.
+ */
+
+/* Light: the default, and theme="system" in a light colour scheme. */
+.brand-toast {
+  --ret-surface: #f0fdfa;
+  --ret-text: #134e4a;
+  --ret-text-muted: #115e59;
+  --ret-border: #5eead4;
+  --ret-shadow: 0 1px 2px rgb(19 78 74 / 0.08), 0 6px 18px rgb(19 78 74 / 0.14);
+  --ret-focus: #0f766e;
+  --ret-action-surface: #0f766e;
+  --ret-action-text: #ffffff;
+  --ret-success: #0f766e;
+  --ret-success-subtle: #ccfbf1;
+  --ret-progress: #0f766e;
+  --ret-radius: 14px;
+}
+
+/* Dark: the Toaster's theme="dark". The documented theme attribute sits on .ret-toaster. */
+.ret-toaster[data-theme='dark'] .brand-toast {
+  --ret-surface: #042f2e;
+  --ret-text: #f0fdfa;
+  --ret-text-muted: #99f6e4;
+  --ret-border: #115e59;
+  --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.5);
+  --ret-focus: #5eead4;
+  --ret-action-surface: #5eead4;
+  --ret-action-text: #042f2e;
+  --ret-success: #5eead4;
+  --ret-success-subtle: #134e4a;
+  --ret-progress: #5eead4;
+}
+
+/* The same dark values for theme="system" when the operating system is dark. */
+@media (prefers-color-scheme: dark) {
+  .ret-toaster[data-theme='system'] .brand-toast {
+    --ret-surface: #042f2e;
+    --ret-text: #f0fdfa;
+    --ret-text-muted: #99f6e4;
+    --ret-border: #115e59;
+    --ret-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.5);
+    --ret-focus: #5eead4;
+    --ret-action-surface: #5eead4;
+    --ret-action-text: #042f2e;
+    --ret-success: #5eead4;
+    --ret-success-subtle: #134e4a;
+    --ret-progress: #5eead4;
+  }
+}
