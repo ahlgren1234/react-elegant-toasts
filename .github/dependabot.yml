@@ -18,7 +18,9 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@eslint/js'
         update-types: ['version-update:semver-major']
-      # Vite, plugin-react and Vitest: evaluated with the demo rebuild (P-04, P-25).
+      # Vite, plugin-react and Vitest: P-25 moved them to Vite 8, plugin-react 6 and Vitest 5 (S0,
+      # PR #58). Vite also builds the browser harness and runs the tests, so a new major is a
+      # reviewed toolchain change, never an automatic update, and none lands before 2.0.0 (P-25 S9).
       - dependency-name: vite
         update-types: ['version-update:semver-major']
       - dependency-name: '@vitejs/plugin-react'
