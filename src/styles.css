@@ -513,9 +513,12 @@
  *
  * Only the fill moves. `ret-progress` shrinks its own `transform: scaleX(1 → 0)` toward the
  * inline start (§20): the left in LTR, the right in RTL, so the moving edge stays straight. The
- * renderer sets each fill's duration and its negative delay from the timer's folded `remaining`,
- * and recreates the fill at every run boundary (P-20 decision 3). The fill runs exactly while the
- * timer does, `visible` and not `data-paused`; in every other phase and while paused it holds.
+ * fill is twice the strip's width and centred on its inline-start edge, so it scales about that
+ * edge; the strip clips the outer half. No selector reads the direction, which bundlers rewrite
+ * (Issue #45). The renderer sets each fill's duration and its negative delay from the timer's
+ * folded `remaining`, and recreates the fill at every run boundary (P-20 decision 3). The fill
+ * runs exactly while the timer does, `visible` and not `data-paused`; in every other phase and
+ * while paused it holds.
  * Progress is information, not decoration, so reduced motion leaves it running (OQ-22). The
  * fill's class is an implementation detail; `.ret-toast__progress` and the tokens are public.
  */
@@ -538,23 +541,22 @@
     calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 max(0px, var(--ret-radius) - 1px)
       max(0px, var(--ret-radius) - 1px)
   );
+  /* The fill's outer half stays out of any scroll container's overflow (Issue #45). */
+  overflow: clip;
   pointer-events: none;
 }
 
 :where(.ret-toast__progress-fill) {
-  display: block;
-  block-size: 100%;
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -100%;
+  inline-size: 200%;
   background: var(--ret-progress);
-  transform-origin: left;
   animation-name: ret-progress;
   animation-timing-function: linear;
   animation-iteration-count: 1;
   animation-fill-mode: both;
   animation-play-state: paused;
-}
-
-:where(.ret-toast__progress-fill:dir(rtl)) {
-  transform-origin: right;
 }
 
 :where(

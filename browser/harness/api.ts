@@ -72,6 +72,10 @@ export interface ProgressState {
   readonly scale: number;
   readonly playState: string;
   readonly strip: Box | null;
+  /**
+   * The visible fill: its box clipped to the strip's inline extent, since the fill itself is twice
+   * the strip's inline size and the strip clips it (Issue #45). Its width is 0 when nothing shows.
+   */
   readonly fill: Box | null;
 }
 

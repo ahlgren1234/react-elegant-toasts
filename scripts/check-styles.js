@@ -6,6 +6,7 @@
 // brackets and strings. Every rule must be one of the allowed kinds, and:
 // - every complex selector carries at least one class, and every class is `ret-*`;
 // - no ID selectors;
+// - no `:dir()` or `:lang()` selectors (Issue #45);
 // - attribute selectors use only the documented hooks, in a compound that has a `ret-*` class, or
 //   an internal state hook, only on the toast root (`.ret-toast`);
 // - every keyframe name is `ret-*`;
@@ -95,6 +96,12 @@ function checkSelector(selector, report) {
     if (!name.startsWith(PREFIX)) report(`selector "${selector}" uses unprefixed class .${name}`);
   }
   if (/#-?[A-Za-z_]/.test(masked)) report(`selector "${selector}" uses an ID selector`);
+  // Direction comes from the DOM through logical properties, never a selector (§20, Issue #45):
+  // minifiers lower `:dir()` to a `:lang()` list for older targets, which guesses direction from
+  // the language.
+  for (const pseudo of masked.match(/:(dir|lang)\(/gi) ?? []) {
+    report(`selector "${selector}" uses ${pseudo.toLowerCase()}), which bundlers can rewrite`);
+  }
   for (const name of attributes) {
     if (!ATTRIBUTES.includes(name) && !INTERNAL_ATTRIBUTES.includes(name)) {
       report(`selector "${selector}" uses undocumented attribute [${name}]`);
