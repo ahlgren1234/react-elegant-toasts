@@ -5,7 +5,7 @@
 // genuine hidden-tab, minimised-window and visual evidence is Chromium's (see the S4 record).
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { Toaster, toast, type ToastOptions } from '../index';
 import { announcementText } from '../react/announcer';
 import { dismiss, inspectRecords, setGlobalPause, setStackPause } from '../store/store';
@@ -36,7 +36,7 @@ function showVisible(text: string, options: ToastOptions & { id: string }) {
 }
 
 /** Document visibility through the real P-15 listener, as a tab switch reports it. */
-function setHidden(hidden: boolean, spy: ReturnType<typeof vi.spyOn>) {
+function setHidden(hidden: boolean, spy: MockInstance<() => boolean>) {
   spy.mockReturnValue(hidden);
   act(() => {
     fireEvent(document, new Event('visibilitychange'));
