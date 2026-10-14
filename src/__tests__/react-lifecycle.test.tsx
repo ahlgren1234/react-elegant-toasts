@@ -18,7 +18,16 @@ import {
   type ComponentType,
   type ReactNode,
 } from 'react';
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+  type MockInstance,
+} from 'vitest';
 import { Toaster, toast } from '../index';
 import { restoreFocusFrom } from '../react/focus';
 import { dismiss, inspectRecords, subscribe } from '../store/store';
@@ -137,7 +146,7 @@ async function trackSubscriptions() {
   return () => held;
 }
 
-let warn: ReturnType<typeof vi.spyOn>;
+let warn: MockInstance<typeof console.warn>;
 
 beforeEach(() => {
   vi.useFakeTimers();
