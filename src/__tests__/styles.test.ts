@@ -130,6 +130,9 @@ const FAILING: readonly (readonly [name: string, css: string, message: string])[
   ['an element-only selector', 'button { color: red; }', 'no ret- class'],
   ['an ID selector', '.ret-toast#main {}', 'ID selector'],
   ['an undocumented attribute', '.ret-toast[data-foo] {}', '[data-foo]'],
+  // Issue #45: bundlers lower `:dir()` to a `:lang()` list, so the stylesheet uses neither.
+  ['a :dir() selector', ':where(.ret-toast__progress-fill:dir(rtl)) {}', 'uses :dir()'],
+  ['a :lang() selector', '.ret-toast:is(:lang(ar), :lang(he)) {}', 'uses :lang()'],
   // P-21 S2: the internal swipe hook is only ever read on the toast root (D0 decision 6).
   [
     'the internal swipe hook off the root',
@@ -1229,8 +1232,8 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
       );
     });
 
-    // Narrowed by P-20 S3: the internal progress fill's rules may set `transform-origin` (§20),
-    // and nothing else of these. Narrowed by P-21 S2: the swipe drag rule sets exactly the root
+    // P-20 S3 let the internal progress fill's rules set `transform-origin` (§20); Issue #45
+    // removed that, so they set none of these again. Narrowed by P-21 S2: the swipe drag rule sets exactly the root
     // `transform` and `opacity`, only while a drag is active. Narrowed by P-21 S3: so does the
     // release rule, only while releasing, and its reduced-motion form only the `transform`. Every
     // other rule still sets none.
@@ -1243,11 +1246,6 @@ describe('enter and exit motion (§22, P-18 S2)', () => {
           expect(own, rule.selector).toEqual(['transform']);
         } else if (rule.selector === SWIPE_DRAG || rule.selector === SWIPE_RELEASE) {
           expect(own.sort(), rule.selector).toEqual(['opacity', 'transform']);
-        } else if (/ret-toast__progress-fill\b/.test(rule.selector)) {
-          expect(
-            own.filter(property => property !== 'transform-origin'),
-            rule.selector
-          ).toEqual([]);
         } else {
           expect(own, rule.selector).toEqual([]);
         }
@@ -1664,11 +1662,14 @@ describe('progress (§20, §22, P-20 S3, D1 candidate B)', () => {
       'inset(calc(-1 * var(--ret-radius)) 0 0 0 round 0 0 max(0px, var(--ret-radius) - 1px) max(0px, var(--ret-radius) - 1px) )',
     'pointer-events': 'none',
   };
+  // Issue #45: twice the strip's inline size, centred on its inline-start edge, scaled about its
+  // default centre origin; the strip's clip shows the half inside it.
   const FILL = {
-    display: 'block',
-    'block-size': '100%',
+    position: 'absolute',
+    'inset-block': '0px',
+    'inset-inline-start': '-100%',
+    'inline-size': '200%',
     background: 'var(--ret-progress)',
-    'transform-origin': 'left',
     'animation-name': 'ret-progress',
     'animation-timing-function': 'linear',
     'animation-iteration-count': '1',
@@ -1705,12 +1706,15 @@ describe('progress (§20, §22, P-20 S3, D1 candidate B)', () => {
     host.remove();
   });
 
-  it('D-11: anchors the fill at the inline start, left in LTR and right in RTL', () => {
+  // Amended by Issue #45: the inline start comes from logical insets alone, so LTR and RTL get the
+  // same declarations and no rule selects on direction or language. Real browsers check the edge.
+  it('D-11: anchors the fill at the inline start with logical insets, never a direction selector', () => {
     const ltr = progressIn('visible');
     const rtl = progressIn('visible', { dir: 'rtl' });
-    expect(declared(ltr.fill)['transform-origin']).toBe('left');
-    expect(declared(rtl.fill)['transform-origin']).toBe('right');
+    expect(declared(rtl.fill)).toEqual(declared(ltr.fill));
+    expect(declared(ltr.fill)).not.toHaveProperty('transform-origin');
     expect(squashed(declared(rtl.strip))).toEqual(STRIP);
+    expect(rules.filter(r => /:(dir|lang)\(/i.test(r.selector)).map(r => r.selector)).toEqual([]);
     ltr.host.remove();
     rtl.host.remove();
   });

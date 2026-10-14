@@ -365,8 +365,17 @@ function progressState(label: string): ProgressState {
     scale: style.transform === 'none' ? 1 : new DOMMatrixReadOnly(style.transform).a,
     playState: style.animationPlayState,
     strip: boxOf(strip),
-    fill: boxOf(fill),
+    fill: visibleBoxOf(fill, strip),
   };
+}
+
+/** `element`'s box clipped to `clip`'s horizontal extent, as the strip clips its fill. */
+function visibleBoxOf(element: Element, clip: Element): Box {
+  const box = element.getBoundingClientRect();
+  const bounds = clip.getBoundingClientRect();
+  const left = Math.max(box.left, bounds.left);
+  const right = Math.max(left, Math.min(box.right, bounds.right));
+  return { left, right, top: box.top, bottom: box.bottom, width: right - left, height: box.height };
 }
 
 function sampleFrames<T>(read: () => T, options: SampleOptions<T>): Promise<FrameSample<T>[]> {

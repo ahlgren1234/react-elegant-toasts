@@ -15,3 +15,10 @@ export function mountApp(container: Element): Root {
 export function showToast(): ToastId | undefined {
   return toast.success(APP_TOAST, { description: 'Rendered from the packed package' });
 }
+
+// A finite toast with progress on, for the direction check in a browser (Issue #45).
+export const PROGRESS_TOAST = 'Progress from the consumer fixture';
+
+export function showProgressToast(): ToastId | undefined {
+  return toast.info(PROGRESS_TOAST, { duration: 8000, progress: true });
+}

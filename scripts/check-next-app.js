@@ -7,12 +7,14 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
+import { checkProgressDirection, directionSelectors } from './progress-direction.js';
 
 const [consumer, cssMarker] = process.argv.slice(2);
 if (!consumer || !cssMarker) throw new Error('usage: check-next-app.js <consumer> <css-marker>');
 const PORT = Number(process.env.CONSUMER_NEXT_PORT ?? 4310);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const TOAST = 'Saved by the Next.js fixture';
+const PROGRESS_TOAST = 'Progress from the Next.js fixture';
 const env = { ...process.env, NEXT_TELEMETRY_DISABLED: '1' };
 const next = path.join(consumer, 'node_modules', 'next', 'dist', 'bin', 'next');
 
@@ -76,6 +78,12 @@ walk(path.join(consumer, '.next', 'static'));
 const withMarker = cssFiles.filter(file => fs.readFileSync(file, 'utf8').includes(cssMarker));
 check(withMarker.length > 0, `no built CSS contains ${cssMarker}`);
 ok(`${path.relative(consumer, withMarker[0])} contains ${cssMarker} from the packed styles.css`);
+// Turbopack minifies with Lightning CSS, which lowers `:dir()` for older targets (Issue #45).
+const rewritten = cssFiles.flatMap(file =>
+  directionSelectors(fs.readFileSync(file, 'utf8')).map(found => `${found} in ${file}`)
+);
+check(rewritten.length === 0, `the built CSS has direction selectors: ${rewritten.join(', ')}`);
+ok('the built CSS has no :dir() or :lang() selector');
 
 const server = spawn(process.execPath, [next, 'start', '-p', String(PORT), '-H', '127.0.0.1'], {
   cwd: consumer,
@@ -129,6 +137,16 @@ try {
   ok(
     `Chromium: hydrated, the button showed "${TOAST}", its list is fixed, and the page logged nothing`
   );
+
+  // The remaining progress sits at the inline start in the built app (§20, Issue #45).
+  const anchored = await checkProgressDirection(browser, {
+    open: page => page.goto(`${ORIGIN}/`, { waitUntil: 'networkidle' }),
+    show: async page => {
+      await page.getByRole('button', { name: 'Show a progress toast' }).click();
+      return page.locator('li.ret-toast', { hasText: PROGRESS_TOAST });
+    },
+  });
+  ok(`Chromium: the progress fill ${anchored.join(', and ')}`);
 } finally {
   await browser?.close();
   server.kill();

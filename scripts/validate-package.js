@@ -1,11 +1,13 @@
 // Validates the packed package as consumers receive it (§27, P-07; the F1 to F4 matrix and the
 // Next.js App Router consumer, P-23 S5b to S7).
 // Run through `npm run validate:package`, which builds the library first.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from '@playwright/test';
+import { checkProgressDirection, directionSelectors } from './progress-direction.js';
 
 const PACKAGE_NAME = 'react-elegant-toasts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,6 +36,8 @@ const BLOCKED_DEEP_IMPORTS = [
 // The 2.x stylesheet's root class (P-17). The 0.x stylesheet had no `ret-` selector, so stale CSS
 // cannot satisfy it, and minifiers keep class names.
 const CSS_MARKER = '.ret-toaster';
+// The fixture's progress toast (fixtures/consumer-vite/src/app.ts), for the direction check.
+const PROGRESS_TOAST = 'Progress from the consumer fixture';
 // The public export surface (§6.1, §6.7, AC-API-1).
 const VALUE_EXPORTS = ['Toaster', 'toast'];
 const TYPE_EXPORTS = [
@@ -535,7 +539,7 @@ console.log(JSON.stringify(result));
   );
 }
 
-function checkFixture(consumer, installed, leg) {
+async function checkFixture(consumer, installed, leg) {
   step(`${leg.id}: type-check the fixture`);
   const typescript = readJson(
     path.join(consumer, 'node_modules', 'typescript', 'package.json')
@@ -564,6 +568,16 @@ function checkFixture(consumer, installed, leg) {
   const bundled = cssFiles.map(file => fs.readFileSync(path.join(assets, file), 'utf8')).join('\n');
   assert(bundled.includes(CSS_MARKER), `the Vite CSS output does not contain ${CSS_MARKER}`);
   ok(`${cssFiles.join(', ')} contains ${CSS_MARKER} from the packed styles.css`);
+  // Vite 8 minifies with Lightning CSS, which lowers `:dir()` for older targets (Issue #45).
+  const rewritten = directionSelectors(bundled);
+  assert(
+    rewritten.length === 0,
+    `the Vite CSS output has direction selectors: ${rewritten.join(', ')}`
+  );
+  ok('the Vite CSS output has no :dir() or :lang() selector');
+
+  // The built app in a real browser, once: every leg builds the same sources with the same Vite.
+  if (leg.id === 'F1') await checkViteProgressDirection(consumer, leg);
 
   step(`${leg.id}: render a toast from the packed package in jsdom`);
   const jsdom = readJson(path.join(consumer, 'node_modules', 'jsdom', 'package.json')).version;
@@ -579,6 +593,52 @@ function checkFixture(consumer, installed, leg) {
       label: `SSR smoke test (${mode})`,
     });
     ok(`server rendering passed in ${mode}`);
+  }
+}
+
+/**
+ * Serves the fixture's Vite build with `vite preview` and checks in Chromium that the remaining
+ * progress sits at the inline start (§20, Issue #45): `?progress` makes the app show a progress
+ * toast.
+ */
+async function checkViteProgressDirection(consumer, leg) {
+  step(`${leg.id}: anchor the progress at the inline start in Chromium`);
+  const port = Number(process.env.CONSUMER_VITE_PORT ?? 4311);
+  const origin = `http://127.0.0.1:${port}`;
+  const vite = path.join(consumer, 'node_modules', 'vite', 'bin', 'vite.js');
+  const server = spawn(
+    process.execPath,
+    [vite, 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+    { cwd: consumer }
+  );
+  let serverOutput = '';
+  server.stdout.on('data', chunk => (serverOutput += chunk));
+  server.stderr.on('data', chunk => (serverOutput += chunk));
+  let browser;
+  try {
+    for (const deadline = Date.now() + 30_000; ;) {
+      try {
+        const response = await fetch(`${origin}/`);
+        assert(response.status === 200, `vite preview returned ${response.status}`);
+        break;
+      } catch (error) {
+        if (Date.now() > deadline || server.exitCode !== null) {
+          throw new ValidationError(
+            `vite preview did not start: ${error.message}\n${serverOutput}`
+          );
+        }
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+    }
+    browser = await chromium.launch();
+    const anchored = await checkProgressDirection(browser, {
+      open: page => page.goto(`${origin}/?progress`, { waitUntil: 'networkidle' }),
+      show: async page => page.locator('li.ret-toast', { hasText: PROGRESS_TOAST }),
+    });
+    ok(`Chromium: the progress fill ${anchored.join(', and ')}`);
+  } finally {
+    await browser?.close();
+    server.kill();
   }
 }
 
@@ -598,7 +658,7 @@ try {
       checkDeclarations(installed);
     }
     checkResolution(consumer, installed, leg);
-    checkFixture(consumer, installed, leg);
+    await checkFixture(consumer, installed, leg);
   }
   {
     const { consumer, installed } = prepareConsumer(tmp, tarball, NEXT_LEG);

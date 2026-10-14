@@ -2,13 +2,15 @@
 import 'react-elegant-toasts/styles.css';
 import { createElement } from 'react';
 import { toast } from 'react-elegant-toasts';
-import { mountApp, showToast } from './app';
+import { mountApp, showProgressToast, showToast } from './app';
 import { messages } from './types';
 
 const container = document.getElementById('root');
 if (container) {
   mountApp(container);
-  showToast();
+  // `?progress` shows a progress toast instead, for validate-package.js's browser check.
+  if (new URLSearchParams(location.search).has('progress')) showProgressToast();
+  else showToast();
 }
 
 // Exercises every toast method for typing and bundling. Never invoked.
