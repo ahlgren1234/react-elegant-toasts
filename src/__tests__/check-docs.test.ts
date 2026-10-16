@@ -1,4 +1,4 @@
-// The documentation checks (P-26 S2, S3): scripts/check-docs.js, which `npm run lint` runs on the
+// The documentation checks (P-26 S2 to S4): scripts/check-docs.js, which `npm run lint` runs on the
 // reference documents. Each sample is a Markdown file in a temporary directory, checked together
 // with a temporary examples directory, so the controls never depend on the real documents. The
 // last test runs the script on the real documents and the fixture's examples.
@@ -69,6 +69,8 @@ function runCheck(
 
 // A document that every check accepts: public names, the package's public subpaths, a repository
 // URL, valid links and anchors, a marked fence equal to its region and an unmarked CSS fence.
+const REPO = 'https://github.com/ahlgren1234/react-elegant-toasts';
+
 const PASSING = `# Passing sample
 
 Set \`--ret-surface\` on \`.ret-toaster\`, or select \`.ret-toast--custom\` and
@@ -78,7 +80,8 @@ source is at https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/src/sty
 pretext or interpret-style word is not a class.
 
 See [the heading](#passing-sample), [the other file](other.md) and
-[its section](other.md#a-section-with-code).
+[its section](other.md#a-section-with-code), and the
+[token reference](${REPO}/blob/v2/docs/THEMING.md#token-reference) in this repository.
 
 <!-- example: sample -->
 
@@ -120,6 +123,16 @@ const FAILING: readonly (readonly [name: string, markdown: string, message: stri
   ['a missing link target', 'See [the guide](missing.md).', 'link target missing.md does not'],
   ['a missing anchor', 'See [below](#nowhere).', 'anchor #nowhere is not in'],
   ['a missing anchor elsewhere', 'See [it](other.md#nope).', 'anchor #nope is not in'],
+  [
+    'a missing anchor in a repository link',
+    `See [it](${REPO}/blob/v2/docs/THEMING.md#nope).`,
+    'anchor #nope is not in docs/THEMING.md',
+  ],
+  [
+    'a missing file in a repository link',
+    `See [it](${REPO}/blob/v2/docs/MISSING.md).`,
+    'link target docs/MISSING.md does not exist',
+  ],
   ['a TODO', 'TODO: write this.', 'placeholder "TODO"'],
   ['a placeholder URL', 'github.com/yourusername/repo', 'placeholder "yourusername"'],
   ['an empty link', 'See [this]().', 'placeholder "]()"'],
@@ -181,6 +194,50 @@ describe('scripts/check-docs.js', () => {
     expect(run.status).toBe(1);
   });
 
+  describe('the README', () => {
+    const TYPES = [
+      'ToasterProps',
+      'ToastOptions',
+      'CustomToastOptions',
+      'ToastPromiseMessages',
+      'ToastAction',
+      'ToastSnapshot',
+      'DismissReason',
+      'ToastId',
+      'ToastPosition',
+      'ToastType',
+      'ToastTheme',
+    ];
+    const readme = (types: readonly string[], extra = '') =>
+      `# Sample\n\nTypes: ${types.map(name => `\`${name}\``).join(', ')}.\n\n` +
+      `See [the top](#sample) and [the reference](${REPO}/blob/v2/docs/ACCESSIBILITY.md).\n${extra}`;
+
+    it('accepts absolute repository links, anchors and every public type', () => {
+      const run = runCheck({ 'README.md': readme(TYPES) }, {});
+      expect(run.reports).toEqual({ 'README.md': [] });
+      expect(run.status, run.output).toBe(0);
+    });
+
+    it('rejects a relative link, which npm cannot follow', () => {
+      const run = runCheck({ 'README.md': readme(TYPES, 'See [theming](docs/THEMING.md).\n') }, {});
+      expect(run.reports['README.md']).toEqual([
+        '  - line 6: relative link docs/THEMING.md: the README links with absolute GitHub URLs',
+      ]);
+      expect(run.status).toBe(1);
+    });
+
+    it('requires every public type the package entry exports', () => {
+      const run = runCheck(
+        { 'README.md': readme(TYPES.filter(name => name !== 'ToastTheme')) },
+        {}
+      );
+      expect(run.reports['README.md']).toEqual([
+        '  - the README does not name the type ToastTheme',
+      ]);
+      expect(run.status).toBe(1);
+    });
+  });
+
   it('rejects unused, duplicate and unclosed example regions', () => {
     const run = runCheck(
       { 'passing.md': PASSING, 'other.md': OTHER },
@@ -199,6 +256,7 @@ describe('scripts/check-docs.js', () => {
 
   it('passes on the real documents and the fixture examples', () => {
     const result = spawnSync(process.execPath, [CHECK], { cwd: root, encoding: 'utf8' });
+    expect(result.stdout).toContain('README.md: documentation checks OK');
     expect(result.stdout).toContain('docs/THEMING.md: documentation checks OK');
     expect(result.stdout).toContain('docs/ACCESSIBILITY.md: documentation checks OK');
     expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);

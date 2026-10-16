@@ -10,7 +10,10 @@
 // - every `ret-*` class is a documented one, and every `data-*` name a documented attribute;
 // - every `react-elegant-toasts/…` subpath is in the package's `exports` map (no `dist/` paths);
 // - no 0.x API names, and no placeholders;
-// - relative links reach an existing file, and anchors a heading or `id` in it;
+// - relative links reach an existing file, and anchors a heading or `id` in it; links to this
+//   repository on GitHub (`…/blob/<ref>/<path>`) are checked the same way against the local file;
+// - README.md has no relative links other than `#anchors`, since npm shows it without the docs,
+//   and names every public type the package entry exports;
 // - every fence names its language, so no TypeScript example escapes the checks below untagged;
 // - each TS or TSX fence follows an `<!-- example: <id> -->` marker and equals that region of the
 //   fixture's examples, which validate-package.js type-checks against the packed package; every
@@ -21,12 +24,16 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-// README.md joins in S4; docs/V2_PLAN.md and browser/MANUAL_QA.md are internal records and are
-// never checked.
-const DOCS = ['docs/THEMING.md', 'docs/ACCESSIBILITY.md'];
+// docs/V2_PLAN.md and browser/MANUAL_QA.md are internal records and are never checked.
+const DOCS = ['README.md', 'docs/THEMING.md', 'docs/ACCESSIBILITY.md'];
 const EXAMPLES = 'fixtures/consumer-vite/src/docs';
 // The document that must name every token.
 const TOKEN_REFERENCE = 'THEMING.md';
+// The document that must name every public type, and may link only absolutely.
+const README = 'README.md';
+// A file of this repository on GitHub, at any branch or tag: the path, then an optional anchor.
+const REPO_FILE =
+  /^https:\/\/github\.com\/ahlgren1234\/react-elegant-toasts\/blob\/[^/]+\/([^#?]+)(?:#(.*))?$/;
 
 // The documented classes (OQ-25, P-26 S2). Everything else with the prefix is internal, such as
 // the live regions, the progress fill, the spinner, the keyframes and the toast's text block.
@@ -101,6 +108,17 @@ function readTokens() {
   };
   walk(element.sheet.cssRules);
   return tokens;
+}
+
+/** The types the package entry exports, from the `export type { … }` lists of src/index.ts. */
+function readTypeExports() {
+  const entry = fs.readFileSync(path.join(root, 'src/index.ts'), 'utf8');
+  return [...entry.matchAll(/export type \{([^}]*)\}/g)].flatMap(([, list]) =>
+    list
+      .split(',')
+      .map(name => name.trim())
+      .filter(Boolean)
+  );
 }
 
 /** The package's public subpaths, from its `exports` map. */
@@ -244,13 +262,29 @@ function checkDocument(file, context, report) {
       if (!named.has(token)) report(`the token reference does not name ${token}`);
     }
   }
+  const readme = path.basename(file) === README;
+  if (readme) {
+    for (const name of context.types) {
+      if (!new RegExp(`\\b${name}\\b`).test(text))
+        report(`the README does not name the type ${name}`);
+    }
+  }
 
   // Relative links and anchors, in prose only, outside inline code.
   for (const { line, text: content } of prose) {
     for (const [, target] of content.replace(/`[^`]*`/g, '').matchAll(LINK)) {
-      if (target === '' || /^[a-z][\w+.-]*:|^\/\//i.test(target)) continue;
-      const [pathPart, anchor] = target.split('#');
-      const linked = pathPart ? path.resolve(path.dirname(file), decodeURI(pathPart)) : file;
+      const repoFile = target.match(REPO_FILE);
+      if (target === '' || (!repoFile && /^[a-z][\w+.-]*:|^\/\//i.test(target))) continue;
+      const [pathPart, anchor] = repoFile ? [repoFile[1], repoFile[2]] : target.split('#');
+      if (readme && !repoFile && pathPart) {
+        at(line)(`relative link ${target}: the README links with absolute GitHub URLs`);
+        continue;
+      }
+      const linked = repoFile
+        ? path.resolve(root, decodeURI(pathPart))
+        : pathPart
+          ? path.resolve(path.dirname(file), decodeURI(pathPart))
+          : file;
       if (!fs.existsSync(linked)) {
         at(line)(`link target ${pathPart} does not exist`);
       } else if (anchor !== undefined && linked.endsWith('.md')) {
@@ -326,6 +360,7 @@ const regionProblems = [];
 const context = {
   tokens: readTokens(),
   subpaths: readSubpaths(),
+  types: readTypeExports(),
   regions: readRegions(examplesDir, message => regionProblems.push(message)),
   examplesName: display(examplesDir),
   used: new Set(),
