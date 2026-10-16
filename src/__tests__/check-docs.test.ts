@@ -1,4 +1,4 @@
-// The documentation checks (P-26 S2): scripts/check-docs.js, which `npm run lint` runs on the
+// The documentation checks (P-26 S2, S3): scripts/check-docs.js, which `npm run lint` runs on the
 // reference documents. Each sample is a Markdown file in a temporary directory, checked together
 // with a temporary examples directory, so the controls never depend on the real documents. The
 // last test runs the script on the real documents and the fixture's examples.
@@ -141,6 +141,7 @@ const FAILING: readonly (readonly [name: string, markdown: string, message: stri
     'example sample must be a TS or TSX fence',
   ],
   ['an unclosed fence', '```css\n.ret-toast {}', 'code fence is never closed'],
+  ['an untagged fence', "```\ntoast('Hi');\n```", 'line 3: code fence has no language tag'],
 ];
 
 describe('scripts/check-docs.js', () => {
@@ -199,6 +200,7 @@ describe('scripts/check-docs.js', () => {
   it('passes on the real documents and the fixture examples', () => {
     const result = spawnSync(process.execPath, [CHECK], { cwd: root, encoding: 'utf8' });
     expect(result.stdout).toContain('docs/THEMING.md: documentation checks OK');
+    expect(result.stdout).toContain('docs/ACCESSIBILITY.md: documentation checks OK');
     expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
   });
 });

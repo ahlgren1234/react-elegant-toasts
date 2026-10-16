@@ -11,6 +11,7 @@
 // - every `react-elegant-toasts/…` subpath is in the package's `exports` map (no `dist/` paths);
 // - no 0.x API names, and no placeholders;
 // - relative links reach an existing file, and anchors a heading or `id` in it;
+// - every fence names its language, so no TypeScript example escapes the checks below untagged;
 // - each TS or TSX fence follows an `<!-- example: <id> -->` marker and equals that region of the
 //   fixture's examples, which validate-package.js type-checks against the packed package; every
 //   region is used by a checked document.
@@ -20,9 +21,9 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-// README.md joins in S4, docs/ACCESSIBILITY.md in S3; docs/V2_PLAN.md and browser/MANUAL_QA.md
-// are internal records and are never checked.
-const DOCS = ['docs/THEMING.md'];
+// README.md joins in S4; docs/V2_PLAN.md and browser/MANUAL_QA.md are internal records and are
+// never checked.
+const DOCS = ['docs/THEMING.md', 'docs/ACCESSIBILITY.md'];
 const EXAMPLES = 'fixtures/consumer-vite/src/docs';
 // The document that must name every token.
 const TOKEN_REFERENCE = 'THEMING.md';
@@ -273,6 +274,7 @@ function checkDocument(file, context, report) {
   }
   for (const fence of fences) {
     if (fence.unclosed) at(fence.line)('code fence is never closed');
+    if (fence.language === '') at(fence.line)('code fence has no language tag');
     const id = markers.get(fence);
     const typed = TS_LANGUAGES.includes(fence.language.toLowerCase());
     if (!id) {
