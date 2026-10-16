@@ -6570,6 +6570,37 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 
 **P-26 README and reference docs** (§31), including the accessibility boundary and the ESM-only guidance. Defects: D-22, D-35.
 
+- **Status: in progress, at S2 (2026-10-16).** S1 is merged into `v2`. S2 is implemented locally and awaits maintainer review. Issue #20 is open with Project #8 status In Progress, and Roadmap #28 lists it under In progress.
+- **Delivery:** each slice is its own PR into `v2`, merged with a merge commit after a maintainer checkpoint: S1 TSDoc, S2 documentation checks and the theming reference, S3 the accessibility documentation, S4 the README rewrite. Each slice adds its own short record here.
+- **S1, TSDoc** (PR #64, from `8571138`, merged as `c33722a2781e207831acc877c419e7ffb60788b8`): TSDoc for `ToasterProps.theme` and the supporting types `ToastId`, `ToastPosition`, `ToastType`, `ToastTheme`, `DismissReason`, `ToastAction` and `ToastSnapshot`, so every public export carries TSDoc in the shipped declarations (§31). Comments in `src/types.ts` only.
+- **S2, documentation checks and theming reference** (2026-10-16; branch `docs/p26-s2-theming` from `v2` at `c33722a`; local commit, not pushed). The S2 design review (2026-10-14) was approved with these decisions:
+  1. `.ret-toaster__list` is documented as a limited hook for per-position token overrides, with no promise about the number, order or structure of the stacks.
+  2. `.ret-toast__title` stays internal and undocumented, and is not renamed.
+  3. `data-phase` is documented with its values `entering`, `visible` and `exiting`, without timing guarantees.
+  4. The public type-export coverage check is deferred to S4, where the README is its target.
+  5. The Vite consumer fixture's `tsconfig.json` gains `"jsx": "react-jsx"`.
+  6. Token names are checked automatically; descriptions are reviewed manually and need not match `demo/utils/tokens.ts`.
+  7. This record.
+  - **`scripts/check-docs.js`**, run by `npm run lint` after `check-styles.js`, with existing dependencies only (jsdom reads the stylesheet's tokens). It checks `docs/THEMING.md` only: the README still documents 0.x and joins in S4, `docs/ACCESSIBILITY.md` joins in S3, and this plan and `browser/MANUAL_QA.md` are never checked. A line scanner separates fenced code from prose; nothing else of Markdown is parsed. The checks:
+    - every `--ret-*` name is a token the stylesheet declares, and THEMING.md names all 30;
+    - every `ret-*` name is one of the documented classes, and every `data-*` name one of the four documented attributes, so internal classes, keyframes, `data-swiping` and the swipe properties fail;
+    - every `react-elegant-toasts/…` subpath is a key of the `exports` map;
+    - no 0.x API names (§6.8) and no placeholders;
+    - relative links reach an existing file, and anchors a heading (GitHub's slug rule) or HTML `id` in it;
+    - each TS or TSX fence follows an `<!-- example: <id> -->` marker and equals that region of `fixtures/consumer-vite/src/docs/`, and every region there is used.
+    - not automated: claims about behaviour, browsers and evidence, which stay with manual review.
+  - **Typechecked examples:** `fixtures/consumer-vite/src/docs/theming.tsx` holds the document's five TSX examples as named regions. `validate-package.js` already copies the fixture's `src/` into every leg, so F1 to F4 type-check them against the packed package (React 18 and 19, TypeScript 5.0.4 and 7.0.2) with no change to the script, the manifests or the lockfiles. Nothing imports the file, so the fixture's Vite build does not bundle it.
+  - **`docs/THEMING.md`:** the stylesheet import and CSP note; theme selection and `system`; the token override model; the 30 tokens with their light and dark defaults, and which four work only on the Toaster (`--ret-gap`, `--ret-offset`, `--ret-width`, `--ret-z-index`, read by the stacks); the documented classes and the four data attributes; per-position, per-toast and custom-toast styling and focus; progress and its RTL anchoring; motion and reduced motion; forced colours, keeping the emulated and real Windows evidence apart and listing what was not verified; and the ownership limits from the P-19 to P-21 notes. Undocumented hooks (`ret-toast__title`, the progress fill, the spinner, the live regions, the keyframes, `data-swiping`, the swipe properties) are not named. It claims no browser floor and no screen-reader verification. It is not yet linked from the README (S4).
+  - **Tests:** `src/__tests__/check-docs.test.ts` (28 tests) runs the script on temporary documents: a passing control, and one negative control for each of 23 rule violations, including an unknown token, internal classes, keyframe and attribute names, `dist/` and `src/` deep imports, 0.x identifiers, broken links and anchors, placeholders, an out-of-sync fence, unmarked or misplaced markers and an unclosed fence. Further tests cover THEMING.md's token completeness, unused, duplicate and unclosed regions, and a run on the real documents.
+  - **Validation** (2026-10-16, Node 24.21.0, npm 11.19.0):
+    - `format:check`, `lint` (with `check-docs.js`) and `typecheck`: pass.
+    - `npm test`, React 19.3.0: 57 files, 2,007 tests, first run (the baseline at `c33722a`: 56 files, 1,979 tests; the 28 new tests are this slice's).
+    - React 18.3.1, with CI's exact override in a throwaway copy of the working tree: 57 files, 1,998 tests, and the `tsconfig.lib` and `tsconfig.test` projects pass.
+    - `validate:package`: F1 to F4 and N1 pass, including the progress-direction checks in Chromium.
+    - **Negative controls:** with two invalid examples appended to `theming.tsx` (`description` on `toast.custom`, `theme="sepia"`), `validate:package` failed at F1's type-check with both TS2322 errors; the same type-check, reproduced for each leg from its committed manifest and lockfile and the packed tarball, failed with both errors in F2, F3 and F4 too, and passed without them in all four. A Vite build of F1 contained none of the examples.
+    - The built `dist/index.js`, `index.js.map`, `index.d.ts` and `styles.css` are byte-identical to a clean build of `c33722a`, so `size` is unchanged: 32.38 / 11.79 / 10.71 kB for the ESM entry and 8.09 / 6.88 kB for `styles.css`, all within the unchanged budgets.
+  - **Manual review for the maintainer:** that THEMING.md's descriptions and limits match the behaviour, that its forced-colours, reduced-motion and RTL statements claim no more than the recorded evidence, and that its anchors render on GitHub once pushed.
+
 - Notes from P-16 for the accessibility documentation:
   - **Hotkey and focus.** A press from inside the region moves focus to the first toast and keeps the earlier record. There is no focus trap. Escape works from the region too. Removal restoration goes from the next toast's equivalent control (or the next toast) to the previous toast, then the region. `aria-keyshortcuts` names physical keys by their US-QWERTY labels, so on other layouts the advertised letter may differ from the printed one. Whether a configured hotkey meets WCAG (for example 2.1.4 for a single-character hotkey) is the consumer's responsibility; document the mechanism, not blanket conformance.
   - **Labels.** Give a localisation example. The warning and error prefixes are read in announcements only and do not appear in the visible toast.
