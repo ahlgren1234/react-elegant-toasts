@@ -260,7 +260,7 @@ toast.custom(
 - **Close button colour.** The close button takes the toast root's `color`, so set `color` on the toast's `className`, not on your content: the button is your content's sibling, not its descendant. Its focus ring is drawn in that same colour, so it contrasts with your background as well as the glyph does.
 - **Root focus ring.** When the hotkey or focus restoration focuses the toast, its ring is drawn just outside the toast in `--ret-focus`. The library cannot know what lies behind your toast, so set `--ret-focus` on the toast's `className` when the default does not contrast with the page.
 - **Focus inside your content** is yours to style; no library rule reaches into it.
-- **Library class names.** Do not give your own elements library class names. In particular, an element in custom content with the class `ret-toast__close` is left out of the toast's announcement.
+- **Library class names.** Do not give your own elements library class names. In particular, an outermost element of your content with the class `ret-toast__close` is left out of the toast's announcement; a nested element with that class is still announced.
 
 ## Progress
 
