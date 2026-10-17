@@ -325,6 +325,7 @@ The package exports `Toaster` and `toast`, with no default export, and these typ
 
 - [Theming and styling reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/THEMING.md)
 - [Accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/ACCESSIBILITY.md)
+- [Migration guide (0.x → 2.0)](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/MIGRATION.md)
 - [Issues](https://github.com/ahlgren1234/react-elegant-toasts/issues)
 
 ## License

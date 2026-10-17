@@ -1,7 +1,8 @@
-// The documentation checks (P-26 S2 to S4): scripts/check-docs.js, which `npm run lint` runs on the
-// reference documents. Each sample is a Markdown file in a temporary directory, checked together
-// with a temporary examples directory, so the controls never depend on the real documents. The
-// last test runs the script on the real documents and the fixture's examples.
+// The documentation checks (P-26 S2 to S4, P-27): scripts/check-docs.js, which `npm run lint` runs
+// on the reference documents. Each sample is a Markdown file in a temporary directory, checked
+// together with a temporary examples directory and a temporary Jest manifest, so the controls never
+// depend on the real documents or fixtures. The last test runs the script on the real documents,
+// the fixture's examples and the Jest consumer's package.json.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,17 +21,39 @@ toast.success('Saved');
 const FENCE =
   "```tsx\nimport { toast } from 'react-elegant-toasts';\n\ntoast.success('Saved');\n```";
 
+// A Jest consumer manifest, and the guide's fence showing its synchronised fields: `type`,
+// `scripts.test` and `jest` (P-27 S3).
+const JEST_CONFIG = {
+  type: 'module',
+  scripts: { test: 'node --experimental-vm-modules node_modules/jest/bin/jest.js' },
+  jest: { testEnvironment: 'jsdom', moduleNameMapper: { '\\.css$': '<rootDir>/style-stub.js' } },
+};
+const JEST_MANIFEST = JSON.stringify(
+  { name: 'consumer-jest', private: true, ...JEST_CONFIG, devDependencies: { jest: '30.5.2' } },
+  null,
+  2
+);
+const jestFence = (config: unknown) =>
+  `<!-- jest-config -->\n\n\`\`\`json\n${JSON.stringify(config, null, 2)}\n\`\`\``;
+const JEST_FENCE = jestFence(JEST_CONFIG);
+
 interface Run {
   status: number | null;
   output: string;
   /** Each document's violation lines, or an empty list when it passed. */
   reports: Record<string, string[]>;
+  /** The temporary Jest manifest the run compared with. */
+  jestFile: string;
 }
 
-/** Runs the check on `docs` (name → Markdown) with `examples` (file name → source). */
+/**
+ * Runs the check on `docs` (name → Markdown) with `examples` (file name → source) and `jest`, the
+ * text of the Jest consumer's package.json.
+ */
 function runCheck(
   docs: Record<string, string>,
-  examples: Record<string, string> = { 'sample.tsx': REGION }
+  examples: Record<string, string> = { 'sample.tsx': REGION },
+  jest = JEST_MANIFEST
 ): Run {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ret-docs-'));
   try {
@@ -39,16 +62,20 @@ function runCheck(
     for (const [name, text] of Object.entries(examples)) {
       fs.writeFileSync(path.join(exampleDir, name), text);
     }
+    const jestFile = path.join(tmp, 'consumer-jest', 'package.json');
+    fs.mkdirSync(path.dirname(jestFile));
+    fs.writeFileSync(jestFile, jest);
     const files = Object.entries(docs).map(([name, text]) => {
       const file = path.join(tmp, name);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, text);
       return file;
     });
-    const result = spawnSync(process.execPath, [CHECK, '--examples', exampleDir, ...files], {
-      cwd: root,
-      encoding: 'utf8',
-    });
+    const result = spawnSync(
+      process.execPath,
+      [CHECK, '--examples', exampleDir, '--jest', jestFile, ...files],
+      { cwd: root, encoding: 'utf8' }
+    );
     const output = `${result.stdout}${result.stderr}`;
     const lines = output.split('\n');
     const reports = Object.fromEntries(
@@ -61,7 +88,7 @@ function runCheck(
         return [name, lines.slice(start + 1, end === -1 ? undefined : end)];
       })
     );
-    return { status: result.status, output, reports };
+    return { status: result.status, output, reports, jestFile };
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -268,8 +295,12 @@ ${FENCE}
   --ret-focus: #93c5fd;
 }
 \`\`\`
+
+${JEST_FENCE}
 `;
-    const guide = (markdown: string) => `# Guide\n\nFrom 0.x → 2.0.\n\n${markdown}\n`;
+    // A guide around `markdown`; its required Jest fence follows, so line 5 starts the sample.
+    const guide = (markdown: string) =>
+      `# Guide\n\nFrom 0.x → 2.0.\n\n${markdown}\n\n${JEST_FENCE}\n`;
     // A v2 region whose comment names the 0.x hook, for the rule that examples get every check.
     const LEGACY_REGION = "// #region legacy\n// Replaces useToast.\ntoast('Hi');\n// #endregion\n";
     const examples = { 'sample.tsx': `${REGION}${LEGACY_REGION}` };
@@ -439,11 +470,207 @@ ${FENCE}
     });
 
     it('requires the phrase "0.x → 2.0"', () => {
-      const run = runCheck({ 'MIGRATION.md': '# Guide\n\nFrom 0.x to 2.0.\n' }, {});
+      const run = runCheck(
+        { 'MIGRATION.md': `# Guide\n\nFrom 0.x to 2.0.\n\n${JEST_FENCE}\n` },
+        {}
+      );
       expect(run.reports['MIGRATION.md']).toEqual([
         '  - the migration guide does not say "0.x → 2.0"',
       ]);
       expect(run.status).toBe(1);
+    });
+
+    // The guide's Jest configuration equals the J1 fixture's `type`, `scripts.test` and `jest`
+    // (P-27 S3): exactly one json fence after `<!-- jest-config -->`, compared as parsed JSON.
+    describe('the Jest configuration', () => {
+      const FIXTURE = 'consumer-jest/package.json';
+      // A guide with `markdown` and no Jest fence of its own.
+      const bare = (markdown: string) => `# Guide\n\nFrom 0.x → 2.0.\n\n${markdown}\n`;
+      const { type, scripts, jest } = JEST_CONFIG;
+      const fence = (language: string, body: string) => `\`\`\`${language}\n${body}\n\`\`\``;
+
+      it('accepts the configuration with its keys in any order', () => {
+        const run = runCheck(
+          {
+            'MIGRATION.md': bare(jestFence({ jest, scripts, type })),
+            'nested/MIGRATION.md': bare(
+              jestFence({
+                type,
+                scripts,
+                jest: {
+                  moduleNameMapper: jest.moduleNameMapper,
+                  testEnvironment: jest.testEnvironment,
+                },
+              })
+            ),
+          },
+          {}
+        );
+        expect(run.reports).toEqual({ 'MIGRATION.md': [], 'nested/MIGRATION.md': [] });
+        expect(run.status, run.output).toBe(0);
+      });
+
+      // Samples the check must reject, each breaking one rule.
+      const CASES: readonly (readonly [name: string, markdown: string, message: string])[] = [
+        [
+          'a missing fence',
+          'No configuration here.',
+          'the migration guide has no <!-- jest-config --> fence',
+        ],
+        [
+          'a duplicated fence',
+          `${JEST_FENCE}\n\n${JEST_FENCE}`,
+          'line 24: a second <!-- jest-config --> fence',
+        ],
+        [
+          'invalid JSON',
+          `<!-- jest-config -->\n\n${fence('json', '{ "type": "module", }')}`,
+          'line 7: the Jest configuration is not valid JSON',
+        ],
+        [
+          'a JSON array',
+          `<!-- jest-config -->\n\n${fence('json', '[]')}`,
+          'the Jest configuration must be a JSON object',
+        ],
+        [
+          'a changed type',
+          jestFence({ type: 'commonjs', scripts, jest }),
+          'the Jest configuration\'s "type" differs from',
+        ],
+        [
+          'a test script without the flag',
+          jestFence({ type, scripts: { test: 'jest' }, jest }),
+          'the Jest configuration\'s "scripts.test" differs from',
+        ],
+        [
+          'a changed CSS mapping',
+          jestFence({ type, scripts, jest: { ...jest, moduleNameMapper: {} } }),
+          'the Jest configuration\'s "jest" differs from',
+        ],
+        [
+          'an extra Jest option',
+          jestFence({ type, scripts, jest: { ...jest, transformIgnorePatterns: [] } }),
+          'the Jest configuration\'s "jest" differs from',
+        ],
+        [
+          'an extra top-level field',
+          jestFence({ ...JEST_CONFIG, devDependencies: { jest: '30.5.2' } }),
+          'the Jest configuration\'s "devDependencies" is not a synchronised field',
+        ],
+        [
+          'an extra script',
+          jestFence({ type, scripts: { ...scripts, lint: 'eslint .' }, jest }),
+          'the Jest configuration\'s "scripts.lint" is not a synchronised field',
+        ],
+        ['a missing type', jestFence({ scripts, jest }), 'the Jest configuration has no "type"'],
+        [
+          'a missing test script',
+          jestFence({ type, scripts: {}, jest }),
+          'the Jest configuration has no "scripts.test"',
+        ],
+        [
+          'scripts that are not an object',
+          jestFence({ type, scripts: 'jest', jest }),
+          'the Jest configuration\'s "scripts" must be an object',
+        ],
+        [
+          'the marker on a text fence',
+          `<!-- jest-config -->\n\n${fence('text', JSON.stringify(JEST_CONFIG))}`,
+          'the Jest configuration must be a json fence',
+        ],
+        [
+          'an orphan marker',
+          `<!-- jest-config -->\n\nText.\n\n${JEST_FENCE}`,
+          'line 5: the Jest marker is not followed by a code fence',
+        ],
+        [
+          'a marker followed by another marker',
+          `<!-- jest-config -->\n${JEST_FENCE}`,
+          'line 5: the Jest marker is not followed by a code fence',
+        ],
+        [
+          'an unmarked json fence',
+          `${fence('json', '{}')}\n\n${JEST_FENCE}`,
+          'line 5: json fence has no <!-- jest-config --> marker',
+        ],
+        [
+          'an unmarked jsonc fence',
+          `${fence('jsonc', '{}')}\n\n${JEST_FENCE}`,
+          'line 5: jsonc fence has no <!-- jest-config --> marker',
+        ],
+        [
+          'an unmarked JSON5 fence',
+          `${fence('JSON5', '{}')}\n\n${JEST_FENCE}`,
+          'line 5: JSON5 fence has no <!-- jest-config --> marker',
+        ],
+      ];
+
+      describe('rejects', () => {
+        const docs: Record<string, string> = {};
+        CASES.forEach(
+          ([, markdown], index) => (docs[`case-${index}/MIGRATION.md`] = bare(markdown))
+        );
+        const run = runCheck(docs, {});
+
+        it('with a failing exit status', () => expect(run.status).toBe(1));
+
+        it.each(CASES.map(([name, , message], index) => [name, message, index] as const))(
+          '%s',
+          (_name, message, index) => {
+            const report = run.reports[`case-${index}/MIGRATION.md`]!;
+            expect(report.join('\n')).toContain(message);
+            // A difference adds detail lines under its message.
+            expect(report.filter(line => line.startsWith('  - '))).toHaveLength(1);
+          }
+        );
+      });
+
+      it('shows both values of a difference', () => {
+        const run = runCheck(
+          { 'MIGRATION.md': bare(jestFence({ type: 'commonjs', scripts, jest })) },
+          {}
+        );
+        expect(run.reports['MIGRATION.md']).toEqual([
+          `  - line 7: the Jest configuration's "type" differs from ${run.jestFile}:`,
+          '      doc:     "commonjs"',
+          '      fixture: "module"',
+        ]);
+      });
+
+      // The fixture side: a changed, invalid or incomplete manifest fails the unchanged guide.
+      it.each([
+        [
+          'a changed fixture',
+          JSON.stringify({ ...JEST_CONFIG, jest: { testEnvironment: 'node' } }),
+          'the Jest configuration\'s "jest" differs from',
+        ],
+        ['an invalid fixture', '{ "type": "module", }', `${FIXTURE} cannot be read as JSON`],
+        ['a fixture without jest', JSON.stringify({ type, scripts }), `${FIXTURE} has no "jest"`],
+        [
+          'a fixture without a test script',
+          JSON.stringify({ type, scripts: {}, jest }),
+          `${FIXTURE} has no "scripts.test"`,
+        ],
+      ])('rejects %s', (_name, manifest, message) => {
+        const run = runCheck({ 'MIGRATION.md': bare(JEST_FENCE) }, {}, manifest);
+        const report = run.reports['MIGRATION.md']!;
+        expect(report.join('\n')).toContain(message);
+        expect(report.filter(line => line.startsWith('  - '))).toHaveLength(1);
+        expect(run.status).toBe(1);
+      });
+
+      // The marker is the guide's alone; elsewhere it binds nothing and json fences need none.
+      it.each(['README.md', 'docs/THEMING.md', 'docs/ACCESSIBILITY.md'])(
+        'rejects the marker in %s',
+        name => {
+          const markdown = `# Doc\n\n${JEST_FENCE}\n\n${fence('json', '{}')}\n`;
+          // README.md and THEMING.md also report the types and tokens this sample leaves out.
+          const report = runCheck({ [name]: markdown }, {}).reports[name]!;
+          expect(report.filter(line => /jest|json/i.test(line))).toEqual([
+            '  - line 3: the Jest marker is allowed only in MIGRATION.md',
+          ]);
+        }
+      );
     });
 
     // The guide's allowances apply to no other document: the reference names stay rejected.
@@ -489,6 +716,10 @@ ${FENCE}
     expect(result.stdout).toContain('README.md: documentation checks OK');
     expect(result.stdout).toContain('docs/THEMING.md: documentation checks OK');
     expect(result.stdout).toContain('docs/ACCESSIBILITY.md: documentation checks OK');
+    expect(result.stdout).toContain('docs/MIGRATION.md: documentation checks OK');
+    expect(result.stdout).toContain(
+      'fixtures/consumer-vite/src/docs: 21 example regions, all in use'
+    );
     expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
   });
 });
