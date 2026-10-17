@@ -132,6 +132,7 @@ jobs:
             fixtures/consumer-vite/package-lock.json
             fixtures/consumer-vite/legs/*/package-lock.json
             fixtures/consumer-next/package-lock.json
+            fixtures/consumer-jest/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - run: npm run validate:package

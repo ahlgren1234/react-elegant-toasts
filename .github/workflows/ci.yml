@@ -109,11 +109,12 @@ jobs:
             fixtures/consumer-vite/package-lock.json
             fixtures/consumer-vite/legs/*/package-lock.json
             fixtures/consumer-next/package-lock.json
+            fixtures/consumer-jest/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
       # Chromium pinned by @playwright/test, and its system packages, for the Next.js consumer check.
       - run: npx playwright install --with-deps chromium
-      # Builds, packs and validates the tarball: the packed consumer matrix, F1 to F4, and the
-      # Next.js App Router consumer, N1 (§27).
+      # Builds, packs and validates the tarball: the packed consumer matrix, F1 to F4, the Next.js
+      # App Router consumer, N1, and the Jest consumer, J1 (§27).
       - run: npm run validate:package
 
   # The bundle-size budget (§33, P-24): size-limit measures the built ESM entry and the shipped

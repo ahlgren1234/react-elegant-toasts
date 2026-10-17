@@ -874,7 +874,7 @@ The docs (§31) state this boundary explicitly. The demo's custom-toast example 
 ### 24.3 Compatibility guidance (documented in the README and migration guide)
 
 - **CommonJS is not part of the supported package contract.**
-- Consumers whose test setups use CommonJS, for example Jest in its default CJS mode, may need to configure ESM support or transform this package (for example through `transformIgnorePatterns`). The docs include a short example. Vitest needs no configuration.
+- Consumers whose test setups load packages as CommonJS, for example Jest in its default mode, must run their tests as ESM or transform this package. The docs include a short example, the configuration the Jest consumer (J1, §27 step 9) tests: Jest 30 runs native ESM test files under Node's `--experimental-vm-modules`, with no transform, and a `moduleNameMapper` entry maps CSS imports to a stub, which is needed only when the tested code imports `react-elegant-toasts/styles.css`. `transformIgnorePatterns` alone is not an ESM solution: it only lets a transform reach this package, and with none that compiles ESM to CommonJS the package still fails to load (P-27 S2 D0). A Babel-based transformation is a separate approach that the documented fixture does not verify, and the docs give no configuration for it. Vitest normally needs no equivalent configuration. (Corrected in P-27 S2; this item previously offered `transformIgnorePatterns` as an example.)
 - Some recent Node versions can `require()` ESM. This package makes **no API guarantee** about that, and it is not tested.
 - Bundlers (Vite, webpack 5, Next.js, Rspack, esbuild) and modern Node ESM are supported targets.
 
@@ -933,6 +933,11 @@ Rules:
    - `next build` succeeds
    - a Playwright check against `next start` shows a toast
    - this confirms that `"use client"` works through the real framework
+9. **Jest consumer** (`fixtures/consumer-jest`, J1), installed from the tarball, with React 19 only. Jest 30 with `jest-environment-jsdom` runs native ESM test files under Node's `--experimental-vm-modules`, with no transform, and maps CSS imports to a stub. It must:
+   - import `react-elegant-toasts` and `react-elegant-toasts/styles.css` by their public names, and resolve the package to the installed copy
+   - render `<Toaster />`, show a `toast.success(...)` and remove it from its close button
+   - pass exactly its two tests, so a run with none fails
+   - this backs the Jest configuration in the migration guide (§24.3, §30)
 
 The fixtures are excluded from the library's lint and typecheck. They install with their own lockfiles, or without one, and never touch the root lockfile. **There is no CJS smoke test.**
 
@@ -941,6 +946,7 @@ This list is the final 2.0 state, and it is built up in phases:
 - P-07 adds steps 1–6, with the Vite fixture on React 18 and TypeScript 5.0, covering types and imports only.
 - P-14 adds the rendering test.
 - P-23 adds the React 19, `@types/react` 19 and latest-TypeScript legs, plus steps 7 and 8.
+- P-27 (S2) adds step 9.
 
 ## 28. CI strategy
 
@@ -6777,7 +6783,7 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
 - Carried over from P-26 (S4, S5). These add to §30's requirements, which stay as written (every mapping, the Next.js before-and-after examples and the Jest guidance), and to the testing note above:
   - Once `docs/MIGRATION.md` exists, link it from the README, as §31 requires. Use an absolute `blob/v2/` link, like the README's other documentation links, until P-29 switches them for the release.
   - Decide how `scripts/check-docs.js` validates the guide. The checker rejects 0.x API names (§6.8), and the guide must name them on purpose.
-- **Status: in progress, at S1 (2026-10-17).** Issue #21 is In Progress in Project #8 (priority High, phase P-27), and Roadmap #28 lists it under In progress.
+- **Status: in progress, at S2 (2026-10-17).** Issue #21 is In Progress in Project #8 (priority High, phase P-27), and Roadmap #28 lists it under In progress.
 - **Delivery:** each slice is its own PR into `v2`, merged with a merge commit after a maintainer checkpoint: S1 the plan reconciliation and the checker's support for the guide, S2 the Jest consumer leg, S3 the guide and the README link, S4 the closeout (plan only). Each slice adds its own short record here.
 - **D0, design and audit** (2026-10-17, read-only, from `v2` at `dde8b08`). The evidence for the 0.x API is the published package, not the README:
   - **Artifacts:** the npm tarballs 0.1.0, 0.1.1 and 0.1.2 (`latest`; 0.1.2's shasum `8204601aafdee24a31a9bd2b981e3d805b8d5a08`, `gitHead` `6e0b160`). Their `dist/` folders are identical; only the README and the manifest differ. The source at `6e0b160` matches the minified `dist/index.mjs`, and its `styles.css` is byte-identical to the published one. 0.x was read, not run.
@@ -6808,6 +6814,42 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
     - Not run: `validate:package`, since no fixture, manifest or validation script changed, and the browser suites. No file under `src/` outside the tests changed, so the build output and `size` are unchanged.
   - **Inline-code fix** (pre-PR review, 2026-10-17; a second commit, within S1). The guide's exemption removed ``/`[^`]*`/g`` spans before looking for 0.x names, so a malformed span could hide a bare name: one between double-backtick spans, or after a stray backtick, passed. Now the exemption trusts only single backticks in pairs: in the guide's prose, a line with a double backtick or an odd number of backticks is reported and checked whole, so its names fail too. Fences and the other three documents are unchanged. `check-docs.test.ts` gains 12 tests (72 in all): the review's four probe lines, which all fail now; a double and a stray backtick with no 0.x name; a bare name before, and between, valid spans; a passing guide with valid spans, and a 0.x fence and a v2 example that both contain backticks; and, in README.md, THEMING.md and ACCESSIBILITY.md, 0.x names in single- and double-backtick inline code, still rejected with no delimiter rule. Against the first S1 commit's checker, exactly the six malformed-delimiter tests fail. `npm test`, React 19.3.0: 57 files, 2,051 tests.
   - **Carried to S3:** add `docs/MIGRATION.md` to `DOCS` when the guide is created, with the real-document test expecting it.
+  - **Merged** through PR #70 (from `0fbfeee`: `cbd1270`, the slice, and `0fbfeee`, the inline-code fix) as `51c4c7a86d47c76ebb262e42fbdde01256663057` (2026-10-17), a merge commit whose parents are `dde8b08` and `0fbfeee`. GitGuardian passed on the PR head. The post-merge push runs, CI/CD `39025731110` and Node 26 compatibility `39025731010`, passed all 15 jobs.
+- **S2, the Jest consumer leg** (2026-10-17; branch `docs/p27-s2-jest-consumer` from `v2` at `51c4c7a`; local commit, not pushed).
+  - **D0, design** (read-only, from `v2` at `51c4c7a`), in scratch consumers of the packed tarball with Jest 30.5.2 and `jest-environment-jsdom` 30.5.2:
+    - Jest's default CommonJS mode cannot load the package: `require()` and an `import` test file both fail with "Must use import to load ES Module". A `transformIgnorePatterns` exception with no Babel configuration fails identically; with `@babel/preset-env` it passes without the flag, but that approach is outside the tested fixture.
+    - Under Node's `--experimental-vm-modules`, native ESM test files pass with the default transform and with `transform: {}`, on Node 24.21.0 and 26.11.1, with React 18.3.1 and 19.3.0. They also pass on Jest 30.0.5. A CommonJS `require()` passes under the flag only from Jest 30.4 (30.3.0 fails, 30.4.2 passes); J1 does not test it, since CommonJS is outside the package contract (§24.3).
+    - Jest's resolver honours the exports map: without a mapper, `react-elegant-toasts/styles.css` resolves to the installed `dist/styles.css` and fails to parse as JavaScript. `dist/index.js` imports no CSS, so the mapper matters only when tested code imports the stylesheet.
+    - `jest-environment-jsdom` 30.5.2 brings jsdom 26.1.0, not the 30.1.1 of the Vite legs; J1 makes no jsdom claim.
+  - The maintainer approved the design with these decisions:
+    1. J1 uses React 19.3.0 only: its claim is about loading the package, and both React majors already render in F1 to F4 and the unit tests.
+    2. Native ESM `.js` tests in a `"type": "module"` fixture; `require()` is not tested.
+    3. The Jest configuration and the test script live in the fixture's `package.json`.
+    4. S3 adds a narrow check that keeps the guide's Jest JSON in sync with the fixture; not part of S2.
+    5. `transformIgnorePatterns` is not recommended as a standalone solution, and §24.3 is corrected.
+    6. Dependabot covers the fixture, with the existing major-version policy.
+    7. Both workflows add the fixture's lockfile to `cache-dependency-path`.
+    8. The fixture is `fixtures/consumer-jest`, and the leg is J1.
+  - **`fixtures/consumer-jest`:** `package.json` pins `react` and `react-dom` 19.3.0, `jest` and `jest-environment-jsdom` 30.5.2, sets `"type": "module"`, runs `node --experimental-vm-modules node_modules/jest/bin/jest.js` as `test`, and configures Jest with `testEnvironment: "jsdom"` and a `moduleNameMapper` from `\.css$` to `style-stub.js` (`export default {}`). The committed lockfile installs with `npm ci`. No Babel, ts-jest, Testing Library or JSX transform.
+  - **`toaster.test.js`:** imports `react-elegant-toasts/styles.css` and `react-elegant-toasts` by name, with `act` and `createElement` from `react` and `createRoot` from `react-dom/client`. Two tests: the package resolves (`import.meta.resolve`) inside the consumer's `node_modules/react-elegant-toasts/`; and `<Toaster />` mounts its region, `toast.success` returns a string ID and renders one `li.ret-toast--success` with its text, and its close button removes it. Without the stylesheet no library animation runs, so each phase change completes on the zero-delay lifecycle fallback (§9 rule 3): the test asserts `entering`, then `visible` after one zero-delay turn inside `act`, then `exiting` on the click and removal after one more turn. No polling, sleep or timeout. Each test restores `IS_REACT_ACT_ENVIRONMENT`, unmounts its root and removes its container.
+  - **`scripts/validate-package.js`:** J1 runs after N1. It reuses `prepareConsumer` (an isolated copy outside the repository, `npm ci`, the tarball installed as a real copy, the manifests unchanged and free of the package name) and `checkResolution` (Node ESM resolution, the blocked deep imports, one React copy). A J1 version check requires exact pins and matching installs of the four packages, and React 19. The Jest run (`npm test -- --ci --json --outputFile <tmp>`) must succeed with exactly one passing suite, `toaster.test.js` inside the consumer, and exactly the two expected test titles passing. F1 to F4 and N1 are unchanged.
+  - **CI and Dependabot:** `build-package` (Node 24, required) and `node26-build-package` run J1 through `validate:package`; both add `fixtures/consumer-jest/package-lock.json` to `cache-dependency-path`, and `ci.yml`'s comment names J1. Dependabot gains a weekly `/fixtures/consumer-jest` entry that groups minor and patch updates and ignores majors of `jest`, `jest-environment-jsdom`, `react` and `react-dom`. No job, trigger or ruleset change.
+  - **Validation** (2026-10-17, Node 24.21.0 and npm 11.19.0 unless stated):
+    - `format:check`, `lint` (three documents, 19 regions, unchanged) and `typecheck`: pass.
+    - `npm test`, React 19.3.0: 57 files, 2,051 tests, unchanged from S1. The first full run had one timeout, `demo/utils/lifecycle.test.ts`'s type-check of the demo snippets (6,612 ms against 5,000 ms); the file passed alone and the full suite passed on the rerun. S2 changes no file it reads.
+    - `validate:package` from a clean `git archive` export of the slice's tree: F1 to F4, N1 and J1 pass on Node 24.21.0, and again on Node 26.11.1 (npm 11.20.0). J1 passes exactly its two tests on both.
+    - The built `dist/index.js`, `index.js.map`, `index.d.ts` and `styles.css` are byte-identical to a clean build of `51c4c7a`, and `size` is unchanged: 32.38 / 11.79 / 10.71 kB for the ESM entry and 8.09 / 6.88 kB for `styles.css`, within the unchanged budgets.
+    - **Negative controls,** in disposable copies of the slice (`validate-package.js` limited to J1 in the copy only):
+      1. Without `--experimental-vm-modules` in the test script, Jest fails with "Must use import to load ES Module" and validation fails.
+      2. Without the `moduleNameMapper`, Jest fails with a SyntaxError in the installed `node_modules/react-elegant-toasts/dist/styles.css`, so the CSS import resolved through the exports map.
+      3. With the installed package removed before the resolution check, Node fails with `ERR_MODULE_NOT_FOUND`; removed before the Jest run, Jest fails with "Cannot find module 'react-elegant-toasts'".
+      4. With the removal assertion reversed, the test fails (expected `true`, received `false`).
+      5. With the test file renamed, Jest finds no tests and exits 1; with `--passWithNoTests` added, Jest exits 0 and validation fails on "expected 1 passing test suite, found 0 of 0"; with one test skipped, on "expected 2 passing tests, found 1 of 2".
+      6. With the installed package replaced by a symlink to a copy outside the consumer, `prepareConsumer` rejects it as "a symlink, not an installed copy".
+      7. Aliasing the package away from the installed copy is rejected by the existing manifest check (the fixture may not name the package). Applied to an installed consumer instead, the resolution test fails, and the render test fails with "Invalid hook call", from a second React copy.
+    - Not run: the browser suites, since no file under `src/`, `browser/` or `demo/` changed.
+  - **This plan:** the S1 merge record; this status; §24.3 corrected (the flag, the CSS mapping, `transformIgnorePatterns` alone not an ESM solution, Babel a separate approach the fixture does not verify); §27 step 9.
+  - **Carried to S3:** the guide's Jest example shows this fixture's configuration, and the narrow check (decision 4) compares it with `fixtures/consumer-jest/package.json`.
 - **AC-REL-2 stays open:** `docs/MIGRATION.md` (S3) and `CHANGELOG.md` (P-28) do not exist yet, and the sign-off is P-29's. P-28 keeps Changesets, `CHANGELOG.md` and the release metadata; P-29 keeps the README's link switch to `blob/main/` (which will include the guide's link), the npm deprecation of 0.x and the release sign-offs.
 
 **P-28 Release tooling**

@@ -1,5 +1,5 @@
 // Validates the packed package as consumers receive it (§27, P-07; the F1 to F4 matrix and the
-// Next.js App Router consumer, P-23 S5b to S7).
+// Next.js App Router consumer, P-23 S5b to S7; the Jest consumer, P-27 S2).
 // Run through `npm run validate:package`, which builds the library first.
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -13,6 +13,7 @@ const PACKAGE_NAME = 'react-elegant-toasts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureDir = path.join(root, 'fixtures', 'consumer-vite');
 const nextFixtureDir = path.join(root, 'fixtures', 'consumer-next');
+const jestFixtureDir = path.join(root, 'fixtures', 'consumer-jest');
 const npmFlags = ['--ignore-scripts', '--no-audit', '--no-fund'];
 
 const EXPECTED_FILES = [
@@ -77,6 +78,22 @@ const NEXT_LEG = {
   typescript: '7.0.2',
   next: '16.4.0',
 };
+// The Jest consumer (§27 step 9, P-27 S2): Jest 30 with jsdom loads the package as native ESM
+// under Node's --experimental-vm-modules, with no transform, and maps the CSS import to a stub.
+// It backs the Jest configuration the migration guide shows; React 19 only (P-27 S2, D1).
+const JEST_LEG = {
+  id: 'J1',
+  sourceDir: jestFixtureDir,
+  manifestDir: jestFixtureDir,
+  react: 19,
+  packages: { jest: '30.5.2', 'jest-environment-jsdom': '30.5.2' },
+};
+// The fixture's tests, by title. The run must pass exactly these, so it cannot pass with none.
+const JEST_TEST_FILE = 'toaster.test.js';
+const JEST_TESTS = [
+  'resolves the package to the copy installed in this consumer',
+  'shows a success toast and removes it from its close button',
+];
 
 class ValidationError extends Error {}
 
@@ -315,6 +332,71 @@ function checkNextApp(consumer, leg) {
     label: 'Next.js App Router check',
   });
   ok('the App Router app built, served the empty region and showed a toast in Chromium');
+}
+
+function checkJestVersions(consumer, leg) {
+  step(`${leg.id}: check the installed versions`);
+  const manifest = readJson(path.join(consumer, 'package.json'));
+  const pins = { ...manifest.dependencies, ...manifest.devDependencies };
+  const installed = {};
+  for (const name of ['react', 'react-dom', ...Object.keys(leg.packages)]) {
+    const pin = pins[name];
+    assert(/^\d+\.\d+\.\d+$/.test(pin ?? ''), `${leg.id} must pin ${name} exactly, found ${pin}`);
+    installed[name] = readJson(path.join(consumer, 'node_modules', name, 'package.json')).version;
+    assert(
+      installed[name] === pin,
+      `${leg.id} installed ${name} ${installed[name]}, but its manifest pins ${pin}`
+    );
+  }
+  for (const [name, version] of Object.entries(leg.packages)) {
+    assert(installed[name] === version, `${leg.id} must use ${name} ${version}`);
+  }
+  for (const name of ['react', 'react-dom']) {
+    const major = Number(installed[name].split('.')[0]);
+    assert(major === leg.react, `${leg.id} is a React ${leg.react} leg, but has ${name} ${major}`);
+  }
+  ok(
+    `${Object.entries(installed)
+      .map(([name, version]) => `${name} ${version}`)
+      .join(', ')} (React ${leg.react})`
+  );
+}
+
+function checkJest(consumer, tmp, leg) {
+  step(`${leg.id}: run the fixture's Jest tests against the packed package`);
+  // Outside the consumer, so the results file is never mistaken for part of the fixture.
+  const resultsFile = path.join(tmp, `jest-${leg.id.toLowerCase()}-results.json`);
+  npm(['test', '--', '--ci', '--json', '--outputFile', resultsFile], {
+    cwd: consumer,
+    label: `Jest ${leg.packages.jest}`,
+  });
+  const results = readJson(resultsFile);
+  assert(results.success === true, 'the Jest run did not succeed');
+  assert(
+    results.numTotalTestSuites === 1 && results.numPassedTestSuites === 1,
+    `expected 1 passing test suite, found ${results.numPassedTestSuites} of ${results.numTotalTestSuites}`
+  );
+  assert(
+    results.numTotalTests === JEST_TESTS.length && results.numPassedTests === JEST_TESTS.length,
+    `expected ${JEST_TESTS.length} passing tests, found ${results.numPassedTests} of ${results.numTotalTests}`
+  );
+  const [suite] = results.testResults;
+  const testFile = fs.realpathSync(suite.name);
+  assert(
+    isInside(testFile, fs.realpathSync(consumer)) && path.basename(testFile) === JEST_TEST_FILE,
+    `the test suite ran from ${suite.name}, not the consumer's ${JEST_TEST_FILE}`
+  );
+  const passed = suite.assertionResults
+    .filter(test => test.status === 'passed')
+    .map(test => test.title)
+    .sort();
+  assert(
+    JSON.stringify(passed) === JSON.stringify([...JEST_TESTS].sort()),
+    `the passing tests are [${passed.join(', ')}], expected [${JEST_TESTS.join(', ')}]`
+  );
+  ok(
+    `Jest ${leg.packages.jest} passed exactly the ${JEST_TESTS.length} tests of ${JEST_TEST_FILE}`
+  );
 }
 
 function checkPackedManifest(installed, info) {
@@ -666,7 +748,13 @@ try {
     checkResolution(consumer, installed, NEXT_LEG);
     checkNextApp(consumer, NEXT_LEG);
   }
-  const ids = [...LEGS, NEXT_LEG].map(leg => leg.id);
+  {
+    const { consumer, installed } = prepareConsumer(tmp, tarball, JEST_LEG);
+    checkJestVersions(consumer, JEST_LEG);
+    checkResolution(consumer, installed, JEST_LEG);
+    checkJest(consumer, tmp, JEST_LEG);
+  }
+  const ids = [...LEGS, NEXT_LEG, JEST_LEG].map(leg => leg.id);
   console.log(`\nPackage validation passed (${ids.join(', ')}).`);
 } catch (error) {
   failed = true;
