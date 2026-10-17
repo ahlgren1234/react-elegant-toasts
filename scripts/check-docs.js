@@ -20,16 +20,23 @@
 // - each TS or TSX fence follows an `<!-- example: <id> -->` marker and equals that region of the
 //   fixture's examples, which validate-package.js type-checks against the packed package; every
 //   region is used by a checked document. In MIGRATION.md a fence marked `<!-- 0.x -->` instead
-//   shows 0.x code, which is never type-checked.
+//   shows 0.x code, which is never type-checked;
+// - MIGRATION.md has exactly one json fence, after `<!-- jest-config -->`, and no other JSON fence.
+//   Parsed, it has exactly the `type`, `scripts.test` and `jest` fields of the Jest consumer's
+//   package.json (J1, P-27 S3), with equal values in any key order. `--jest <file>` reads another
+//   manifest.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { JSDOM } from 'jsdom';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // docs/V2_PLAN.md and browser/MANUAL_QA.md are internal records and are never checked.
-const DOCS = ['README.md', 'docs/THEMING.md', 'docs/ACCESSIBILITY.md'];
+const DOCS = ['README.md', 'docs/THEMING.md', 'docs/ACCESSIBILITY.md', 'docs/MIGRATION.md'];
 const EXAMPLES = 'fixtures/consumer-vite/src/docs';
+// The Jest consumer (J1) whose configuration MIGRATION.md shows (P-27 S3).
+const JEST_FIXTURE = 'fixtures/consumer-jest/package.json';
 // The document that must name every token.
 const TOKEN_REFERENCE = 'THEMING.md';
 // The document that must name every public type, and may link only absolutely.
@@ -98,6 +105,10 @@ const TS_LANGUAGES = ['ts', 'tsx', 'typescript', 'js', 'jsx', 'javascript'];
 
 const MARKER = /^<!--\s*example:\s*([\w-]+)\s*-->$/;
 const LEGACY_MARKER = /^<!--\s*0\.x\s*-->$/;
+const JEST_MARKER = /^<!--\s*jest-config\s*-->$/;
+const JSON_LANGUAGES = ['json', 'jsonc', 'json5'];
+// The Jest consumer's fields the guide shows: `true` is a value compared whole.
+const JEST_FIELDS = { type: true, scripts: { test: true }, jest: true };
 const INLINE_CODE = /`[^`]*`/g;
 const FENCE = /^ {0,3}(`{3,}|~{3,})\s*([\w-]*)/;
 // `--ret-*` custom properties and bare `ret-*` names, which are classes or keyframes.
@@ -236,6 +247,100 @@ function readRegions(dir, report) {
   return regions;
 }
 
+const isObject = value => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The fields of `value` that `shape` names, by dotted path. Each missing field, and each nested one
+ * that is not an object, is a problem for `subject`; with `strict`, so is each field not in `shape`.
+ */
+function syncedFields(value, shape, subject, problem, strict, prefix = '') {
+  const fields = new Map();
+  if (strict) {
+    for (const key of Object.keys(value)) {
+      if (!Object.hasOwn(shape, key)) {
+        problem(`${subject}'s "${prefix}${key}" is not a synchronised field`);
+      }
+    }
+  }
+  for (const [key, nested] of Object.entries(shape)) {
+    const name = `${prefix}${key}`;
+    if (!Object.hasOwn(value, key)) problem(`${subject} has no "${name}"`);
+    else if (nested === true) fields.set(name, value[key]);
+    else if (!isObject(value[key])) problem(`${subject}'s "${name}" must be an object`);
+    else {
+      for (const field of syncedFields(value[key], nested, subject, problem, strict, `${name}.`)) {
+        fields.set(...field);
+      }
+    }
+  }
+  return fields;
+}
+
+/** The Jest consumer's synchronised fields, or the problems that prevent reading them. */
+function readJestFixture(file) {
+  const where = display(file);
+  let value;
+  try {
+    value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    return { where, problems: [`${where} cannot be read as JSON: ${error.message}`] };
+  }
+  if (!isObject(value)) return { where, problems: [`${where} is not a JSON object`] };
+  const problems = [];
+  const fields = syncedFields(value, JEST_FIELDS, where, message => problems.push(message), false);
+  return { where, fields, problems };
+}
+
+/**
+ * MIGRATION.md's Jest configuration: one json fence after the Jest marker, and no other JSON fence,
+ * so the configuration cannot also appear unchecked. Its fields must equal the fixture's.
+ */
+function checkJestConfig(fences, jestFences, fixture, at, report) {
+  for (const fence of fences) {
+    if (JSON_LANGUAGES.includes(fence.language.toLowerCase()) && !jestFences.includes(fence)) {
+      at(fence.line)(`${fence.language} fence has no <!-- jest-config --> marker`);
+    }
+  }
+  if (jestFences.length === 0) {
+    report('the migration guide has no <!-- jest-config --> fence');
+    return;
+  }
+  for (const extra of jestFences.slice(1)) {
+    at(extra.line)(
+      'a second <!-- jest-config --> fence: the guide shows the Jest configuration once'
+    );
+  }
+  const [fence] = jestFences;
+  const here = at(fence.line);
+  if (fence.language.toLowerCase() !== 'json') {
+    here('the Jest configuration must be a json fence');
+    return;
+  }
+  let value;
+  try {
+    value = JSON.parse(fence.body.join('\n'));
+  } catch (error) {
+    here(`the Jest configuration is not valid JSON: ${error.message}`);
+    return;
+  }
+  if (!isObject(value)) {
+    here('the Jest configuration must be a JSON object');
+    return;
+  }
+  if (fixture.problems.length > 0) {
+    for (const problem of fixture.problems) report(problem);
+    return;
+  }
+  const fields = syncedFields(value, JEST_FIELDS, 'the Jest configuration', here, true);
+  for (const [name, expected] of fixture.fields) {
+    if (!fields.has(name) || isDeepStrictEqual(fields.get(name), expected)) continue;
+    here(
+      `the Jest configuration's "${name}" differs from ${fixture.where}`,
+      `:\n      doc:     ${JSON.stringify(fields.get(name))}\n      fixture: ${JSON.stringify(expected)}`
+    );
+  }
+}
+
 function checkDocument(file, context, report) {
   const text = fs.readFileSync(file, 'utf8');
   const lines = text.split('\n');
@@ -247,22 +352,31 @@ function checkDocument(file, context, report) {
 
   const migration = path.basename(file) === MIGRATION;
 
-  // Example and 0.x markers. Each binds the fence on the next non-blank line.
+  // Example, 0.x and Jest markers. Each binds the fence on the next non-blank line.
   const markers = new Map();
   const legacy = new Set();
+  const jestFences = [];
   for (const { line, text: content } of prose) {
     const marker = content.trim().match(MARKER);
     const legacyMarker = LEGACY_MARKER.test(content.trim());
-    if (!marker && !legacyMarker) continue;
-    const name = marker ? `example ${marker[1]}` : 'the 0.x marker';
-    if (legacyMarker && !migration) at(line)(`${name} is allowed only in ${MIGRATION}`);
+    const jestMarker = JEST_MARKER.test(content.trim());
+    if (!marker && !legacyMarker && !jestMarker) continue;
+    const name = marker
+      ? `example ${marker[1]}`
+      : legacyMarker
+        ? 'the 0.x marker'
+        : 'the Jest marker';
+    if (!marker && !migration) at(line)(`${name} is allowed only in ${MIGRATION}`);
     const next = lines.findIndex((l, index) => index >= line && l.trim() !== '') + 1;
     const fence = fences.find(f => f.line === next);
     if (!fence) at(line)(`${name} is not followed by a code fence`);
     else if (marker) markers.set(fence, marker[1]);
-    // Elsewhere the marker binds nothing, so its fence keeps every check.
-    else if (migration) legacy.add(fence);
+    // Elsewhere these markers bind nothing, so their fences keep every check.
+    else if (!migration) continue;
+    else if (legacyMarker) legacy.add(fence);
+    else jestFences.push(fence);
   }
+  if (migration) checkJestConfig(fences, jestFences, context.jest, at, report);
   // The text of a line that must not name the 0.x API or its stylesheet path. MIGRATION.md may
   // name them in its 0.x fences and in inline code in its prose; anywhere else, and in every other
   // document, the whole line is checked. The exemption trusts only plain inline code: single
@@ -400,9 +514,14 @@ function checkDocument(file, context, report) {
 }
 
 const args = process.argv.slice(2);
-const examplesFlag = args.indexOf('--examples');
-const examplesDir = path.resolve(root, examplesFlag >= 0 ? args[examplesFlag + 1] : EXAMPLES);
-if (examplesFlag >= 0) args.splice(examplesFlag, 2);
+/** Removes `<flag> <value>` from the arguments and returns the value, or `fallback`. */
+function option(flag, fallback) {
+  const index = args.indexOf(flag);
+  if (index < 0) return fallback;
+  return args.splice(index, 2)[1];
+}
+const examplesDir = path.resolve(root, option('--examples', EXAMPLES));
+const jestFile = path.resolve(root, option('--jest', JEST_FIXTURE));
 const files = (args.length > 0 ? args : DOCS).map(name => path.resolve(root, name));
 // Paths are printed as given relative to the repository, or absolute outside it.
 const display = file =>
@@ -415,6 +534,7 @@ const context = {
   types: readTypeExports(),
   regions: readRegions(examplesDir, message => regionProblems.push(message)),
   examplesName: display(examplesDir),
+  jest: readJestFixture(jestFile),
   used: new Set(),
 };
 
