@@ -146,6 +146,26 @@ updates:
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
 
+  # J1: the Jest consumer, Jest 30 and React 19 (P-27 S2). A new Jest major changes the tested
+  # configuration the migration guide shows, so it is a reviewed change.
+  - package-ecosystem: npm
+    directory: /fixtures/consumer-jest
+    target-branch: v2
+    schedule:
+      interval: weekly
+    groups:
+      consumer-jest:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: jest
+        update-types: ['version-update:semver-major']
+      - dependency-name: jest-environment-jsdom
+        update-types: ['version-update:semver-major']
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+
   - package-ecosystem: github-actions
     directory: /
     target-branch: v2
