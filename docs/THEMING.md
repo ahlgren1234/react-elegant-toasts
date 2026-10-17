@@ -1,5 +1,7 @@
 # Theming and styling
 
+See the [README](../README.md) for installation, the quick start and the API.
+
 This is the styling reference for react-elegant-toasts 2.x. The library ships one plain CSS file. You customise it through CSS custom properties (the `--ret-*` tokens), the documented `ret-*` classes and data attributes, and a `className` on the Toaster or on a toast.
 
 Only what this page documents is public. Anything else is an implementation detail and can change in any release: other `ret-*` classes, keyframe names, the element structure inside a toast or the region, inline styles, and the library's values for properties that are not tokens, such as font sizes, weights and padding.

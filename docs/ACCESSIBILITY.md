@@ -1,5 +1,7 @@
 # Accessibility
 
+See the [README](../README.md) for installation, the quick start and the API.
+
 This is the accessibility reference for react-elegant-toasts 2.x. It explains what the library does for the people using your application, what it leaves to you, and what has and has not been verified.
 
 The library gives you mechanisms: announcements, a keyboard route to the toasts, focus handling, pausing, reduced motion and forced-colours styles. Whether your application meets a particular accessibility standard also depends on what your toasts say, when you show them and what you put in custom toasts. This page makes no claim of conformance to WCAG or any other standard. Where it mentions a WCAG success criterion, it names the mechanism that helps you meet it, not a result.
