@@ -9,7 +9,9 @@
 // - every `--ret-*` name is a token the stylesheet declares, and THEMING.md names all of them;
 // - every `ret-*` class is a documented one, and every `data-*` name a documented attribute;
 // - every `react-elegant-toasts/…` subpath is in the package's `exports` map (no `dist/` paths);
-// - no 0.x API names, and no placeholders;
+// - no 0.x API names, and no placeholders. MIGRATION.md alone may name the 0.x API and its
+//   stylesheet path, inside inline code or a fence marked `<!-- 0.x -->`; it must say "0.x → 2.0"
+//   and never "v1";
 // - relative links reach an existing file, and anchors a heading or `id` in it; links to this
 //   repository on GitHub (`…/blob/<ref>/<path>`) are checked the same way against the local file;
 // - README.md has no relative links other than `#anchors`, since npm shows it without the docs,
@@ -17,7 +19,8 @@
 // - every fence names its language, so no TypeScript example escapes the checks below untagged;
 // - each TS or TSX fence follows an `<!-- example: <id> -->` marker and equals that region of the
 //   fixture's examples, which validate-package.js type-checks against the packed package; every
-//   region is used by a checked document.
+//   region is used by a checked document. In MIGRATION.md a fence marked `<!-- 0.x -->` instead
+//   shows 0.x code, which is never type-checked.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +34,9 @@ const EXAMPLES = 'fixtures/consumer-vite/src/docs';
 const TOKEN_REFERENCE = 'THEMING.md';
 // The document that must name every public type, and may link only absolutely.
 const README = 'README.md';
+// The migration guide (P-27), the one document that may name the 0.x API on purpose.
+const MIGRATION = 'MIGRATION.md';
+const MIGRATION_PHRASE = '0.x → 2.0';
 // A file of this repository on GitHub, at any branch or tag: the path, then an optional anchor.
 const REPO_FILE =
   /^https:\/\/github\.com\/ahlgren1234\/react-elegant-toasts\/blob\/[^/]+\/([^#?]+)(?:#(.*))?$/;
@@ -64,6 +70,8 @@ const V1_NAMES = [
   'ToastContainer',
   'ToastAnimation',
   'ToastProps',
+  'ToastProviderProps',
+  'ToastContextValue',
   'pauseOnHover',
   'pauseOnFocusLoss',
   'pauseOnPageIdle',
@@ -76,6 +84,8 @@ const V1_NAMES = [
   'containerClassName',
   'containerStyle',
 ];
+// The 0.x stylesheet path, which MIGRATION.md shows as the import to replace.
+const LEGACY_SUBPATHS = ['dist/styles.css'];
 const PLACEHOLDERS = [
   /\b(?:TODO|TBD|FIXME|XXX)\b/,
   /lorem ipsum/i,
@@ -87,6 +97,8 @@ const PLACEHOLDERS = [
 const TS_LANGUAGES = ['ts', 'tsx', 'typescript', 'js', 'jsx', 'javascript'];
 
 const MARKER = /^<!--\s*example:\s*([\w-]+)\s*-->$/;
+const LEGACY_MARKER = /^<!--\s*0\.x\s*-->$/;
+const INLINE_CODE = /`[^`]*`/g;
 const FENCE = /^ {0,3}(`{3,}|~{3,})\s*([\w-]*)/;
 // `--ret-*` custom properties and bare `ret-*` names, which are classes or keyframes.
 const RET_NAME = /(?<![\w-])(--)?ret-[\w-]*\w/g;
@@ -233,10 +245,52 @@ function checkDocument(file, context, report) {
     (message, detail = '') =>
       report(`line ${line}: ${message}${detail}`);
 
+  const migration = path.basename(file) === MIGRATION;
+
+  // Example and 0.x markers. Each binds the fence on the next non-blank line.
+  const markers = new Map();
+  const legacy = new Set();
+  for (const { line, text: content } of prose) {
+    const marker = content.trim().match(MARKER);
+    const legacyMarker = LEGACY_MARKER.test(content.trim());
+    if (!marker && !legacyMarker) continue;
+    const name = marker ? `example ${marker[1]}` : 'the 0.x marker';
+    if (legacyMarker && !migration) at(line)(`${name} is allowed only in ${MIGRATION}`);
+    const next = lines.findIndex((l, index) => index >= line && l.trim() !== '') + 1;
+    const fence = fences.find(f => f.line === next);
+    if (!fence) at(line)(`${name} is not followed by a code fence`);
+    else if (marker) markers.set(fence, marker[1]);
+    // Elsewhere the marker binds nothing, so its fence keeps every check.
+    else if (migration) legacy.add(fence);
+  }
+  // The text of a line that must not name the 0.x API or its stylesheet path. MIGRATION.md may
+  // name them in its 0.x fences and in inline code in its prose; anywhere else, and in every other
+  // document, the whole line is checked. The exemption trusts only plain inline code: single
+  // backticks, in pairs. A prose line with a double backtick or an unpaired one is reported and
+  // checked whole, so a malformed span can never hide a name.
+  const legacyLines = new Set();
+  for (const fence of legacy) fence.body.forEach((_, i) => legacyLines.add(fence.line + 1 + i));
+  const proseLines = new Set(prose.map(({ line }) => line));
+  const modern = (line, number, here) => {
+    if (!migration) return line;
+    if (legacyLines.has(number)) return '';
+    if (!proseLines.has(number)) return line;
+    if (line.includes('``')) {
+      here(`inline code in ${MIGRATION} must use single backticks`);
+      return line;
+    }
+    if (line.split('`').length % 2 === 0) {
+      here(`unpaired backtick: inline code in ${MIGRATION} must open and close on one line`);
+      return line;
+    }
+    return line.replace(INLINE_CODE, '');
+  };
+
   // Names, subpaths, 0.x API and placeholders, everywhere, code included.
   const named = new Set();
   lines.forEach((line, index) => {
     const here = at(index + 1);
+    const checked = modern(line, index + 1, here);
     for (const [name, dashes] of line.matchAll(RET_NAME)) {
       if (dashes) {
         named.add(name);
@@ -247,11 +301,15 @@ function checkDocument(file, context, report) {
       if (!ATTRIBUTES.includes(name)) here(`${name} is not a documented attribute`);
     }
     for (const [specifier, subpath] of line.matchAll(PACKAGE_PATH)) {
-      if (!context.subpaths.includes(subpath)) here(`${specifier} is not a package export`);
+      if (context.subpaths.includes(subpath)) continue;
+      if (!LEGACY_SUBPATHS.includes(subpath) || checked.includes(specifier)) {
+        here(`${specifier} is not a package export`);
+      }
     }
     for (const name of V1_NAMES) {
-      if (new RegExp(`\\b${name}\\b`).test(line)) here(`${name} is 0.x API`);
+      if (new RegExp(`\\b${name}\\b`).test(checked)) here(`${name} is 0.x API`);
     }
+    if (migration && /\bv1\b/i.test(line)) here('"v1": 2.0.0 follows 0.x, and there was no 1.x');
     for (const pattern of PLACEHOLDERS) {
       const match = line.match(pattern);
       if (match) here(`placeholder "${match[0]}"`);
@@ -261,6 +319,9 @@ function checkDocument(file, context, report) {
     for (const token of context.tokens) {
       if (!named.has(token)) report(`the token reference does not name ${token}`);
     }
+  }
+  if (migration && !text.includes(MIGRATION_PHRASE)) {
+    report(`the migration guide does not say "${MIGRATION_PHRASE}"`);
   }
   const readme = path.basename(file) === README;
   if (readme) {
@@ -295,20 +356,11 @@ function checkDocument(file, context, report) {
     }
   }
 
-  // Example markers and fences.
-  const markers = new Map();
-  for (const { line, text: content } of prose) {
-    const marker = content.trim().match(MARKER);
-    if (!marker) continue;
-    // The marker binds the fence on the next non-blank line.
-    const next = lines.findIndex((l, index) => index >= line && l.trim() !== '') + 1;
-    const fence = fences.find(f => f.line === next);
-    if (fence) markers.set(fence, marker[1]);
-    else at(line)(`example ${marker[1]} is not followed by a code fence`);
-  }
+  // Example fences. A 0.x fence is never compared with a region.
   for (const fence of fences) {
     if (fence.unclosed) at(fence.line)('code fence is never closed');
     if (fence.language === '') at(fence.line)('code fence has no language tag');
+    if (legacy.has(fence)) continue;
     const id = markers.get(fence);
     const typed = TS_LANGUAGES.includes(fence.language.toLowerCase());
     if (!id) {
