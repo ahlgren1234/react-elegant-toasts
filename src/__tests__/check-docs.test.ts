@@ -120,6 +120,8 @@ const FAILING: readonly (readonly [name: string, markdown: string, message: stri
   ],
   ['a 0.x component', 'Wrap the app in `ToastProvider`.', 'ToastProvider is 0.x API'],
   ['a 0.x option', 'Pass `pauseOnHover: false`.', 'pauseOnHover is 0.x API'],
+  ['a 0.x props type', 'Type it as `ToastProviderProps`.', 'ToastProviderProps is 0.x API'],
+  ['a 0.x context type', 'Type it as `ToastContextValue`.', 'ToastContextValue is 0.x API'],
   ['a missing link target', 'See [the guide](missing.md).', 'link target missing.md does not'],
   ['a missing anchor', 'See [below](#nowhere).', 'anchor #nowhere is not in'],
   ['a missing anchor elsewhere', 'See [it](other.md#nope).', 'anchor #nope is not in'],
@@ -236,6 +238,152 @@ describe('scripts/check-docs.js', () => {
       ]);
       expect(run.status).toBe(1);
     });
+  });
+
+  describe('the migration guide', () => {
+    // A guide that names the 0.x API only in inline code and in a 0.x fence, beside a v2 example.
+    const GUIDE = `# Migrating from 0.x → 2.0
+
+Version 2.0.0 directly follows 0.1.x; there was no 1.x. Replace \`ToastProvider\` and
+\`useToast().addToast({ message })\` with \`<Toaster />\` and \`toast\`, the import of
+\`react-elegant-toasts/dist/styles.css\` with \`react-elegant-toasts/styles.css\`, and
+\`.toast-message\` with \`.ret-toast__content\`. See [the top](#migrating-from-0x--20).
+
+<!-- 0.x -->
+
+\`\`\`tsx
+import { ToastProvider, useToast, type ToastContextValue } from 'react-elegant-toasts';
+import 'react-elegant-toasts/dist/styles.css';
+
+const { addToast }: ToastContextValue = useToast();
+addToast({ type: 'success', message: 'Saved', progressBar: true, closeOnClick: false });
+\`\`\`
+
+<!-- example: sample -->
+
+${FENCE}
+
+\`\`\`css
+.ret-toaster {
+  --ret-focus: #93c5fd;
+}
+\`\`\`
+`;
+    const guide = (markdown: string) => `# Guide\n\nFrom 0.x → 2.0.\n\n${markdown}\n`;
+    // A v2 region whose comment names the 0.x hook, for the rule that examples get every check.
+    const LEGACY_REGION = "// #region legacy\n// Replaces useToast.\ntoast('Hi');\n// #endregion\n";
+    const examples = { 'sample.tsx': `${REGION}${LEGACY_REGION}` };
+
+    it('accepts 0.x names in inline code and in a marked 0.x fence', () => {
+      const run = runCheck(
+        { 'MIGRATION.md': GUIDE, 'legacy/MIGRATION.md': guide('No examples here.') },
+        { 'sample.tsx': REGION }
+      );
+      expect(run.reports).toEqual({ 'MIGRATION.md': [], 'legacy/MIGRATION.md': [] });
+      expect(run.status, run.output).toBe(0);
+    });
+
+    // Samples the check must reject in MIGRATION.md, each breaking one rule.
+    const GUIDE_FAILING: readonly (readonly [name: string, markdown: string, message: string])[] = [
+      ['a 0.x name in prose', 'Remove the ToastProvider.', 'ToastProvider is 0.x API'],
+      [
+        'a 0.x name beside inline code',
+        'Replace `toast` calls for useToast.',
+        'useToast is 0.x API',
+      ],
+      [
+        'the 0.x stylesheet path in prose',
+        'Delete the react-elegant-toasts/dist/styles.css import.',
+        'react-elegant-toasts/dist/styles.css is not a package export',
+      ],
+      [
+        'another deep import in inline code',
+        'Not `react-elegant-toasts/src/index.ts`.',
+        'react-elegant-toasts/src/index.ts is not a package export',
+      ],
+      [
+        'another deep import in a 0.x fence',
+        "<!-- 0.x -->\n\n```ts\nimport 'react-elegant-toasts/dist/index.mjs';\n```",
+        'react-elegant-toasts/dist/index.mjs is not a package export',
+      ],
+      [
+        'a 0.x name in a v2 example',
+        "<!-- example: legacy -->\n\n```tsx\n// Replaces useToast.\ntoast('Hi');\n```",
+        'useToast is 0.x API',
+      ],
+      ['a 0.x name in an unmarked fence', '```text\nuseToast()\n```', 'useToast is 0.x API'],
+      [
+        'an unmarked TSX fence',
+        "```tsx\ntoast('Hi');\n```",
+        'tsx fence has no <!-- example: <id> --> marker',
+      ],
+      ['an orphan 0.x marker', '<!-- 0.x -->\n\nText.', 'the 0.x marker is not followed by a code'],
+      [
+        'a 0.x marker followed by another marker',
+        `<!-- 0.x -->\n<!-- example: sample -->\n\n${FENCE}`,
+        'the 0.x marker is not followed by a code',
+      ],
+      ['an untagged 0.x fence', '<!-- 0.x -->\n\n```\nuseToast();\n```', 'has no language tag'],
+      ['"v1"', 'Upgrading from v1.', '"v1": 2.0.0 follows 0.x'],
+      ['"V1" in a heading', '## From V1', '"v1": 2.0.0 follows 0.x'],
+      ['an unknown token', 'Set `--ret-colour`.', '--ret-colour is not a public token'],
+      [
+        'an internal class in a 0.x fence',
+        '<!-- 0.x -->\n\n```css\n.ret-toast__title {}\n```',
+        '.ret-toast__title is not a documented class',
+      ],
+      ['a placeholder in a 0.x fence', '<!-- 0.x -->\n\n```ts\n// TODO\n```', 'placeholder "TODO"'],
+      ['a missing link target', 'See [it](missing.md).', 'link target missing.md does not'],
+      ['a missing anchor', 'See [below](#nowhere).', 'anchor #nowhere is not in'],
+    ];
+
+    describe('rejects', () => {
+      const docs: Record<string, string> = {};
+      GUIDE_FAILING.forEach(
+        ([, markdown], index) => (docs[`case-${index}/MIGRATION.md`] = guide(markdown))
+      );
+      const run = runCheck(docs, examples);
+
+      it('with a failing exit status', () => expect(run.status).toBe(1));
+
+      it.each(GUIDE_FAILING.map(([name, , message], index) => [name, message, index] as const))(
+        '%s',
+        (_name, message, index) => {
+          const report = run.reports[`case-${index}/MIGRATION.md`]!;
+          expect(report.join('\n')).toContain(message);
+          expect(report.filter(line => line.startsWith('  - '))).toHaveLength(1);
+        }
+      );
+    });
+
+    it('requires the phrase "0.x → 2.0"', () => {
+      const run = runCheck({ 'MIGRATION.md': '# Guide\n\nFrom 0.x to 2.0.\n' }, {});
+      expect(run.reports['MIGRATION.md']).toEqual([
+        '  - the migration guide does not say "0.x → 2.0"',
+      ]);
+      expect(run.status).toBe(1);
+    });
+
+    // The guide's allowances apply to no other document: the reference names stay rejected.
+    it.each(['README.md', 'docs/THEMING.md', 'docs/ACCESSIBILITY.md'])(
+      'keeps rejecting 0.x names and markers in %s',
+      name => {
+        const markdown =
+          '# Doc\n\nFrom 0.x → 2.0: replace `useToast` and ' +
+          '`react-elegant-toasts/dist/styles.css`.\n\n' +
+          '<!-- 0.x -->\n\n```tsx\nconst { addToast } = useToast();\n```\n';
+        const report = runCheck({ [name]: markdown }, {}).reports[name]!;
+        expect(report).toEqual(
+          expect.arrayContaining([
+            '  - line 3: useToast is 0.x API',
+            '  - line 3: react-elegant-toasts/dist/styles.css is not a package export',
+            '  - line 5: the 0.x marker is allowed only in MIGRATION.md',
+            '  - line 8: addToast is 0.x API',
+            '  - line 8: useToast is 0.x API',
+          ])
+        );
+      }
+    );
   });
 
   it('rejects unused, duplicate and unclosed example regions', () => {
