@@ -356,6 +356,88 @@ ${FENCE}
       );
     });
 
+    // The inline-code exemption trusts only single backticks in pairs (P-27 S1 pre-PR review). The
+    // first four cases are the review's probes: before the fix, the last three hid a bare name.
+    describe('inline code', () => {
+      const DOUBLE = 'inline code in MIGRATION.md must use single backticks';
+      const UNPAIRED =
+        'unpaired backtick: inline code in MIGRATION.md must open and close on one line';
+      const CASES: readonly (readonly [name: string, markdown: string, messages: string[]])[] = [
+        ['a double-backtick span', 'Use ``useToast`` here.', [DOUBLE, 'useToast is 0.x API']],
+        [
+          'a double-backtick span around a backtick',
+          'Use `` `useToast` `` here.',
+          [DOUBLE, 'useToast is 0.x API'],
+        ],
+        [
+          'a bare name between double-backtick spans',
+          'A `` ` `` then useToast then `` ` ``.',
+          [DOUBLE, 'useToast is 0.x API'],
+        ],
+        [
+          'a bare name after a stray backtick',
+          'Odd ` tick, then useToast, then `x`.',
+          [UNPAIRED, 'useToast is 0.x API'],
+        ],
+        ['a double backtick with no 0.x name', 'Call ``toast``.', [DOUBLE]],
+        ['a stray backtick with no 0.x name', 'Call ` toast.', [UNPAIRED]],
+        [
+          'a bare name before a valid span',
+          'Remove useToast, then call `toast`.',
+          ['useToast is 0.x API'],
+        ],
+        [
+          'a bare name between valid spans',
+          'Use `toast`, not useToast or `addToast`.',
+          ['useToast is 0.x API'],
+        ],
+      ];
+      const docs: Record<string, string> = {
+        'valid/MIGRATION.md': guide(
+          'Replace `useToast` and `ToastProvider` with `toast` and `<Toaster />`, and ' +
+            "`import 'react-elegant-toasts/dist/styles.css'` with the public stylesheet.\n\n" +
+            // Fences are not prose: backticks inside them are not inline code.
+            '<!-- 0.x -->\n\n```tsx\nconst label = `${addToast.name}`; // ``\n```\n\n' +
+            '<!-- example: ticks -->\n\n```tsx\n// ``\ntoast(`Saved ${1}`);\n```'
+        ),
+      };
+      CASES.forEach(
+        ([, markdown], index) => (docs[`case-${index}/MIGRATION.md`] = guide(markdown))
+      );
+      const run = runCheck(docs, {
+        'sample.tsx': '// #region ticks\n// ``\ntoast(`Saved ${1}`);\n// #endregion\n',
+      });
+
+      it('accepts single-backtick spans, 0.x fences and v2 examples with backticks', () =>
+        expect(run.reports['valid/MIGRATION.md']).toEqual([]));
+
+      it.each(CASES.map(([name, , messages], index) => [name, messages, index] as const))(
+        'rejects %s',
+        (_name, messages, index) =>
+          expect(run.reports[`case-${index}/MIGRATION.md`]).toEqual(
+            messages.map(message => `  - line 5: ${message}`)
+          )
+      );
+
+      // The delimiter rule belongs to the guide's exemption; the other documents need none, since
+      // they check the whole line, inline code included.
+      it.each(['README.md', 'docs/THEMING.md', 'docs/ACCESSIBILITY.md'])(
+        'still rejects the names in any inline code in %s',
+        name => {
+          const markdown = '# Doc\n\nUse `useToast`, `` `addToast` `` and ``ToastProvider``.\n';
+          const report = runCheck({ [name]: markdown }, {}).reports[name]!;
+          expect(report).toEqual(
+            expect.arrayContaining([
+              '  - line 3: useToast is 0.x API',
+              '  - line 3: addToast is 0.x API',
+              '  - line 3: ToastProvider is 0.x API',
+            ])
+          );
+          expect(report.join('\n')).not.toContain('backtick');
+        }
+      );
+    });
+
     it('requires the phrase "0.x → 2.0"', () => {
       const run = runCheck({ 'MIGRATION.md': '# Guide\n\nFrom 0.x to 2.0.\n' }, {});
       expect(run.reports['MIGRATION.md']).toEqual([

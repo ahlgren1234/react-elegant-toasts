@@ -265,21 +265,32 @@ function checkDocument(file, context, report) {
   }
   // The text of a line that must not name the 0.x API or its stylesheet path. MIGRATION.md may
   // name them in its 0.x fences and in inline code in its prose; anywhere else, and in every other
-  // document, the whole line is checked.
+  // document, the whole line is checked. The exemption trusts only plain inline code: single
+  // backticks, in pairs. A prose line with a double backtick or an unpaired one is reported and
+  // checked whole, so a malformed span can never hide a name.
   const legacyLines = new Set();
   for (const fence of legacy) fence.body.forEach((_, i) => legacyLines.add(fence.line + 1 + i));
   const proseLines = new Set(prose.map(({ line }) => line));
-  const modern = (line, number) => {
+  const modern = (line, number, here) => {
     if (!migration) return line;
     if (legacyLines.has(number)) return '';
-    return proseLines.has(number) ? line.replace(INLINE_CODE, '') : line;
+    if (!proseLines.has(number)) return line;
+    if (line.includes('``')) {
+      here(`inline code in ${MIGRATION} must use single backticks`);
+      return line;
+    }
+    if (line.split('`').length % 2 === 0) {
+      here(`unpaired backtick: inline code in ${MIGRATION} must open and close on one line`);
+      return line;
+    }
+    return line.replace(INLINE_CODE, '');
   };
 
   // Names, subpaths, 0.x API and placeholders, everywhere, code included.
   const named = new Set();
   lines.forEach((line, index) => {
     const here = at(index + 1);
-    const checked = modern(line, index + 1);
+    const checked = modern(line, index + 1, here);
     for (const [name, dashes] of line.matchAll(RET_NAME)) {
       if (dashes) {
         named.add(name);
