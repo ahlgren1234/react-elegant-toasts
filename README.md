@@ -203,7 +203,7 @@ There are six positions: `top-left`, `top-center`, `top-right` (the default), `b
 | `maxVisible`  | `4`                  | How many toasts each position shows at once.                                                                   |
 | `duration`    | `5000`               | The duration, in milliseconds, of toasts that do not set their own. `Infinity` makes them persistent.          |
 | `closeButton` | `true`               | Whether normal toasts that do not set `closeButton` show a close button. Custom toasts ignore it.              |
-| `progress`    | `false`              | Whether normal toasts that do not set `progress` show the progress bar.                                        |
+| `progress`    | `false`              | Whether normal toasts that do not set `progress` show a progress bar. Only finite-duration toasts can show it. |
 | `hotkey`      | `["altKey", "KeyT"]` | The shortcut that moves focus to the toasts: modifier names plus a `KeyboardEvent.code`. `false` turns it off. |
 | `labels`      | English              | Text for assistive technology: `region`, `close`, `warningPrefix` and `errorPrefix`.                           |
 | `className`   | none                 | Extra classes for the toaster's root element.                                                                  |
