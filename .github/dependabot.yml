@@ -1,10 +1,11 @@
 # Dependabot reads this file only from the default branch (main). Until v2 is merged,
-# these version updates stay inactive (see V2_PLAN.md, P-06).
+# these version updates stay inactive (see V2_PLAN.md, P-06). They target main, the canonical
+# branch from the integration on, which is also when this file first takes effect (P-29 S2).
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
-    target-branch: v2
+    target-branch: main
     schedule:
       interval: weekly
     groups:
@@ -46,7 +47,7 @@ updates:
   # The packed-package consumer fixture (P-07).
   - package-ecosystem: npm
     directory: /fixtures/consumer-vite
-    target-branch: v2
+    target-branch: main
     schedule:
       interval: weekly
     groups:
@@ -67,7 +68,7 @@ updates:
   # F2: React 19 and TypeScript 5.0.4 (P-23 D0-5).
   - package-ecosystem: npm
     directory: /fixtures/consumer-vite/legs/f2
-    target-branch: v2
+    target-branch: main
     schedule:
       interval: weekly
     groups:
@@ -85,7 +86,7 @@ updates:
   # F3: React 18 and TypeScript 7.0.2 (P-23 D0-5).
   - package-ecosystem: npm
     directory: /fixtures/consumer-vite/legs/f3
-    target-branch: v2
+    target-branch: main
     schedule:
       interval: weekly
     groups:
@@ -105,7 +106,7 @@ updates:
   # F4: React 19 and TypeScript 7.0.2 (P-23 D0-5).
   - package-ecosystem: npm
     directory: /fixtures/consumer-vite/legs/f4
-    target-branch: v2
+    target-branch: main
     schedule:
       interval: weekly
     groups:
@@ -125,7 +126,7 @@ updates:
   # N1: the Next.js App Router consumer, React 19 and TypeScript 7.0.2 (P-23 D0-7).
   - package-ecosystem: npm
     directory: /fixtures/consumer-next
-    target-branch: v2
+    target-branch: main
     schedule:
       interval: weekly
     groups:
@@ -150,7 +151,7 @@ updates:
   # configuration the migration guide shows, so it is a reviewed change.
   - package-ecosystem: npm
     directory: /fixtures/consumer-jest
-    target-branch: v2
+    target-branch: main
     schedule:
       interval: weekly
     groups:
@@ -168,7 +169,7 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
-    target-branch: v2
+    target-branch: main
     schedule:
       interval: weekly
     groups:
