@@ -38,7 +38,8 @@
     "size": "size-limit",
     "prepublishOnly": "npm run build",
     "demo": "npm run build && vite",
-    "build:demo": "npm run build && vite build"
+    "build:demo": "npm run build && vite build",
+    "changeset": "changeset"
   },
   "keywords": [
     "react",
@@ -65,6 +66,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
+    "@changesets/cli": "3.0.3",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "1.63.0",
     "@size-limit/esbuild": "14.2.0",
