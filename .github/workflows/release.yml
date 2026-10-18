@@ -1,54 +1,45 @@
-name: Release
+# The release rehearsal (§29, P-28 S3, design B1). It never publishes: no publish job, no
+# id-token permission, no npm credentials or secrets, no GitHub release and no environment.
+# It runs the release security tests, then scripts/release-check.js validates the release state,
+# builds once, packs once, checks the exact tarball contents and runs `npm publish --dry-run`
+# (a labelled simulated version while the real version is parked). P-29 owns the live publish job
+# and the full CI gate before it. release-check.test.js checks this file's structure against an
+# allowlist, so any change here must change that test too.
+name: Release rehearsal
 
 on:
-  release:
-    types: [created]
+  pull_request:
+    branches: [v2]
+  push:
+    branches: [v2]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '24'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  rehearsal:
+    name: release rehearsal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Use Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: '18.x'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Check if version exists
-        id: version_check
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if npm view react-elegant-toasts@$VERSION version >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Publish to npm
-        if: steps.version_check.outputs.exists != 'true'
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Generate changelog
-        id: changelog
-        uses: metcalfc/changelog-generator@v4.0.1
+          persist-credentials: false
+      # No registry-url: setup-node would then write an .npmrc that reads NODE_AUTH_TOKEN.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          myToken: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update release
-        uses: softprops/action-gh-release@v1
-        with:
-          body: ${{ steps.changelog.outputs.changelog }}
-          files: |
-            dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test scripts/release-check.test.js
+      - run: node scripts/release-check.js rehearse

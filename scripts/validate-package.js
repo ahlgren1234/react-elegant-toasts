@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { EXPECTED_FILES, compareFileList } from './package-contents.js';
 import { checkProgressDirection, directionSelectors } from './progress-direction.js';
 
 const PACKAGE_NAME = 'react-elegant-toasts';
@@ -16,16 +17,6 @@ const nextFixtureDir = path.join(root, 'fixtures', 'consumer-next');
 const jestFixtureDir = path.join(root, 'fixtures', 'consumer-jest');
 const npmFlags = ['--ignore-scripts', '--no-audit', '--no-fund'];
 
-const EXPECTED_FILES = [
-  'LICENSE',
-  'README.md',
-  'dist/index.d.ts',
-  'dist/index.js',
-  'dist/index.js.map',
-  'dist/styles.css',
-  'package.json',
-];
-const FORBIDDEN_EXTENSIONS = /\.(cjs|cts|mjs|mts)$/;
 const PEERS = { react: '^18.0.0 || ^19.0.0', 'react-dom': '^18.0.0 || ^19.0.0' };
 const BLOCKED_DEEP_IMPORTS = [
   'dist/index.js',
@@ -174,15 +165,12 @@ function pack(tmp) {
 
 function checkTarballContents(info) {
   step('Check tarball contents');
-  const files = info.files.map(file => file.path).sort();
+  const { files, unexpected, missing, nonEsm } = compareFileList(info.files.map(file => file.path));
   for (const file of files) console.log(`    ${file}`);
-  const unexpected = files.filter(file => !EXPECTED_FILES.includes(file));
-  const missing = EXPECTED_FILES.filter(file => !files.includes(file));
   assert(
     unexpected.length === 0 && missing.length === 0,
     `tarball contents differ: unexpected [${unexpected.join(', ')}], missing [${missing.join(', ')}]`
   );
-  const nonEsm = files.filter(file => FORBIDDEN_EXTENSIONS.test(file));
   assert(nonEsm.length === 0, `tarball contains non-ESM-only files: ${nonEsm.join(', ')}`);
   ok(`exactly the ${EXPECTED_FILES.length} expected files, no .cjs/.cts/.mjs/.mts/.d.cts/.d.mts`);
 }
