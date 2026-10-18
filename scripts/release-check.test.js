@@ -11,6 +11,7 @@ import { EXPECTED_FILES, compareFileList } from './package-contents.js';
 import {
   JOB_ID,
   PARKED_VERSIONS,
+  REHEARSAL_BRANCHES,
   REQUIRED_CHECKS,
   RUN_COMMANDS,
   ReleaseCheckError,
@@ -237,7 +238,12 @@ describe('release.yml structure', () => {
       workflow_call: w => (w.on.workflow_call = {}),
       workflow_run: w => (w.on.workflow_run = { workflows: ['CI'], types: ['completed'] }),
       schedule: w => (w.on.schedule = [{ cron: '0 0 * * *' }]),
-      'push to main': w => (w.on.push.branches = ['v2', 'main']),
+      'push to another branch': w => (w.on.push.branches = ['main', 'v2', 'release/next']),
+      'push to every branch': w => (w.on.push.branches = ['**']),
+      'push to v2 only': w => (w.on.push.branches = ['v2']),
+      'a PR into another branch': w => (w.on.pull_request.branches = ['main', 'v2', 'next']),
+      'a PR into main only': w => (w.on.pull_request.branches = ['main']),
+      'branches-ignore': w => (w.on.push = { 'branches-ignore': ['gh-pages'] }),
       'push tags': w => (w.on.push.tags = ['v*']),
       'a path filter': w => (w.on.pull_request.paths = ['src/**']),
       'dispatch inputs': w =>
@@ -249,6 +255,12 @@ describe('release.yml structure', () => {
         rejects(mutated(mutate), /trigger|pull_request|push|workflow_dispatch|publish/)
       );
     }
+    test('the rehearsal runs on main and v2, the branches ci.yml runs on (P-29 S2)', () => {
+      assert.deepEqual(REHEARSAL_BRANCHES, ['main', 'v2']);
+      const workflow = parse(release.source);
+      assert.deepEqual(workflow.on.push.branches, REHEARSAL_BRANCHES);
+      assert.deepEqual(workflow.on.pull_request.branches, REHEARSAL_BRANCHES);
+    });
     test('a deployment environment', () => {
       rejects(
         mutated(w => (job(w).environment = 'npm')),

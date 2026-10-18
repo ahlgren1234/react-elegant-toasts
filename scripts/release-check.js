@@ -400,6 +400,7 @@ export const REQUIRED_CHECKS = Object.freeze([
   'size',
 ]);
 export const WORKFLOW_NAME = 'Release rehearsal';
+export const REHEARSAL_BRANCHES = Object.freeze(['main', 'v2']);
 export const JOB_ID = 'rehearsal';
 export const JOB_NAME = 'release rehearsal';
 export const RUN_COMMANDS = Object.freeze([
@@ -507,14 +508,17 @@ export function checkWorkflow(source, others = []) {
   )
     fail('unexpected concurrency');
 
-  // Triggers: a PR into v2, a push to v2 and a manual dispatch, all without filters or inputs.
+  // Triggers: a PR into main or v2, a push to main or v2 and a manual dispatch, all without
+  // filters or inputs. Both branches, so the rehearsal runs across the integration (P-29 S2).
   const on = workflow.on;
   if (!on || typeof on !== 'object' || Array.isArray(on)) fail('`on` must be a mapping');
   else {
     if (!sameJson(Object.keys(on).sort(), ['pull_request', 'push', 'workflow_dispatch']))
       fail(`triggers ${Object.keys(on).join(', ')}`);
-    if (!sameJson(on.pull_request, { branches: ['v2'] })) fail('pull_request must target v2 only');
-    if (!sameJson(on.push, { branches: ['v2'] })) fail('push must be on v2 only');
+    if (!sameJson(on.pull_request, { branches: REHEARSAL_BRANCHES }))
+      fail('pull_request must target main and v2 only');
+    if (!sameJson(on.push, { branches: REHEARSAL_BRANCHES }))
+      fail('push must be on main and v2 only');
     if (on.workflow_dispatch !== null && !sameJson(on.workflow_dispatch, {}))
       fail('workflow_dispatch must have no inputs');
   }

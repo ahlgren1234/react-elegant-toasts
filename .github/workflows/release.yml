@@ -4,14 +4,15 @@
 # builds once, packs once, checks the exact tarball contents and runs `npm publish --dry-run`
 # (a labelled simulated version while the real version is parked). P-29 owns the live publish job
 # and the full CI gate before it. release-check.test.js checks this file's structure against an
-# allowlist, so any change here must change that test too.
+# allowlist, so any change here must change that test too. It runs on `main` and `v2` alike, so it
+# keeps running across the v2-to-main integration (P-29 S2).
 name: Release rehearsal
 
 on:
   pull_request:
-    branches: [v2]
+    branches: [main, v2]
   push:
-    branches: [v2]
+    branches: [main, v2]
   workflow_dispatch:
 
 permissions: {}

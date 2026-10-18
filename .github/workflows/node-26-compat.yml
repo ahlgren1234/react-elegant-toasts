@@ -2,11 +2,12 @@ name: Node 26 compatibility
 
 # Temporary, non-required evidence for the Node 24 → 26 transition (Issue #24). It mirrors the jobs
 # in ci.yml on Node 26 and is removed by the change that makes Node 26 the primary CI runtime.
-# None of its checks is required by the v2 ruleset, but a failing node26-* job is investigated
-# before a PR is approved. Documentation-only changes do not run it.
+# Like ci.yml, it runs on main and v2 (P-29 S2). None of its checks is required by a ruleset, but a
+# failing node26-* job is investigated before a PR is approved. Documentation-only changes do not
+# run it.
 on:
   push:
-    branches: [v2]
+    branches: [main, v2]
     paths:
       - '.github/workflows/node-26-compat.yml'
       - '.github/workflows/ci.yml'
@@ -26,7 +27,7 @@ on:
       - '.size-limit.json'
       - '.prettierrc'
   pull_request:
-    branches: [v2]
+    branches: [main, v2]
     paths:
       - '.github/workflows/node-26-compat.yml'
       - '.github/workflows/ci.yml'
