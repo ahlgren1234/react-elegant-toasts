@@ -9,6 +9,8 @@ import { after, describe, test } from 'node:test';
 import { parse, stringify } from 'yaml';
 import { EXPECTED_FILES, compareFileList } from './package-contents.js';
 import {
+  CHANGESET_CONFIG,
+  CI_JOBS,
   JOB_ID,
   PARKED_VERSIONS,
   REHEARSAL_BRANCHES,
@@ -17,6 +19,9 @@ import {
   ReleaseCheckError,
   SIMULATED_VERSION,
   assertDryRunOnly,
+  checkChangesetConfig,
+  checkCiCallers,
+  checkCiWorkflow,
   checkDistTag,
   checkLockfile,
   checkManifest,
@@ -26,6 +31,7 @@ import {
   classifyVersion,
   compareExtracted,
   publishDryRunArgs,
+  readChangesetConfig,
   readReleaseState,
   readWorkflows,
   rehearse,
@@ -683,6 +689,278 @@ describe('12. package contents remain unchanged', () => {
         }
       });
     }
+  });
+});
+
+// The CI gate that the publish workflow will call (P-29 S7b-1).
+const ci = [release, ...others].find(({ file }) => file === 'ci.yml');
+
+function ciMutated(mutate) {
+  const workflow = parse(ci.source);
+  mutate(workflow);
+  return stringify(workflow);
+}
+
+function ciRejects(source, pattern) {
+  const problems = checkCiWorkflow(source);
+  assert.ok(problems.length > 0, 'ci.yml was accepted');
+  assert.ok(
+    problems.some(p => pattern.test(p)),
+    problems.join('\n')
+  );
+}
+
+describe('13. ci.yml stays the full, reusable gate', () => {
+  test('the committed workflow conforms', () => {
+    assert.deepEqual(checkCiWorkflow(ci.source), []);
+  });
+  test('a re-serialised copy still conforms, so the mutations below test only their change', () => {
+    assert.deepEqual(checkCiWorkflow(ciMutated(() => {})), []);
+  });
+  test('the committed jobs are exactly the expected jobs', () => {
+    assert.deepEqual(Object.keys(parse(ci.source).jobs).sort(), Object.keys(CI_JOBS).sort());
+  });
+
+  describe('triggers', () => {
+    test('workflow_call removed', () => {
+      ciRejects(
+        ciMutated(w => delete w.on.workflow_call),
+        /triggers/
+      );
+    });
+    test('workflow_call with inputs, outputs or secrets', () => {
+      for (const extra of [
+        { inputs: { ref: { type: 'string' } } },
+        { outputs: { ok: { value: 'yes' } } },
+        { secrets: { token: { required: false } } },
+      ])
+        ciRejects(
+          ciMutated(w => (w.on.workflow_call = extra)),
+          /workflow_call/
+        );
+    });
+    test('push or pull_request changed or removed', () => {
+      ciRejects(
+        ciMutated(w => (w.on.push.branches = ['main'])),
+        /push/
+      );
+      ciRejects(
+        ciMutated(w => delete w.on.pull_request),
+        /triggers/
+      );
+      ciRejects(
+        ciMutated(w => (w.on.pull_request = { branches: ['main', 'v2'], paths: ['src/**'] })),
+        /pull_request/
+      );
+    });
+    test('an extra trigger', () => {
+      ciRejects(
+        ciMutated(w => (w.on.pull_request_target = { branches: ['main'] })),
+        /triggers/
+      );
+    });
+    test('workflow_dispatch with inputs', () => {
+      ciRejects(
+        ciMutated(w => (w.on.workflow_dispatch = { inputs: { x: { type: 'string' } } })),
+        /workflow_dispatch/
+      );
+    });
+  });
+
+  describe('permissions and credentials', () => {
+    test('broader top-level permissions', () => {
+      for (const permissions of [
+        { contents: 'write' },
+        { contents: 'read', 'id-token': 'write' },
+        'write-all',
+      ])
+        ciRejects(
+          ciMutated(w => (w.permissions = permissions)),
+          /permissions|forbidden/
+        );
+    });
+    test('job-level permissions, environment, secrets or a called workflow', () => {
+      for (const [key, value] of [
+        ['permissions', { contents: 'read' }],
+        ['environment', 'npm-publish'],
+        ['secrets', 'inherit'],
+        ['uses', './.github/workflows/release.yml'],
+      ])
+        ciRejects(
+          ciMutated(w => (w.jobs.size[key] = value)),
+          new RegExp(`job size has ${key}`)
+        );
+    });
+    test('a secret in a step', () => {
+      ciRejects(
+        ciMutated(w => (w.jobs.quality.steps[0].with.token = '${{ secrets.NPM_TOKEN }}')),
+        /forbidden/
+      );
+    });
+  });
+
+  test('concurrency changed', () => {
+    ciRejects(
+      ciMutated(w => (w.concurrency['cancel-in-progress'] = true)),
+      /concurrency/
+    );
+    ciRejects(
+      ciMutated(w => (w.concurrency.group = 'ci')),
+      /concurrency/
+    );
+  });
+
+  describe('jobs, dependencies and the required checks', () => {
+    for (const check of REQUIRED_CHECKS) {
+      test(`required check ${check} renamed`, () => {
+        ciRejects(
+          ciMutated(w => (w.jobs[check].name = `${check}-renamed`)),
+          new RegExp(`required check ${check}`)
+        );
+      });
+    }
+    test('a second job named like a required check', () => {
+      ciRejects(
+        ciMutated(w => (w.jobs['test-react'].name = 'size')),
+        /required check size/
+      );
+    });
+    test('a job removed or added', () => {
+      ciRejects(
+        ciMutated(w => delete w.jobs.demo),
+        /jobs|required check demo/
+      );
+      ciRejects(
+        ciMutated(w => (w.jobs.extra = { 'runs-on': 'ubuntu-24.04', steps: [{ run: 'true' }] })),
+        /jobs/
+      );
+    });
+    test('a dependency removed or added', () => {
+      ciRejects(
+        ciMutated(w => delete w.jobs.test.needs),
+        /job test needs/
+      );
+      ciRejects(
+        ciMutated(w => (w.jobs.demo.needs = 'quality')),
+        /job demo needs/
+      );
+    });
+    test('a job-level if on a required job', () => {
+      ciRejects(
+        ciMutated(w => (w.jobs['build-package'].if = "github.event_name != 'workflow_call'")),
+        /job-level if/
+      );
+    });
+    test('continue-on-error on a job or a step', () => {
+      ciRejects(
+        ciMutated(w => (w.jobs.browser['continue-on-error'] = true)),
+        /continue-on-error/
+      );
+      ciRejects(
+        ciMutated(w => (w.jobs.quality.steps.at(-1)['continue-on-error'] = true)),
+        /continue-on-error/
+      );
+    });
+  });
+
+  describe('the fail-closed test aggregator', () => {
+    test('no longer always runs', () => {
+      ciRejects(
+        ciMutated(w => (w.jobs.test.if = '${{ success() }}')),
+        /always/
+      );
+      ciRejects(
+        ciMutated(w => delete w.jobs.test.if),
+        /always/
+      );
+    });
+    test('passes on a failed or skipped leg', () => {
+      ciRejects(
+        ciMutated(w => (w.jobs.test.steps[0].run = 'echo "test-react: $RESULT"\n')),
+        /aggregator steps/
+      );
+      ciRejects(
+        ciMutated(w => (w.jobs.test.steps[0].env.RESULT = '${{ needs.test-react.outputs.x }}')),
+        /aggregator steps/
+      );
+    });
+  });
+
+  test('YAML tricks', () => {
+    ciRejects(
+      ci.source.replace(
+        '    timeout-minutes: 5\n',
+        '    timeout-minutes: 5\n    timeout-minutes: 6\n'
+      ),
+      /YAML/
+    );
+    ciRejects(ci.source.replace('  workflow_call:\n', '  workflow_call: !custom\n'), /tag/);
+  });
+});
+
+describe("14. a workflow calling ci.yml does not share ci.yml's concurrency group", () => {
+  const caller = (concurrency, jobConcurrency) => ({
+    file: 'caller.yml',
+    source: stringify({
+      name: 'Caller',
+      on: { workflow_dispatch: null },
+      permissions: {},
+      ...(concurrency && { concurrency }),
+      jobs: {
+        gate: {
+          uses: './.github/workflows/ci.yml',
+          permissions: { contents: 'read' },
+          ...(jobConcurrency && { concurrency: jobConcurrency }),
+        },
+      },
+    }),
+  });
+  const shared = '${{ github.workflow }}-${{ github.ref }}';
+
+  test('the committed workflows', () => {
+    assert.deepEqual(checkCiCallers([release, ...others]), []);
+  });
+  test('a caller with its own fixed group, or with none', () => {
+    assert.deepEqual(checkCiCallers([caller({ group: 'npm-publish' })]), []);
+    assert.deepEqual(checkCiCallers([caller()]), []);
+  });
+  test("a caller using ci.yml's group, at workflow or job level", () => {
+    assert.equal(checkCiCallers([caller({ group: shared })]).length, 1);
+    assert.equal(checkCiCallers([caller(shared)]).length, 1);
+    assert.equal(checkCiCallers([caller(undefined, { group: shared })]).length, 1);
+  });
+});
+
+describe('15. the Changesets configuration', () => {
+  test('the committed configuration conforms, with baseBranch main', () => {
+    const config = readChangesetConfig();
+    assert.deepEqual(checkChangesetConfig(config), []);
+    assert.equal(config.baseBranch, 'main');
+  });
+  test('baseBranch v2 or missing', () => {
+    assert.match(
+      checkChangesetConfig({ ...CHANGESET_CONFIG, baseBranch: 'v2' }).join('\n'),
+      /baseBranch/
+    );
+    const missing = { ...CHANGESET_CONFIG };
+    delete missing.baseBranch;
+    assert.match(checkChangesetConfig(missing).join('\n'), /baseBranch/);
+  });
+  test('any other setting changed or added', () => {
+    for (const [key, value] of [
+      ['access', 'restricted'],
+      ['commit', true],
+      ['changelog', false],
+      ['ignore', ['react-elegant-toasts']],
+    ])
+      assert.match(
+        checkChangesetConfig({ ...CHANGESET_CONFIG, [key]: value }).join('\n'),
+        new RegExp(key)
+      );
+    assert.match(
+      checkChangesetConfig({ ...CHANGESET_CONFIG, privatePackages: {} }).join('\n'),
+      /extra key privatePackages/
+    );
   });
 });
 
