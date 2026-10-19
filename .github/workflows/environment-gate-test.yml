@@ -1,0 +1,27 @@
+name: Environment gate test
+
+# Temporary P-29 S6 workflow.
+# Tests the npm-publish approval gate without publishing.
+# Remove through a separate PR before S8.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  gate:
+    name: npm-publish gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: npm-publish
+    permissions: {}
+    steps:
+      - name: Print run context
+        run: |
+          printf 'event=%s\n' "$GITHUB_EVENT_NAME"
+          printf 'ref=%s\n' "$GITHUB_REF"
+          printf 'sha=%s\n' "$GITHUB_SHA"
+          printf 'workflow_ref=%s\n' "$GITHUB_WORKFLOW_REF"
+          printf 'run=%s attempt=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          printf 'actor=%s triggering_actor=%s\n' "$GITHUB_ACTOR" "$GITHUB_TRIGGERING_ACTOR"
