@@ -134,14 +134,23 @@ test('completes on none of the animation events that are not its own', async ({ 
   );
   expectFallbackAt(elapsed, 600 + FALLBACK_MARGIN_MS);
 
-  const ends = (await page.evaluate(() => window.__retHarness!.events))
-    .filter(event => event.type === 'animationend')
-    .map(event => event.detail as ToastEventDetail);
-  expect(ends).toEqual([
+  // Each of the three events reached the toast, and all of them before it was dismissed, so the
+  // scenario ran and none of them completed it. Their order is not part of the contract: the real
+  // animation races the timers (Issue #46), so they are compared sorted by name.
+  const events = await page.evaluate(() => window.__retHarness!.events);
+  const dismissal = events.find(event => event.type === 'dismiss');
+  const ends = events.filter(event => event.type === 'animationend');
+  expect(
+    ends
+      .map(event => event.detail as ToastEventDetail)
+      .sort((x, y) => String(x.name).localeCompare(String(y.name)))
+  ).toEqual([
     { label: 'a', root: false, name: 'harness-blink', trusted: true },
     { label: 'a', root: true, name: 'harness-other', trusted: false },
     { label: 'a', root: false, name: 'ret-exit-top', trusted: false },
   ]);
+  expect(dismissal).toBeDefined();
+  for (const end of ends) expect(end.time).toBeLessThan(dismissal!.time);
   expect(await dismissals(page)).toEqual(['programmatic']);
 });
 
