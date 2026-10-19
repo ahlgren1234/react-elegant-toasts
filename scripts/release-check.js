@@ -3,6 +3,7 @@
 //
 //   node scripts/release-check.js check [--mode=rehearsal|publish] [--tag=<dist-tag>]
 //   node scripts/release-check.js rehearse
+//   node scripts/release-check.js pack --tag=<dist-tag> --out=<dir>
 //
 // `check` validates the release state: the package manifest, both lockfile version fields, the
 // Changesets pre mode, the version and its dist-tag, and the Node and npm minimums for Trusted
@@ -27,147 +28,45 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isAlias, isScalar, parseDocument, visit } from 'yaml';
 import { compareFileList } from './package-contents.js';
+import {
+  checkTarball,
+  defaults as guardDefaults,
+  integrityOf,
+  readTarball,
+  tarballName,
+} from './publish-guard.js';
+import { PACKAGE_NAME, ReleaseCheckError, assert, checkRelease } from './release-policy.js';
 
-export const PACKAGE_NAME = 'react-elegant-toasts';
-// Never published by the release path: the 0.x version on npm and the S4 baseline (§29).
-export const PARKED_VERSIONS = Object.freeze(['0.1.2', '2.0.0-0']);
-// npm Trusted Publishing's minimums (P-28 D0).
-export const MINIMUM_NODE = '22.14.0';
-export const MINIMUM_NPM = '11.5.1';
+export {
+  PACKAGE_NAME,
+  PARKED_VERSIONS,
+  MINIMUM_NODE,
+  MINIMUM_NPM,
+  NEXT_VERSION,
+  STABLE_VERSION,
+  DIST_TAGS,
+  ReleaseCheckError,
+  atLeast,
+  checkToolchain,
+  checkManifest,
+  checkLockfile,
+  checkPreState,
+  classifyVersion,
+  checkDistTag,
+  checkRelease,
+} from './release-policy.js';
+
 // The stand-in version for a parked version's rehearsal. It is a pre-release, so it is dry-run on
 // `next`, and checkRelease() rejects it as unsupported, so it can never pass as a real candidate.
 export const SIMULATED_VERSION = '2.0.0-rehearsal.0';
 export const SIMULATED_TAG = 'next';
 
-const NEXT_VERSION = /^2\.0\.0-next\.(0|[1-9]\d*)$/;
-const STABLE_VERSION = /^2\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const DIST_TAGS = ['next', 'latest'];
 const PROVENANCE_ERROR = /provenance|id-token|oidc/i;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export class ReleaseCheckError extends Error {}
-
-function assert(condition, message) {
-  if (!condition) throw new ReleaseCheckError(message);
-}
-
 // ---------------------------------------------------------------------------------------------
 // Release state
-
-function parseRelease(version, label) {
-  const match = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/.exec(String(version));
-  assert(match, `${label} version is not x.y.z: ${JSON.stringify(version)}`);
-  return match.slice(1).map(Number);
-}
-
-export function atLeast(version, minimum, label) {
-  const actual = parseRelease(version, label);
-  const wanted = parseRelease(minimum, label);
-  for (let i = 0; i < 3; i++) {
-    if (actual[i] !== wanted[i]) return actual[i] > wanted[i];
-  }
-  return true;
-}
-
-export function checkToolchain({ node, npm }) {
-  assert(
-    atLeast(node, MINIMUM_NODE, 'Node'),
-    `Node ${node} is older than the minimum ${MINIMUM_NODE}`
-  );
-  assert(atLeast(npm, MINIMUM_NPM, 'npm'), `npm ${npm} is older than the minimum ${MINIMUM_NPM}`);
-}
-
-export function checkManifest(pkg) {
-  assert(pkg.name === PACKAGE_NAME, `package.json name is ${JSON.stringify(pkg.name)}`);
-  assert(typeof pkg.version === 'string', 'package.json has no version');
-  assert(pkg.publishConfig?.provenance === true, 'publishConfig.provenance must stay true');
-  assert(pkg.publishConfig?.access === 'public', 'publishConfig.access must be "public"');
-  assert(
-    Array.isArray(pkg.files) && pkg.files.length === 1 && pkg.files[0] === 'dist',
-    `package.json files must be ["dist"], not ${JSON.stringify(pkg.files)}`
-  );
-}
-
-export function checkLockfile(pkg, lock) {
-  const rootEntry = lock?.packages?.[''];
-  assert(lock?.name === pkg.name, `package-lock.json name ${JSON.stringify(lock?.name)}`);
-  assert(
-    lock.version === pkg.version,
-    `package-lock.json version ${JSON.stringify(lock.version)} does not match ${pkg.version}`
-  );
-  assert(rootEntry, 'package-lock.json has no root package entry');
-  assert(
-    rootEntry.name === pkg.name,
-    `package-lock.json packages[""].name ${JSON.stringify(rootEntry.name)}`
-  );
-  assert(
-    rootEntry.version === pkg.version,
-    `package-lock.json packages[""].version ${JSON.stringify(rootEntry.version)} does not match ${pkg.version}`
-  );
-}
-
-// `.changeset/pre.json`, or null when pre mode is off.
-export function checkPreState(preState) {
-  if (preState === null) return;
-  assert(
-    preState !== null && typeof preState === 'object' && !Array.isArray(preState),
-    '.changeset/pre.json is not an object'
-  );
-  assert(
-    preState.mode === 'pre' || preState.mode === 'exit',
-    `.changeset/pre.json mode ${JSON.stringify(preState.mode)}`
-  );
-  assert(preState.tag === 'next', `.changeset/pre.json tag ${JSON.stringify(preState.tag)}`);
-}
-
-// Classifies a version as `next`, `stable` or `parked`; throws when it is unsupported or does not
-// fit the pre mode, and in publish mode when it is parked.
-export function classifyVersion({ version, preState, published, mode }) {
-  assert(mode === 'rehearsal' || mode === 'publish', `unknown mode ${JSON.stringify(mode)}`);
-  assert(Array.isArray(published), 'the published versions are unknown');
-  checkPreState(preState);
-  if (PARKED_VERSIONS.includes(version) || published.includes(version)) {
-    const reason = published.includes(version) ? 'already published on npm' : 'a parked version';
-    assert(mode === 'rehearsal', `${version} is ${reason} and cannot be published`);
-    return { version, kind: 'parked', distTag: null, releasable: false, reason };
-  }
-  if (NEXT_VERSION.test(version)) {
-    assert(
-      preState?.mode === 'pre',
-      `${version} needs Changesets pre mode "next" (pre.json mode "pre"), found ${
-        preState ? `mode "${preState.mode}"` : 'pre mode off'
-      }`
-    );
-    return { version, kind: 'next', distTag: 'next', releasable: true, reason: 'pre-release' };
-  }
-  if (STABLE_VERSION.test(version)) {
-    assert(preState === null, `${version} needs pre mode off, but .changeset/pre.json exists`);
-    return { version, kind: 'stable', distTag: 'latest', releasable: true, reason: 'stable' };
-  }
-  throw new ReleaseCheckError(
-    `unsupported version ${JSON.stringify(version)}: expected 2.0.0-next.N or 2.x.y`
-  );
-}
-
-export function checkDistTag(classification, tag) {
-  if (tag === undefined) return classification.distTag;
-  assert(DIST_TAGS.includes(tag), `invalid dist-tag ${JSON.stringify(tag)}`);
-  assert(classification.releasable, `${classification.version} is parked and has no dist-tag`);
-  assert(
-    tag === classification.distTag,
-    `${classification.version} must use dist-tag "${classification.distTag}", not "${tag}"`
-  );
-  return tag;
-}
-
-export function checkRelease({ pkg, lock, preState, published, mode, tag, toolchain }) {
-  checkToolchain(toolchain);
-  checkManifest(pkg);
-  checkLockfile(pkg, lock);
-  const classification = classifyVersion({ version: pkg.version, preState, published, mode });
-  return { ...classification, distTag: checkDistTag(classification, tag) };
-}
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -385,6 +284,59 @@ export function rehearse({
   assert(readJson(path.join(dir, 'package.json')).version === release.version, 'version changed');
   dryRun(npm, simulated.tarball, SIMULATED_TAG, log, '[SIMULATED]');
   return { release, simulated: true, files };
+}
+
+// The publish workflow's `package` job (P-29 S7b-2): validates in publish mode, builds once,
+// packs once into `outDir`, checks the exact files and the tarball's own name and version, runs the
+// real `npm publish --dry-run` and returns the tarball's sha512 integrity. A parked or published
+// version stops it before anything is built. It runs without id-token, so it cannot publish.
+export function packForPublish({
+  dir = root,
+  outDir,
+  tag,
+  runner = spawnRunner,
+  log = console.log,
+  toolchain,
+} = {}) {
+  const npm = makeNpm(runner);
+  const tools = toolchain ?? {
+    node: process.version,
+    npm: expectSuccess(npm(['--version'], { cwd: dir }), 'npm --version').trim(),
+  };
+  assert(tag !== undefined, 'pack needs --tag');
+  assert(outDir && !fs.existsSync(outDir), `the output directory ${outDir} must not exist yet`);
+  const state = readReleaseState(dir);
+  const published = fetchPublishedVersions(npm);
+  const release = checkRelease({ ...state, published, mode: 'publish', tag, toolchain: tools });
+  log(`▶ release check: ${release.version} on ${release.distTag}`);
+
+  log('▶ build');
+  expectSuccess(npm(['run', 'build'], { cwd: dir }), 'npm run build');
+
+  log('▶ pack');
+  const { tarball, info } = pack(npm, dir, outDir);
+  assert(
+    info.filename === tarballName(release.version) &&
+      fs.readdirSync(outDir).join() === info.filename,
+    `expected only ${tarballName(release.version)} in ${outDir}`
+  );
+  const contents = compareFileList(info.files.map(file => file.path));
+  assert(
+    contents.unexpected.length === 0 && contents.missing.length === 0,
+    `tarball contents differ: unexpected [${contents.unexpected.join(', ')}], missing [${contents.missing.join(', ')}]`
+  );
+  const buffer = fs.readFileSync(tarball);
+  checkTarball(readTarball(buffer), { name: PACKAGE_NAME, version: release.version });
+  const integrity = integrityOf(buffer);
+  assert(
+    info.integrity === integrity,
+    `npm pack reported ${info.integrity}, the file is ${integrity}`
+  );
+  log(`  ${info.filename}: exactly the ${contents.files.length} expected files, ${integrity}`);
+
+  log(`▶ REAL dry run: ${release.version} on dist-tag ${release.distTag}`);
+  dryRun(npm, tarball, release.distTag, log, '[real]');
+  return { tarball, filename: info.filename, integrity, release };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -777,13 +729,344 @@ export function readChangesetConfig(dir = root) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// publish.yml (P-29 S7b-2)
+//
+// checkPublishWorkflow() names each security invariant of the publish workflow, then compares every
+// job and step with the approved ones below, so anything else, however it is written, fails. Actions
+// are matched by name with any pinned commit, so Dependabot can move a pin.
+
+export const PUBLISH_WORKFLOW_NAME = 'Publish';
+export const PUBLISH_CONCURRENCY = Object.freeze({
+  group: 'npm-publish',
+  'cancel-in-progress': false,
+});
+export const PUBLISH_JOBS = Object.freeze({
+  preflight: [],
+  ci: ['preflight'],
+  package: ['preflight', 'ci'],
+  publish: ['preflight', 'ci', 'package'],
+  verify: ['preflight', 'package', 'publish'],
+});
+export const PUBLISH_PERMISSIONS = Object.freeze({
+  preflight: { contents: 'read' },
+  ci: { contents: 'read' },
+  package: { contents: 'read' },
+  publish: { contents: 'read', 'id-token': 'write' },
+  verify: { contents: 'read' },
+});
+export const LIVE_PUBLISH_COMMAND =
+  'npm publish "$TARBALL" --tag "$DIST_TAG" --ignore-scripts --access public --provenance';
+const MODE_IS_PUBLISH = "inputs.mode == 'publish'";
+const PUBLISH_IFS = {
+  preflight: "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+  verify: MODE_IS_PUBLISH,
+};
+const PUBLISH_INPUTS = {
+  mode: {
+    description:
+      'dry-run: every gate and a dry run, nothing published. publish: publish after approval.',
+    type: 'choice',
+    options: ['dry-run', 'publish'],
+    default: 'dry-run',
+    required: true,
+  },
+  version: {
+    description: 'The version in package.json, typed exactly to confirm it.',
+    type: 'string',
+    required: true,
+  },
+};
+const PUBLISH_OUTPUTS = {
+  preflight: {
+    'dist-tag': '${{ steps.guard.outputs.dist-tag }}',
+    'previous-latest': '${{ steps.guard.outputs.previous-latest }}',
+  },
+  package: { integrity: '${{ steps.pack.outputs.integrity }}' },
+};
+const PUBLISH_ACTIONS = {
+  preflight: ['actions/checkout', 'actions/setup-node'],
+  package: ['actions/checkout', 'actions/setup-node', 'actions/upload-artifact'],
+  publish: ['actions/checkout', 'actions/setup-node', 'actions/download-artifact'],
+  verify: ['actions/checkout', 'actions/setup-node'],
+};
+const CHECKOUT = { uses: 'actions/checkout', with: { 'persist-credentials': false } };
+const SETUP_NODE = {
+  uses: 'actions/setup-node',
+  with: { 'node-version': '${{ env.NODE_VERSION }}', 'package-manager-cache': false },
+};
+const NPM_CI = { run: 'npm ci --ignore-scripts --no-audit --no-fund' };
+// The approved steps of each job.
+const PUBLISH_STEPS = {
+  preflight: [
+    CHECKOUT,
+    SETUP_NODE,
+    {
+      id: 'guard',
+      env: { MODE: '${{ inputs.mode }}', VERSION: '${{ inputs.version }}' },
+      run: 'node scripts/publish-guard.js preflight',
+    },
+    NPM_CI,
+    { run: 'node --test scripts/release-check.test.js' },
+    {
+      env: { DIST_TAG: '${{ steps.guard.outputs.dist-tag }}' },
+      run: 'node scripts/release-check.js check --mode=publish --tag="$DIST_TAG"',
+    },
+  ],
+  package: [
+    CHECKOUT,
+    SETUP_NODE,
+    NPM_CI,
+    {
+      id: 'pack',
+      env: { DIST_TAG: '${{ needs.preflight.outputs.dist-tag }}' },
+      run: 'node scripts/release-check.js pack --tag="$DIST_TAG" --out=publish-tarball',
+    },
+    {
+      uses: 'actions/upload-artifact',
+      with: {
+        name: 'npm-tarball',
+        path: 'publish-tarball/',
+        'if-no-files-found': 'error',
+        'retention-days': 7,
+      },
+    },
+  ],
+  publish: [
+    CHECKOUT,
+    {
+      uses: 'actions/setup-node',
+      with: {
+        'node-version': '${{ env.NODE_VERSION }}',
+        'registry-url': 'https://registry.npmjs.org',
+        'package-manager-cache': false,
+      },
+    },
+    {
+      uses: 'actions/download-artifact',
+      with: { name: 'npm-tarball', path: 'publish-tarball', 'digest-mismatch': 'error' },
+    },
+    {
+      id: 'artifact',
+      env: {
+        VERSION: '${{ inputs.version }}',
+        EXPECTED_INTEGRITY: '${{ needs.package.outputs.integrity }}',
+      },
+      run: 'node scripts/publish-guard.js artifact',
+    },
+    {
+      id: 'final',
+      env: {
+        MODE: '${{ inputs.mode }}',
+        VERSION: '${{ inputs.version }}',
+        EXPECTED_DIST_TAG: '${{ needs.preflight.outputs.dist-tag }}',
+      },
+      run: 'node scripts/publish-guard.js final',
+    },
+    {
+      if: "inputs.mode == 'dry-run'",
+      env: {
+        MODE: '${{ inputs.mode }}',
+        TARBALL: '${{ steps.artifact.outputs.tarball }}',
+        DIST_TAG: '${{ steps.final.outputs.dist-tag }}',
+      },
+      run: 'node scripts/publish-guard.js dry-run',
+    },
+    {
+      if: MODE_IS_PUBLISH,
+      env: {
+        TARBALL: '${{ steps.artifact.outputs.tarball }}',
+        DIST_TAG: '${{ steps.final.outputs.dist-tag }}',
+      },
+      run: LIVE_PUBLISH_COMMAND,
+    },
+  ],
+  verify: [
+    CHECKOUT,
+    SETUP_NODE,
+    {
+      env: {
+        VERSION: '${{ inputs.version }}',
+        DIST_TAG: '${{ needs.preflight.outputs.dist-tag }}',
+        EXPECTED_INTEGRITY: '${{ needs.package.outputs.integrity }}',
+        PREVIOUS_LATEST: '${{ needs.preflight.outputs.previous-latest }}',
+      },
+      run: 'node scripts/publish-guard.js verify',
+    },
+  ],
+};
+const PUBLISH_FORBIDDEN_TEXT = [
+  [/secrets\./i, 'a secret'],
+  [/NPM_TOKEN|NODE_AUTH_TOKEN|_authToken|github\.token/i, 'a token'],
+  [/pull_request_target/i, 'pull_request_target'],
+  [/\bgh\s+release\b|create-release|gh-release/i, 'a GitHub release'],
+  [/\bgit\s+(tag|push)\b/i, 'a Git tag or push'],
+  [/changeset/i, 'Changesets'],
+  [/\bnpm\s+(version|dist-tag|unpublish|deprecate|stage)\b/i, 'an npm version or tag mutation'],
+  [/\b(always|failure|cancelled)\s*\(/i, 'a status function'],
+  [/self-hosted/i, 'a self-hosted runner'],
+];
+
+// The published workflow's labels, without the action pins: `owner/name@SHA` becomes `owner/name`.
+function unpinned(step, where, fail) {
+  if (!step || typeof step !== 'object' || !('uses' in step)) return step;
+  const match = /^([\w.-]+\/[\w.-]+)@([0-9a-f]{40})$/.exec(String(step.uses));
+  if (!match) {
+    fail(`${where} uses ${step.uses}: not a SHA-pinned action`);
+    return step;
+  }
+  return { ...step, uses: match[1] };
+}
+
+// Returns the ways in which `source` (publish.yml) departs from the approved workflow; empty when
+// it conforms. `others` are the repository's other workflow files, for name shadowing.
+export function checkPublishWorkflow(source, others = []) {
+  const parsed = parseStrict(source);
+  if (parsed.problems.length) return parsed.problems;
+  const { workflow, problems } = parsed;
+  const fail = message => problems.push(message);
+
+  for (const key of keysOutside(workflow, [
+    'name',
+    'on',
+    'permissions',
+    'concurrency',
+    'env',
+    'jobs',
+  ]))
+    fail(`top-level key ${key}`);
+  if (workflow.name !== PUBLISH_WORKFLOW_NAME)
+    fail(`workflow name ${JSON.stringify(workflow.name)}`);
+  if (!sameJson(workflow.env, { NODE_VERSION: '24' }))
+    fail('top-level env must be NODE_VERSION only');
+  if (!sameJson(workflow.permissions, {})) fail('top-level permissions must be {}');
+  if (!sameJson(workflow.concurrency, PUBLISH_CONCURRENCY))
+    fail('concurrency must be the fixed group npm-publish, never cancelled');
+  for (const problem of checkCiCallers([{ file: 'publish.yml', source }])) fail(problem);
+
+  // Triggers: a manual dispatch only, with exactly the two inputs.
+  const on = workflow.on;
+  if (
+    !on ||
+    typeof on !== 'object' ||
+    Array.isArray(on) ||
+    !sameJson(Object.keys(on), ['workflow_dispatch'])
+  )
+    fail('workflow_dispatch must be the only trigger');
+  else if (!sameJson(on.workflow_dispatch, { inputs: PUBLISH_INPUTS }))
+    fail('workflow_dispatch inputs must be exactly mode and version');
+
+  const jobs = workflow.jobs && typeof workflow.jobs === 'object' ? workflow.jobs : {};
+  if (!sameJson(Object.keys(jobs), Object.keys(PUBLISH_JOBS)))
+    fail(`jobs must be exactly ${Object.keys(PUBLISH_JOBS).join(', ')}`);
+  const shadowed = new Set(REQUIRED_CHECKS);
+  for (const other of others) for (const label of jobLabels(other.source)) shadowed.add(label);
+  if (shadowed.has(`workflow:${workflow.name}`)) fail(`workflow name ${workflow.name} is taken`);
+
+  for (const [id, job] of Object.entries(jobs)) {
+    if (!job || typeof job !== 'object') {
+      fail(`job ${id} is not a mapping`);
+      continue;
+    }
+    if (shadowed.has(id) || ('name' in job && shadowed.has(job.name)))
+      fail(`job ${id} shadows a check name`);
+    if (PUBLISH_JOBS[id] && !sameJson(needsList(job.needs), PUBLISH_JOBS[id]))
+      fail(`job ${id} needs ${JSON.stringify(job.needs ?? [])}`);
+    if (!sameJson(job.permissions, PUBLISH_PERMISSIONS[id] ?? null))
+      fail(`job ${id} permissions ${JSON.stringify(job.permissions)}`);
+    if ('environment' in job && (id !== 'publish' || job.environment !== 'npm-publish'))
+      fail(`job ${id} environment ${JSON.stringify(job.environment)}: only publish, npm-publish`);
+    if (id === 'publish' && job.environment !== 'npm-publish')
+      fail('job publish must run in the npm-publish environment');
+    if ((job.if ?? null) !== (PUBLISH_IFS[id] ?? null))
+      fail(`job ${id} if ${JSON.stringify(job.if)}`);
+    if ('continue-on-error' in job) fail(`job ${id} has continue-on-error`);
+
+    if (id === 'ci') {
+      if (
+        !sameJson(job, {
+          needs: 'preflight',
+          permissions: PUBLISH_PERMISSIONS.ci,
+          uses: './.github/workflows/ci.yml',
+        })
+      )
+        fail('job ci must only call ./.github/workflows/ci.yml, with contents: read');
+      continue;
+    }
+    const allowed = [
+      'needs',
+      'if',
+      'runs-on',
+      'timeout-minutes',
+      'permissions',
+      'outputs',
+      'steps',
+    ];
+    if (id === 'publish') allowed.push('environment');
+    for (const key of keysOutside(job, allowed)) fail(`job ${id} has key ${key}`);
+    if (typeof job['runs-on'] !== 'string' || !/^ubuntu-\d+\.\d+$/.test(job['runs-on']))
+      fail(`job ${id} runs-on must be a pinned GitHub-hosted Ubuntu image`);
+    if (!Number.isInteger(job['timeout-minutes']) || job['timeout-minutes'] > 30)
+      fail(`job ${id} needs a timeout of at most 30 minutes`);
+    if (!sameJson(job.outputs ?? null, PUBLISH_OUTPUTS[id] ?? null))
+      fail(`job ${id} outputs ${JSON.stringify(job.outputs)}`);
+
+    const steps = Array.isArray(job.steps) ? job.steps : [];
+    const runs = steps.filter(step => step && typeof step === 'object' && 'run' in step);
+    for (const [index, step] of steps.entries()) {
+      const where = `job ${id} step ${index + 1}`;
+      if (step && typeof step === 'object') {
+        if ('continue-on-error' in step) fail(`${where} has continue-on-error`);
+        if (typeof step.run === 'string' && step.run.includes('${{'))
+          fail(`${where} interpolates an expression into the shell`);
+        if ('uses' in step) {
+          const name = String(step.uses).split('@')[0];
+          if (!(PUBLISH_ACTIONS[id] ?? []).includes(name))
+            fail(`${where} uses ${name}, which job ${id} may not use`);
+          if (name === 'actions/setup-node') {
+            if ('cache' in (step.with ?? {}) || step.with?.['package-manager-cache'] !== false)
+              fail(`${where} must not cache`);
+            if ('registry-url' in (step.with ?? {}) && id !== 'publish')
+              fail(`${where} sets registry-url outside the publish job`);
+          }
+        }
+      }
+      if (typeof step?.run === 'string' && /\bnpm\s+publish\b/.test(step.run)) {
+        const live = !/--dry-run\b/.test(step.run);
+        if (live && (id !== 'publish' || step.run !== LIVE_PUBLISH_COMMAND))
+          fail(`${where} runs a live npm publish outside the protected path`);
+        if (live && (step.if !== MODE_IS_PUBLISH || index !== steps.length - 1))
+          fail(`${where}: the live publish must be the last step, only if ${MODE_IS_PUBLISH}`);
+      }
+    }
+    if (
+      id === 'publish' &&
+      runs.some(step => /\bnpm\s+(ci|install|i|run|exec)\b|\bnpx\b/.test(step.run))
+    )
+      fail('job publish installs dependencies or runs repository scripts');
+    if (
+      !sameJson(
+        steps.map((step, index) => unpinned(step, `job ${id} step ${index + 1}`, fail)),
+        PUBLISH_STEPS[id] ?? null
+      )
+    )
+      fail(`job ${id} steps differ from the approved steps`);
+  }
+
+  walk(workflow, text => {
+    for (const [pattern, label] of PUBLISH_FORBIDDEN_TEXT)
+      if (pattern.test(text)) fail(`forbidden text (${label}) in ${JSON.stringify(text)}`);
+  });
+  return problems;
+}
+
+// ---------------------------------------------------------------------------------------------
 // CLI
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
   const options = { command };
   for (const arg of rest) {
-    const match = /^--(mode|tag)=(.*)$/.exec(arg);
+    const match = /^--(mode|tag|out)=(.*)$/.exec(arg);
     assert(match, `unknown argument ${arg}`);
     options[match[1]] = match[2];
   }
@@ -815,8 +1098,14 @@ function main(argv) {
     } finally {
       fs.rmSync(workDir, { recursive: true, force: true });
     }
+  } else if (options.command === 'pack') {
+    const result = packForPublish({ outDir: path.resolve(options.out ?? ''), tag: options.tag });
+    guardDefaults.output({ tarball: result.filename, integrity: result.integrity });
+    console.log(`\n✓ packed and dry-run ${result.filename}; nothing was published`);
   } else {
-    throw new ReleaseCheckError('usage: release-check.js check [--mode=…] [--tag=…] | rehearse');
+    throw new ReleaseCheckError(
+      'usage: release-check.js check [--mode=…] [--tag=…] | rehearse | pack --tag=… --out=…'
+    );
   }
 }
 
