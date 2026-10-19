@@ -8,10 +8,16 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { parse, stringify } from 'yaml';
 import { EXPECTED_FILES, compareFileList } from './package-contents.js';
+// The publish guards' tests run with these (P-29 S7b-2); makeTarball builds npm-like tarballs.
+import { makeTarball } from './publish-guard.test.js';
+import { integrityOf, tarballName } from './publish-guard.js';
 import {
   CHANGESET_CONFIG,
   CI_JOBS,
   JOB_ID,
+  LIVE_PUBLISH_COMMAND,
+  PUBLISH_JOBS,
+  PUBLISH_PERMISSIONS,
   PARKED_VERSIONS,
   REHEARSAL_BRANCHES,
   REQUIRED_CHECKS,
@@ -23,6 +29,7 @@ import {
   checkCiCallers,
   checkCiWorkflow,
   checkDistTag,
+  checkPublishWorkflow,
   checkLockfile,
   checkManifest,
   checkRelease,
@@ -30,6 +37,7 @@ import {
   checkWorkflow,
   classifyVersion,
   compareExtracted,
+  packForPublish,
   publishDryRunArgs,
   readChangesetConfig,
   readReleaseState,
@@ -961,6 +969,564 @@ describe('15. the Changesets configuration', () => {
       checkChangesetConfig({ ...CHANGESET_CONFIG, privatePackages: {} }).join('\n'),
       /extra key privatePackages/
     );
+  });
+});
+
+// The publish workflow (P-29 S7b-2).
+const publish = others.find(({ file }) => file === 'publish.yml');
+const notPublish = [release, ...others.filter(other => other !== publish)];
+
+function publishMutated(mutate) {
+  const workflow = parse(publish.source);
+  mutate(workflow);
+  return stringify(workflow);
+}
+
+function publishRejects(source, pattern) {
+  const problems = checkPublishWorkflow(source, notPublish);
+  assert.ok(problems.length > 0, 'publish.yml was accepted');
+  assert.ok(
+    problems.some(p => pattern.test(p)),
+    problems.join('\n')
+  );
+}
+
+const step = (w, jobId, run) => w.jobs[jobId].steps.find(s => s.run === run);
+
+describe('22. publish.yml structure', () => {
+  test('the committed workflow conforms', () => {
+    assert.deepEqual(checkPublishWorkflow(publish.source, notPublish), []);
+  });
+  test('a re-serialised copy still conforms, so the mutations below test only their change', () => {
+    assert.deepEqual(
+      checkPublishWorkflow(
+        publishMutated(() => {}),
+        notPublish
+      ),
+      []
+    );
+  });
+  test('the other workflows still conform alongside it', () => {
+    assert.deepEqual(checkWorkflow(release.source, others), []);
+    assert.deepEqual(checkCiCallers([release, ...others]), []);
+  });
+
+  describe('triggers and inputs', () => {
+    for (const [trigger, value] of [
+      ['push', { branches: ['main'] }],
+      ['pull_request', { branches: ['main'] }],
+      ['pull_request_target', { branches: ['main'] }],
+      ['workflow_call', null],
+      ['release', { types: ['created'] }],
+      ['schedule', [{ cron: '0 0 * * *' }]],
+    ]) {
+      test(`an added ${trigger} trigger`, () => {
+        publishRejects(
+          publishMutated(w => (w.on[trigger] = value)),
+          /only trigger/
+        );
+      });
+    }
+    test('an added, removed or changed input', () => {
+      publishRejects(
+        publishMutated(w => (w.on.workflow_dispatch.inputs.tag = { type: 'string' })),
+        /inputs/
+      );
+      publishRejects(
+        publishMutated(w => delete w.on.workflow_dispatch.inputs.version),
+        /inputs/
+      );
+      publishRejects(
+        publishMutated(w => (w.on.workflow_dispatch.inputs.mode.default = 'publish')),
+        /inputs/
+      );
+      publishRejects(
+        publishMutated(w => w.on.workflow_dispatch.inputs.mode.options.push('force')),
+        /inputs/
+      );
+      publishRejects(
+        publishMutated(w => (w.on.workflow_dispatch.inputs.version.required = false)),
+        /inputs/
+      );
+    });
+  });
+
+  describe('jobs and their order', () => {
+    test('the job set and dependency graph', () => {
+      assert.deepEqual(Object.keys(parse(publish.source).jobs), Object.keys(PUBLISH_JOBS));
+      publishRejects(
+        publishMutated(w => (w.jobs.publish.needs = ['preflight', 'package'])),
+        /job publish needs/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.package.needs = 'preflight')),
+        /job package needs/
+      );
+      publishRejects(
+        publishMutated(w => delete w.jobs.ci),
+        /jobs must be exactly/
+      );
+      publishRejects(
+        publishMutated(
+          w => (w.jobs.extra = { 'runs-on': 'ubuntu-24.04', steps: [{ run: 'true' }] })
+        ),
+        /jobs must be exactly/
+      );
+    });
+    test('a skipped or failed gate never counts as success', () => {
+      for (const condition of ['always()', 'failure()', '!cancelled()', 'success() || failure()']) {
+        publishRejects(
+          publishMutated(w => (w.jobs.publish.if = condition)),
+          /job publish if|status function/
+        );
+        publishRejects(
+          publishMutated(w => (step(w, 'publish', LIVE_PUBLISH_COMMAND).if = condition)),
+          /live publish|status function|steps differ/
+        );
+      }
+      publishRejects(
+        publishMutated(w => delete w.jobs.preflight.if),
+        /job preflight if/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.verify.if = "inputs.mode != 'dry-run'")),
+        /job verify if/
+      );
+    });
+    test('continue-on-error on a job or a step', () => {
+      publishRejects(
+        publishMutated(w => (w.jobs.package['continue-on-error'] = true)),
+        /continue-on-error/
+      );
+      publishRejects(
+        publishMutated(
+          w =>
+            (step(w, 'publish', 'node scripts/publish-guard.js final')['continue-on-error'] = true)
+        ),
+        /continue-on-error/
+      );
+    });
+    test('the reusable CI gate is called exactly', () => {
+      publishRejects(
+        publishMutated(w => (w.jobs.ci.uses = './.github/workflows/release.yml')),
+        /job ci must only call/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.ci.secrets = 'inherit')),
+        /job ci must only call/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.ci.with = { skip: true })),
+        /job ci must only call/
+      );
+      publishRejects(
+        publishMutated(
+          w => (w.jobs.ci.uses = 'ahlgren1234/react-elegant-toasts/.github/workflows/ci.yml@v2')
+        ),
+        /job ci must only call/
+      );
+    });
+    test('the concurrency group is fixed, never cancelled, and not ci.yml’s', () => {
+      publishRejects(
+        publishMutated(w => (w.concurrency['cancel-in-progress'] = true)),
+        /concurrency/
+      );
+      publishRejects(
+        publishMutated(w => (w.concurrency.group = '${{ github.workflow }}-${{ github.ref }}')),
+        /concurrency|own concurrency group/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.ci.concurrency = '${{ github.workflow }}-${{ github.ref }}')),
+        /own concurrency group|job ci must only call/
+      );
+    });
+  });
+
+  describe('permissions, OIDC and the Environment', () => {
+    test('least privilege per job', () => {
+      assert.deepEqual(PUBLISH_PERMISSIONS.publish, { contents: 'read', 'id-token': 'write' });
+      publishRejects(
+        publishMutated(w => (w.permissions = { contents: 'read' })),
+        /top-level permissions/
+      );
+      for (const [jobId, permissions] of [
+        ['preflight', { contents: 'write' }],
+        ['package', { contents: 'read', 'id-token': 'write' }],
+        ['verify', { contents: 'read', 'id-token': 'write' }],
+        ['ci', { contents: 'read', 'id-token': 'write' }],
+        ['publish', { contents: 'write', 'id-token': 'write' }],
+        ['publish', { contents: 'read', 'id-token': 'write', packages: 'write' }],
+        ['publish', 'write-all'],
+      ])
+        publishRejects(
+          publishMutated(w => (w.jobs[jobId].permissions = permissions)),
+          new RegExp(`job ${jobId} permissions|job ci must only call`)
+        );
+    });
+    test('the Environment only on the publish job', () => {
+      publishRejects(
+        publishMutated(w => delete w.jobs.publish.environment),
+        /npm-publish environment/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.publish.environment = 'github-pages')),
+        /environment/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.package.environment = 'npm-publish')),
+        /job package environment/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.publish.environment = { name: 'npm-publish', url: 'x' })),
+        /environment/
+      );
+    });
+  });
+
+  describe('actions, caching and installs', () => {
+    test('an unpinned or unexpected action', () => {
+      publishRejects(
+        publishMutated(w => (w.jobs.publish.steps[0].uses = 'actions/checkout@v7')),
+        /SHA-pinned/
+      );
+      publishRejects(
+        publishMutated(w =>
+          w.jobs.publish.steps.splice(2, 0, {
+            uses: 'JS-DevTools/npm-publish@0000000000000000000000000000000000000000',
+          })
+        ),
+        /may not use/
+      );
+      publishRejects(
+        publishMutated(w =>
+          w.jobs.package.steps.splice(2, 0, {
+            uses: 'actions/cache@0000000000000000000000000000000000000000',
+            with: { path: '~/.npm', key: 'npm' },
+          })
+        ),
+        /may not use/
+      );
+    });
+    test('a changed action pin still conforms, so Dependabot can move pins', () => {
+      assert.deepEqual(
+        checkPublishWorkflow(
+          publishMutated(
+            w => (w.jobs.publish.steps[0].uses = `actions/checkout@${'1'.repeat(40)}`)
+          ),
+          notPublish
+        ),
+        []
+      );
+    });
+    test('caching or a registry outside the publish job', () => {
+      publishRejects(
+        publishMutated(w => (w.jobs.publish.steps[1].with.cache = 'npm')),
+        /must not cache/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.publish.steps[1].with['package-manager-cache'] = true)),
+        /must not cache/
+      );
+      publishRejects(
+        publishMutated(
+          w => (w.jobs.package.steps[1].with['registry-url'] = 'https://registry.npmjs.org')
+        ),
+        /registry-url outside/
+      );
+      publishRejects(
+        publishMutated(w => (w.jobs.publish.steps[2].with['digest-mismatch'] = 'warn')),
+        /steps differ/
+      );
+    });
+    test('dependency installation or repository scripts in the privileged job', () => {
+      for (const run of [
+        'npm ci --ignore-scripts --no-audit --no-fund',
+        'npm install',
+        'npm run build',
+        'npx some-tool',
+      ])
+        publishRejects(
+          publishMutated(w => w.jobs.publish.steps.splice(3, 0, { run })),
+          /installs dependencies or runs repository scripts/
+        );
+    });
+  });
+
+  describe('the live publish path', () => {
+    test('a live publish anywhere else, or without its condition', () => {
+      publishRejects(
+        publishMutated(w =>
+          w.jobs.package.steps.push({ run: 'npm publish publish-tarball/x.tgz' })
+        ),
+        /live npm publish outside/
+      );
+      publishRejects(
+        publishMutated(w => w.jobs.publish.steps.splice(3, 0, { run: LIVE_PUBLISH_COMMAND })),
+        /live publish must be the last step/
+      );
+      publishRejects(
+        publishMutated(w => delete step(w, 'publish', LIVE_PUBLISH_COMMAND).if),
+        /live publish must be the last step/
+      );
+      publishRejects(
+        publishMutated(
+          w => (step(w, 'publish', LIVE_PUBLISH_COMMAND).if = "inputs.mode != 'dry-run'")
+        ),
+        /live publish must be the last step/
+      );
+      publishRejects(
+        publishMutated(
+          w =>
+            (step(w, 'publish', LIVE_PUBLISH_COMMAND).run =
+              'npm publish "$TARBALL" --tag "$DIST_TAG" --ignore-scripts --access public')
+        ),
+        /live npm publish outside|steps differ/
+      );
+    });
+    test('the guards before it removed or made conditional', () => {
+      publishRejects(
+        publishMutated(w => {
+          const steps = w.jobs.publish.steps;
+          steps.splice(
+            steps.findIndex(s => s.id === 'final'),
+            1
+          );
+        }),
+        /steps differ/
+      );
+      publishRejects(
+        publishMutated(
+          w => (w.jobs.publish.steps.find(s => s.id === 'final').if = "inputs.mode == 'dry-run'")
+        ),
+        /steps differ/
+      );
+      publishRejects(
+        publishMutated(w => {
+          const steps = w.jobs.publish.steps;
+          steps.splice(
+            steps.findIndex(s => s.id === 'artifact'),
+            1
+          );
+        }),
+        /steps differ/
+      );
+    });
+    test('the dry run turned into a live publish', () => {
+      publishRejects(
+        publishMutated(
+          w =>
+            (step(w, 'publish', 'node scripts/publish-guard.js dry-run').run =
+              'npm publish "$TARBALL" --tag "$DIST_TAG"')
+        ),
+        /live npm publish outside|live publish must be the last step/
+      );
+    });
+  });
+
+  describe('expressions, credentials and side effects', () => {
+    test('an expression interpolated into the shell', () => {
+      publishRejects(
+        publishMutated(
+          w =>
+            (step(w, 'preflight', 'node scripts/publish-guard.js preflight').run =
+              'node scripts/publish-guard.js preflight ${{ inputs.version }}')
+        ),
+        /interpolates an expression/
+      );
+      publishRejects(
+        publishMutated(
+          w =>
+            (step(w, 'publish', LIVE_PUBLISH_COMMAND).run =
+              'npm publish "${{ steps.artifact.outputs.tarball }}" --tag next')
+        ),
+        /interpolates an expression/
+      );
+    });
+    for (const [label, mutate, pattern] of [
+      [
+        'a secret',
+        w => (w.jobs.publish.steps[3].env.T = '${{ secrets.NPM_TOKEN }}'),
+        /secret|token/,
+      ],
+      ['NODE_AUTH_TOKEN', w => (w.jobs.publish.steps[3].env.NODE_AUTH_TOKEN = 'x'), /token/],
+      [
+        'a GitHub release',
+        w => w.jobs.verify.steps.push({ run: 'gh release create v2.0.0-next.0' }),
+        /GitHub release/,
+      ],
+      ['a Git tag', w => w.jobs.verify.steps.push({ run: 'git tag v2.0.0-next.0' }), /Git tag/],
+      ['a push', w => w.jobs.verify.steps.push({ run: 'git push origin HEAD' }), /Git tag or push/],
+      [
+        'changeset publish',
+        w => w.jobs.package.steps.push({ run: 'npx changeset publish' }),
+        /Changesets/,
+      ],
+      [
+        'changeset version',
+        w => w.jobs.package.steps.push({ run: 'npx changeset version' }),
+        /Changesets/,
+      ],
+      [
+        'npm version',
+        w => w.jobs.package.steps.push({ run: 'npm version prerelease' }),
+        /version or tag mutation/,
+      ],
+      [
+        'npm dist-tag',
+        w => w.jobs.verify.steps.push({ run: 'npm dist-tag add x@1 latest' }),
+        /version or tag mutation/,
+      ],
+      [
+        'a self-hosted runner',
+        w => (w.jobs.publish['runs-on'] = 'self-hosted'),
+        /runs-on|self-hosted/,
+      ],
+      ['a container', w => (w.jobs.publish.container = 'node:24'), /key container/],
+    ]) {
+      test(label, () => {
+        publishRejects(publishMutated(mutate), pattern);
+      });
+    }
+  });
+
+  describe('YAML tricks', () => {
+    test('duplicate keys, anchors and custom tags', () => {
+      publishRejects(
+        publish.source.replace(
+          '    environment: npm-publish\n',
+          '    environment: npm-publish\n    environment: other\n'
+        ),
+        /YAML/
+      );
+      publishRejects(
+        publish.source.replace("  NODE_VERSION: '24'", "  NODE_VERSION: !secret '24'"),
+        /tag/
+      );
+      publishRejects(
+        publish.source
+          .replace('permissions: {}\n', 'permissions: &p {}\n')
+          .replace('    environment: npm-publish\n', '    environment: npm-publish\n    x: *p\n'),
+        /anchors/
+      );
+    });
+    test('a job shadowing a required check', () => {
+      publishRejects(
+        publishMutated(w => (w.jobs.package.name = 'build-package')),
+        /shadows|key name/
+      );
+    });
+  });
+});
+
+describe('23. the package job packs once and dry-runs, and never publishes', () => {
+  const NEXT = '2.0.0-next.0';
+  function repo(version) {
+    const dir = fixtureRepo({ version });
+    if (version.includes('-')) {
+      fs.mkdirSync(path.join(dir, '.changeset'));
+      fs.writeFileSync(path.join(dir, '.changeset', 'pre.json'), JSON.stringify(PRE));
+    }
+    return dir;
+  }
+  // npm stubbed: `view` lists 0.1.x, `pack` writes `tarball` and reports `integrity`.
+  function runnerFor({ tarball, integrity, calls }) {
+    return (command, args, options) => {
+      calls.push(args.join(' '));
+      if (args.includes('view'))
+        return { status: 0, stdout: '["0.1.0","0.1.1","0.1.2"]', stderr: '' };
+      if (args.includes('pack')) {
+        const destination = args[args.indexOf('--pack-destination') + 1];
+        fs.writeFileSync(path.join(destination, tarballName(NEXT)), tarball);
+        const files = EXPECTED_FILES.map(p => ({ path: p }));
+        const info = { filename: tarballName(NEXT), files, integrity };
+        return { status: 0, stdout: JSON.stringify([info]), stderr: '' };
+      }
+      if (args.includes('publish')) assert.ok(options.env.npm_config_dry_run === 'true');
+      return { status: 0, stdout: '', stderr: '' };
+    };
+  }
+  const options = (dir, runner, outDir = path.join(dir, 'out')) => ({
+    dir,
+    outDir,
+    tag: 'next',
+    runner,
+    log: () => {},
+    toolchain: TOOLCHAIN,
+  });
+
+  test('builds once, packs once, verifies and dry-runs', () => {
+    const tarball = makeTarball({ version: NEXT });
+    const calls = [];
+    const dir = repo(NEXT);
+    const result = packForPublish(
+      options(dir, runnerFor({ tarball, integrity: integrityOf(tarball), calls }))
+    );
+    assert.equal(result.integrity, integrityOf(tarball));
+    assert.equal(result.filename, tarballName(NEXT));
+    assert.equal(calls.filter(c => /^run build/.test(c)).length, 1);
+    assert.equal(calls.filter(c => /^pack /.test(c)).length, 1);
+    const publishes = calls.filter(c => /\bpublish\b/.test(c));
+    assert.ok(
+      publishes.length >= 1 && publishes.every(c => c.includes('--dry-run')),
+      publishes.join('\n')
+    );
+  });
+  test('a parked version stops before any build, pack or dry run', () => {
+    const calls = [];
+    const dir = repo('2.0.0-0');
+    refused(
+      () =>
+        packForPublish(options(dir, runnerFor({ tarball: makeTarball(), integrity: '', calls }))),
+      /parked/
+    );
+    assert.ok(
+      calls.every(c => !/\b(build|pack|publish)\b/.test(c)),
+      calls.join('\n')
+    );
+  });
+  test('a wrong dist-tag, a reported digest that differs, or a wrong tarball stops before the dry run', () => {
+    const tarball = makeTarball({ version: NEXT });
+    let calls = [];
+    refused(
+      () =>
+        packForPublish({
+          ...options(repo(NEXT), runnerFor({ tarball, integrity: integrityOf(tarball), calls })),
+          tag: 'latest',
+        }),
+      /dist-tag/
+    );
+    calls = [];
+    refused(
+      () =>
+        packForPublish(
+          options(
+            repo(NEXT),
+            runnerFor({ tarball, integrity: integrityOf(makeTarball()) + 'x', calls })
+          )
+        ),
+      /npm pack reported/
+    );
+    assert.ok(
+      calls.every(c => !/\bpublish\b/.test(c)),
+      calls.join('\n')
+    );
+    calls = [];
+    const wrong = makeTarball({ version: '2.0.0-next.1' });
+    refused(
+      () =>
+        packForPublish(
+          options(repo(NEXT), runnerFor({ tarball: wrong, integrity: integrityOf(wrong), calls }))
+        ),
+      /tarball version/
+    );
+    assert.ok(
+      calls.every(c => !/\bpublish\b/.test(c)),
+      calls.join('\n')
+    );
+  });
+  test('an output directory that already exists', () => {
+    const dir = repo(NEXT);
+    refused(() => packForPublish(options(dir, () => ({ status: 0 }), dir)), /must not exist/);
   });
 });
 
