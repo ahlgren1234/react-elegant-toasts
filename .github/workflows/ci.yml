@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, v2]
   workflow_dispatch:
+  # Lets the publish workflow (P-29 S7) run this full gate on the commit it publishes, in its own
+  # run. A called workflow takes its caller's name in `github.workflow`, so the concurrency group
+  # below becomes `<caller>-<ref>` there: a caller must not use that group itself, or the two runs
+  # deadlock (checked by release-check.test.js).
+  workflow_call:
 
 permissions:
   contents: read

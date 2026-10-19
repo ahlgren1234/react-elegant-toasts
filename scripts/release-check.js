@@ -467,9 +467,9 @@ function jobLabels(source) {
   return labels;
 }
 
-// Returns the ways in which `source` (release.yml) departs from the rehearsal-only design; empty
-// when it conforms. `others` are the repository's other workflow files, for name shadowing.
-export function checkWorkflow(source, others = []) {
+// Parses a workflow strictly: no duplicate keys, anchors, aliases, merge keys or custom tags.
+// Returns the parsed mapping, or the problems that stopped it.
+function parseStrict(source) {
   const problems = [];
   const fail = message => problems.push(message);
   const doc = parseDocument(source, { uniqueKeys: true, merge: false });
@@ -483,9 +483,20 @@ export function checkWorkflow(source, others = []) {
       if (isScalar(pair.key) && pair.key.value === '<<') fail('YAML merge keys are not allowed');
     },
   });
-  if (problems.length) return problems;
+  if (problems.length) return { problems };
   const workflow = doc.toJS();
-  if (!workflow || typeof workflow !== 'object') return ['the workflow is not a mapping'];
+  if (!workflow || typeof workflow !== 'object')
+    return { problems: ['the workflow is not a mapping'] };
+  return { workflow, problems };
+}
+
+// Returns the ways in which `source` (release.yml) departs from the rehearsal-only design; empty
+// when it conforms. `others` are the repository's other workflow files, for name shadowing.
+export function checkWorkflow(source, others = []) {
+  const parsed = parseStrict(source);
+  if (parsed.problems.length) return parsed.problems;
+  const { workflow, problems } = parsed;
+  const fail = message => problems.push(message);
 
   for (const key of keysOutside(workflow, [
     'name',
@@ -603,6 +614,166 @@ export function readWorkflows(dir = root) {
     release: read('release.yml'),
     others: files.filter(file => file !== 'release.yml').map(read),
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// CI as the publication gate (P-29 S7b-1)
+//
+// ci.yml is reusable through `workflow_call`, so the publish workflow can run the full gate on the
+// commit it publishes, in its own run (§29, item 2). checkCiWorkflow() keeps what the main ruleset
+// and that gate rely on: the triggers, the read-only permissions, the concurrency, the jobs and
+// their dependencies, the six required check names and the fail-closed `test` aggregator. It does
+// not pin actions or commands, which Dependabot and later phases change.
+
+export const CI_WORKFLOW_NAME = 'CI';
+export const CI_BRANCHES = Object.freeze(['main', 'v2']);
+export const CI_CONCURRENCY = Object.freeze({
+  group: '${{ github.workflow }}-${{ github.ref }}',
+  'cancel-in-progress': "${{ github.event_name == 'pull_request' }}",
+});
+// Each job and the jobs it needs; only `test` needs another.
+export const CI_JOBS = Object.freeze({
+  quality: [],
+  'test-react': [],
+  test: ['test-react'],
+  'build-package': [],
+  size: [],
+  browser: [],
+  demo: [],
+});
+const CI_AGGREGATOR_STEPS = [
+  {
+    env: { RESULT: '${{ needs.test-react.result }}' },
+    run: 'echo "test-react: $RESULT"\n[ "$RESULT" = success ]\n',
+  },
+];
+
+function emptyTrigger(value) {
+  return value === null || sameJson(value, {});
+}
+
+function needsList(needs) {
+  if (needs === undefined) return [];
+  return typeof needs === 'string' ? [needs] : needs;
+}
+
+// Returns the ways in which `source` (ci.yml) departs from the gate it must stay; empty when it
+// conforms.
+export function checkCiWorkflow(source) {
+  const parsed = parseStrict(source);
+  if (parsed.problems.length) return parsed.problems;
+  const { workflow, problems } = parsed;
+  const fail = message => problems.push(message);
+
+  if (workflow.name !== CI_WORKFLOW_NAME) fail(`workflow name ${JSON.stringify(workflow.name)}`);
+  if (!sameJson(workflow.permissions, { contents: 'read' }))
+    fail('top-level permissions must be exactly contents: read');
+  if (!sameJson(workflow.concurrency, CI_CONCURRENCY)) fail('unexpected concurrency');
+
+  // Triggers: a push to and a PR into main or v2, a manual dispatch and a call from another
+  // workflow, without filters, inputs, outputs or secrets.
+  const on = workflow.on;
+  if (!on || typeof on !== 'object' || Array.isArray(on)) fail('`on` must be a mapping');
+  else {
+    const triggers = ['pull_request', 'push', 'workflow_call', 'workflow_dispatch'];
+    if (!sameJson(Object.keys(on).sort(), triggers)) fail(`triggers ${Object.keys(on).join(', ')}`);
+    if (!sameJson(on.push, { branches: CI_BRANCHES })) fail('push must be on main and v2 only');
+    if (!sameJson(on.pull_request, { branches: CI_BRANCHES }))
+      fail('pull_request must target main and v2 only');
+    if ('workflow_dispatch' in on && !emptyTrigger(on.workflow_dispatch))
+      fail('workflow_dispatch must have no inputs');
+    if ('workflow_call' in on && !emptyTrigger(on.workflow_call))
+      fail('workflow_call must have no inputs, outputs or secrets');
+  }
+
+  const jobs = workflow.jobs && typeof workflow.jobs === 'object' ? workflow.jobs : {};
+  if (!sameJson(Object.keys(jobs).sort(), Object.keys(CI_JOBS).sort()))
+    fail(`jobs ${Object.keys(jobs).join(', ')}`);
+  for (const [id, job] of Object.entries(jobs)) {
+    if (!job || typeof job !== 'object') {
+      fail(`job ${id} is not a mapping`);
+      continue;
+    }
+    for (const key of ['permissions', 'uses', 'secrets', 'environment', 'continue-on-error'])
+      if (key in job) fail(`job ${id} has ${key}`);
+    if (CI_JOBS[id] && !sameJson(needsList(job.needs), CI_JOBS[id]))
+      fail(`job ${id} needs ${JSON.stringify(job.needs ?? [])}`);
+    // A skipped job reports success to a required check, so only the aggregator may have an `if`.
+    if ('if' in job && id !== 'test') fail(`job ${id} has a job-level if`);
+    for (const [index, step] of (Array.isArray(job.steps) ? job.steps : []).entries())
+      if (step && typeof step === 'object' && 'continue-on-error' in step)
+        fail(`job ${id} step ${index + 1} has continue-on-error`);
+  }
+
+  // The six required checks: each is the name of exactly one job, the job of the same id.
+  for (const check of REQUIRED_CHECKS) {
+    const named = Object.entries(jobs).filter(([id, job]) => (job?.name ?? id) === check);
+    if (named.length !== 1 || named[0][0] !== check)
+      fail(`required check ${check} must be the name of job ${check} only`);
+  }
+
+  // The `test` check fails closed: it always runs and passes only when every matrix leg passed.
+  const test = jobs.test;
+  if (test && typeof test === 'object') {
+    if (test.if !== '${{ always() }}') fail('the test aggregator must run with if: always()');
+    if (!sameJson(test.steps, CI_AGGREGATOR_STEPS)) fail('the test aggregator steps changed');
+  }
+
+  walk(workflow, text => {
+    if (/id-token|secrets\./i.test(text)) fail(`forbidden text in ${JSON.stringify(text)}`);
+  });
+  return problems;
+}
+
+// Returns the workflows that call ci.yml and would share its concurrency group: a called workflow
+// takes the caller's name in `github.workflow`, so a caller whose own group, or whose calling job's
+// group, is ci.yml's group expression waits on itself.
+export function checkCiCallers(workflows) {
+  const problems = [];
+  for (const { file, source } of workflows) {
+    const { workflow } = parseStrict(source);
+    if (!workflow) continue;
+    for (const [id, job] of Object.entries(workflow.jobs ?? {})) {
+      if (!/(^|\/)\.github\/workflows\/ci\.ya?ml(@|$)/.test(String(job?.uses ?? ''))) continue;
+      for (const concurrency of [workflow.concurrency, job.concurrency]) {
+        const group = typeof concurrency === 'string' ? concurrency : concurrency?.group;
+        if (group === CI_CONCURRENCY.group)
+          problems.push(`${file} job ${id} calls ci.yml in its own concurrency group`);
+      }
+    }
+  }
+  return problems;
+}
+
+// The Changesets configuration, exactly: `baseBranch` is main, the canonical branch since the
+// integration (P-29 S5), and every other setting is as P-28 S2 set it.
+export const CHANGESET_CONFIG = Object.freeze({
+  $schema: 'https://unpkg.com/@changesets/config@4.0.1/schema.json',
+  changelog: '@changesets/cli/changelog',
+  commit: false,
+  format: 'prettier',
+  fixed: [],
+  linked: [],
+  access: 'public',
+  baseBranch: 'main',
+  updateInternalDependencies: 'patch',
+  ignore: [],
+});
+
+export function checkChangesetConfig(config) {
+  const problems = [];
+  const keys = Object.keys(config ?? {});
+  for (const key of keys.filter(k => !(k in CHANGESET_CONFIG))) problems.push(`extra key ${key}`);
+  for (const [key, value] of Object.entries(CHANGESET_CONFIG))
+    if (!sameJson(config?.[key], value))
+      problems.push(
+        `${key} must be ${JSON.stringify(value)}, not ${JSON.stringify(config?.[key])}`
+      );
+  return problems;
+}
+
+export function readChangesetConfig(dir = root) {
+  return readJson(path.join(dir, '.changeset', 'config.json'));
 }
 
 // ---------------------------------------------------------------------------------------------
