@@ -34,7 +34,7 @@ Toast notifications for React 18 and 19: one `<Toaster />` and a `toast()` funct
 npm install react-elegant-toasts
 ```
 
-> **Version 2 is a pre-release.** This README describes version 2. `react-elegant-toasts@2.0.0-next.0` is published under the `next` dist-tag; install it with `npm install react-elegant-toasts@next`. The `latest` dist-tag still points to 0.1.2, so `npm install react-elegant-toasts` installs the 0.x release, whose API is different.
+> **Upgrading from 0.x?** Version 2 is a rewrite with a new API and a new stylesheet, and there was no 1.x. Follow the [migration guide (0.x → 2.0)](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/MIGRATION.md).
 
 `react` and `react-dom` 18 or 19 are peer dependencies.
 
