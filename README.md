@@ -1,7 +1,7 @@
 # React Elegant Toasts
 
 [![npm](https://img.shields.io/npm/v/react-elegant-toasts)](https://www.npmjs.com/package/react-elegant-toasts)
-[![License](https://img.shields.io/github/license/ahlgren1234/react-elegant-toasts)](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/LICENSE)
+[![License](https://img.shields.io/github/license/ahlgren1234/react-elegant-toasts)](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/LICENSE)
 
 Toast notifications for React 18 and 19: one `<Toaster />` and a `toast()` function you can call from anywhere.
 
@@ -34,7 +34,7 @@ Toast notifications for React 18 and 19: one `<Toaster />` and a `toast()` funct
 npm install react-elegant-toasts
 ```
 
-> **Version 2 is not published yet.** This README describes version 2. Until it is released, `npm install react-elegant-toasts` installs the 0.x release, whose API is different.
+> **Version 2 is a pre-release.** This README describes version 2. `react-elegant-toasts@2.0.0-next.0` is published under the `next` dist-tag; install it with `npm install react-elegant-toasts@next`. The `latest` dist-tag still points to 0.1.2, so `npm install react-elegant-toasts` installs the 0.x release, whose API is different.
 
 `react` and `react-dom` 18 or 19 are peer dependencies.
 
@@ -182,7 +182,7 @@ toast.custom(
 );
 ```
 
-Give a custom toast a fixed `id` when its own controls dismiss it. Its content's accessibility is yours: names, keyboard operation, focus styles, contrast, and a way to dismiss a persistent one. See [custom toasts in the accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/ACCESSIBILITY.md#custom-toasts) and [in the theming reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/THEMING.md#custom-toasts).
+Give a custom toast a fixed `id` when its own controls dismiss it. Its content's accessibility is yours: names, keyboard operation, focus styles, contrast, and a way to dismiss a persistent one. See [custom toasts in the accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/ACCESSIBILITY.md#custom-toasts) and [in the theming reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/THEMING.md#custom-toasts).
 
 ## Positions and the queue
 
@@ -238,7 +238,7 @@ Customise the look with the `--ret-*` custom properties, set on `.ret-toaster` o
 }
 ```
 
-The [theming reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/THEMING.md) lists every token with its defaults, the documented classes and attributes, per-toast styling, progress, motion, reduced motion and forced colours.
+The [theming reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/THEMING.md) lists every token with its defaults, the documented classes and attributes, per-toast styling, progress, motion, reduced motion and forced colours.
 
 ## Accessibility
 
@@ -248,7 +248,7 @@ The [theming reference](https://github.com/ahlgren1234/react-elegant-toasts/blob
 - Under `prefers-reduced-motion: reduce`, toasts appear and disappear without motion. The stylesheet also keeps toasts visible in forced-colours modes.
 - In a custom toast, the content's accessibility is yours.
 
-No real screen reader has been tested yet, and this package makes no claim of conformance to an accessibility standard. The [accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/ACCESSIBILITY.md) explains what the library does, what it leaves to you, and [what was verified](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/ACCESSIBILITY.md#what-was-verified).
+No real screen reader has been tested yet, and this package makes no claim of conformance to an accessibility standard. The [accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/ACCESSIBILITY.md) explains what the library does, what it leaves to you, and [what was verified](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/ACCESSIBILITY.md#what-was-verified).
 
 ## Next.js and server rendering
 
@@ -303,7 +303,7 @@ export function SaveButton() {
 - **TypeScript** 5.0 or later, with `moduleResolution` set to `bundler`, `node16` or `nodenext`. The declarations are checked with TypeScript 5.0.4 and 7.0.2.
 - **ESM only.** There is no CommonJS build. The package is tested in Vite and Next.js builds and under Node's native ESM. Test runners that load packages as CommonJS, such as Jest in its default mode, have to be configured for ESM or to transform this package. Loading it with `require()` is not supported.
 - **Imports.** `react-elegant-toasts` and `react-elegant-toasts/styles.css` are the only entry points; paths into the package's build output are blocked.
-- **Browsers.** Automated tests run in current Chromium, Firefox and WebKit engines, and manual checks covered Chrome and Firefox on Windows, Safari on iOS, and Chrome and Firefox on Android. macOS Safari and Microsoft Edge have not been verified. The [accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/ACCESSIBILITY.md#what-was-verified) lists the versions.
+- **Browsers.** Automated tests run in current Chromium, Firefox and WebKit engines, and manual checks covered Chrome and Firefox on Windows, Safari on iOS, and Chrome and Firefox on Android. macOS Safari and Microsoft Edge have not been verified. The [accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/ACCESSIBILITY.md#what-was-verified) lists the versions.
 
 The package exports `Toaster` and `toast`, with no default export, and these types:
 
@@ -323,11 +323,11 @@ The package exports `Toaster` and `toast`, with no default export, and these typ
 
 ## Documentation
 
-- [Theming and styling reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/THEMING.md)
-- [Accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/ACCESSIBILITY.md)
-- [Migration guide (0.x → 2.0)](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/docs/MIGRATION.md)
+- [Theming and styling reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/THEMING.md)
+- [Accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/ACCESSIBILITY.md)
+- [Migration guide (0.x → 2.0)](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/MIGRATION.md)
 - [Issues](https://github.com/ahlgren1234/react-elegant-toasts/issues)
 
 ## License
 
-[MIT](https://github.com/ahlgren1234/react-elegant-toasts/blob/v2/LICENSE) © Peter Anyawantana
+[MIT](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/LICENSE) © Peter Anyawantana
