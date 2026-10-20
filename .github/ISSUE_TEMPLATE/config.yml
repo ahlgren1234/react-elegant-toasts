@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and help
+    url: https://github.com/ahlgren1234/react-elegant-toasts/discussions/categories/q-a
+    about: Ask questions and get help from the community in Discussions.
+  - name: Report a security vulnerability
+    url: https://github.com/ahlgren1234/react-elegant-toasts/security/advisories/new
+    about: Report vulnerabilities privately. Please do not open a public issue.
+  - name: Documentation
+    url: https://github.com/ahlgren1234/react-elegant-toasts#readme
+    about: Read the README, the guides and the live demo.

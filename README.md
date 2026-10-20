@@ -28,6 +28,7 @@ Toast notifications for React 18 and 19: one `<Toaster />` and a `toast()` funct
 - [Next.js and server rendering](#nextjs-and-server-rendering)
 - [Compatibility](#compatibility)
 - [Documentation](#documentation)
+- [Contributing and support](#contributing-and-support)
 - [License](#license)
 
 ## Installation
@@ -330,6 +331,13 @@ The package exports `Toaster` and `toast`, with no default export, and these typ
 - [Accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/ACCESSIBILITY.md)
 - [Migration guide (0.x → 2.0)](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/MIGRATION.md)
 - [Issues](https://github.com/ahlgren1234/react-elegant-toasts/issues)
+
+## Contributing and support
+
+- Questions and ideas: [Discussions](https://github.com/ahlgren1234/react-elegant-toasts/discussions).
+- Bugs and feature requests: [open an issue](https://github.com/ahlgren1234/react-elegant-toasts/issues/new/choose).
+- Contributing: see the [contributing guide](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/CONTRIBUTING.md).
+- Security vulnerabilities: report them privately, as the [security policy](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/SECURITY.md) describes, never in a public issue.
 
 ## License
 
