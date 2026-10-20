@@ -5,6 +5,8 @@
 
 Toast notifications for React 18 and 19: one `<Toaster />` and a `toast()` function you can call from anywhere.
 
+**[Try the live demo](https://ahlgren1234.github.io/react-elegant-toasts/)**: every toast type, all six positions, themes and right-to-left.
+
 - No runtime dependencies; React and React DOM are peer dependencies.
 - Six positions, each with its own stack and its own queue.
 - Success, error, warning, info, loading and promise toasts, plus custom toasts with your own markup.
@@ -323,6 +325,7 @@ The package exports `Toaster` and `toast`, with no default export, and these typ
 
 ## Documentation
 
+- [Live demo](https://ahlgren1234.github.io/react-elegant-toasts/)
 - [Theming and styling reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/THEMING.md)
 - [Accessibility reference](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/ACCESSIBILITY.md)
 - [Migration guide (0.x → 2.0)](https://github.com/ahlgren1234/react-elegant-toasts/blob/main/docs/MIGRATION.md)
