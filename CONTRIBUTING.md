@@ -59,7 +59,8 @@ npx playwright install --with-deps   # only for the browser tests and package va
   handling, reduced motion and sufficient contrast. See the
   [accessibility reference](docs/ACCESSIBILITY.md) before changing any of them.
 - **Styles:** every class, custom property and keyframe in `src/styles.css` uses the `ret-` prefix.
-- **Dependencies:** the package has no runtime dependencies, and new ones are not accepted.
+- **Dependencies:** The package intentionally has no runtime dependencies. Proposals to add one
+  require prior maintainer discussion and a strong justification.
 - **Documentation:** `npm run lint` checks the README and the guides in `docs/`. TypeScript examples
   in them must match the example files in `fixtures/consumer-vite/src/docs/`, which are type-checked
   against the packed package.

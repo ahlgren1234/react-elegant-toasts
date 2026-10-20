@@ -29,9 +29,10 @@ These details help with the investigation:
 
 ## Disclosure
 
-Reports are handled through coordinated disclosure: the vulnerability is investigated privately, and
-a fix and an advisory are published together once a fix is available. This is a volunteer-maintained
-project, so no response or resolution times are guaranteed, but every report is taken seriously.
+The intended approach is coordinated disclosure: the vulnerability is investigated privately, and,
+where possible, an advisory is published together with a fix once one is available. This is a
+volunteer-maintained project, so no response or resolution times are guaranteed, but every report is
+taken seriously.
 
 ## Scope
 
