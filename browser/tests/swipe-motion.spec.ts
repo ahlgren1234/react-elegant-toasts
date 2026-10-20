@@ -1,5 +1,12 @@
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
-import { expectInterpolatedMove, openHarness, PX } from './harness';
+import {
+  expectContinuousTransition,
+  expectInterpolatedMove,
+  openHarness,
+  PX,
+  type TransitionEvidence,
+  type TransitionOutcome,
+} from './harness';
 
 // P-22 S5.2, CF-35 Class 1 (V2_PLAN.md, P-22 D2; P-21 D2 decisions 11 and 12): swipe and stack
 // repositioning compose with no jump. Chromium with TRUSTED touch (CDP, `hasTouch`); Firefox and
@@ -27,6 +34,12 @@ interface Sample {
   readonly transformY: number;
   readonly swiping: string | null;
   readonly connected: boolean;
+  /**
+   * `b`'s running transform transition then, by `id` (empty until a spec names it), and its eased
+   * progress; null when none runs (Issue #65).
+   */
+  readonly transition: string | null;
+  readonly progress: number | null;
 }
 
 /** A gesture on `b`'s title: trusted CDP touch in Chromium, synthetic touch elsewhere. */
@@ -159,6 +172,14 @@ async function startSampling(page: Page): Promise<() => Promise<Sample[]>> {
     const h = window.__retHarness!;
     const read = () => {
       const state = h.toastState('b');
+      const transition = h
+        .toastRoot('b')
+        ?.getAnimations()
+        .find(
+          animation =>
+            animation instanceof CSSTransition && animation.transitionProperty === 'transform'
+        );
+      const progress = transition?.effect?.getComputedTiming().progress;
       return {
         now: performance.now(),
         top: state.top,
@@ -166,6 +187,8 @@ async function startSampling(page: Page): Promise<() => Promise<Sample[]>> {
         transformY: state.transformY,
         swiping: state.swiping,
         connected: state.connected,
+        transition: transition ? transition.id : null,
+        progress: typeof progress === 'number' ? progress : null,
       };
     };
     let before: Activation['before'] | null = null;
@@ -220,6 +243,12 @@ const stageTime = (page: Page, name: string) =>
         .time,
     name
   );
+
+/**
+ * The duration of the reposition transition, which also carries the snap-back: internal to the
+ * stylesheet (`transition-duration` on `.ret-toast`), not a token.
+ */
+const REPOSITION_MS = 200;
 
 /** The bound on the wait for `b`'s `transform` to reach rest, from the start of the wait. */
 const REST_LIMIT_MS = 5000;
@@ -355,29 +384,113 @@ function speedOf(samples: readonly Sample[], key: 'top' | 'x'): number {
   return speed;
 }
 
-interface Measured {
-  readonly before: { readonly x: number; readonly time: number };
-  readonly after: { readonly x: number; readonly time: number };
+/** A read of `b` in the insertion's task, with its running transform transition, if any. */
+interface MeasuredRead {
+  readonly x: number;
+  readonly time: number;
+  readonly transition: TransitionEvidence | undefined;
 }
+
+interface Measured {
+  readonly before: MeasuredRead;
+  readonly after: MeasuredRead;
+}
+
+/** The `id` `insertMeasured` gives the transform transition running after an insertion. */
+const insertedTransition = (id: string) => `after insert ${id}`;
 
 /**
  * Shows toast `id` on top of the stack and commits it at once, in one task with a read of `b`
  * just before and just after: the harness's `mount()` re-renders the same Toaster under
  * `flushSync`, so the insertion's repositioning seed runs inside that task. Chromium and Firefox
  * hold animation time within a task; WebKit advances it, which the allowance covers.
+ * Each read includes `b`'s transform transition through the Web Animations API (Issue #65): its
+ * keyframes and timing, never its events, since WebKit fires none for a transition replaced while
+ * still pending. The one running after the insertion is named `insertedTransition(id)`, so frames
+ * can tell it apart, and how its `finished` promise settles is logged as `transition`.
  */
 const insertMeasured = (page: Page, id: string): Promise<Measured> =>
-  page.evaluate(id => {
-    const h = window.__retHarness!;
-    const read = () => ({ x: h.toastState('b').transformX, time: performance.now() });
-    h.log('stage', `insert ${id}`);
-    const before = read();
-    h.toast(`Toast ${id}`, { id, className: `h-${id}`, duration: 60_000 });
-    h.mount();
-    const after = read();
-    if (!h.toastRoot(id)) throw new Error(`${id} was not committed in the task`);
-    return { before, after };
-  }, id);
+  page.evaluate(
+    ({ id, name }) => {
+      const h = window.__retHarness!;
+      const xOf = (keyframe: ComputedKeyframe | undefined) => {
+        const transform = keyframe?.transform;
+        if (typeof transform !== 'string') return Number.NaN;
+        return transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
+      };
+      const transitionOf = () =>
+        h
+          .toastRoot('b')
+          ?.getAnimations()
+          .find(
+            (animation): animation is CSSTransition =>
+              animation instanceof CSSTransition && animation.transitionProperty === 'transform'
+          );
+      const evidence = (transition: CSSTransition | undefined) => {
+        if (!(transition?.effect instanceof KeyframeEffect)) return undefined;
+        const keyframes = transition.effect.getKeyframes();
+        const timing = transition.effect.getComputedTiming();
+        return {
+          id: transition.id,
+          duration: typeof timing.duration === 'number' ? timing.duration : Number.NaN,
+          easing: timing.easing ?? '',
+          startX: xOf(keyframes.find(keyframe => keyframe.computedOffset === 0)),
+          endX: xOf(keyframes.find(keyframe => keyframe.computedOffset === 1)),
+        };
+      };
+      const read = () => ({
+        x: h.toastState('b').transformX,
+        time: performance.now(),
+        transition: evidence(transitionOf()),
+      });
+      h.log('stage', `insert ${id}`);
+      const before = read();
+      h.toast(`Toast ${id}`, { id, className: `h-${id}`, duration: 60_000 });
+      h.mount();
+      const started = transitionOf();
+      if (started) {
+        started.id = name;
+        started.finished.then(
+          () => h.log('transition', { id: name, outcome: 'finished' }),
+          () => h.log('transition', { id: name, outcome: 'cancelled' })
+        );
+      }
+      const after = read();
+      if (!h.toastRoot(id)) throw new Error(`${id} was not committed in the task`);
+      return { before, after };
+    },
+    { id, name: insertedTransition(id) }
+  );
+
+/** How the transition named `name` settled, as `insertMeasured` logged it. */
+const transitionOutcome = (page: Page, name: string): Promise<TransitionOutcome> =>
+  page.evaluate(
+    name =>
+      (
+        window.__retHarness!.events.find(
+          event => event.type === 'transition' && (event.detail as { id: string }).id === name
+        )?.detail as { outcome: 'finished' | 'cancelled' } | undefined
+      )?.outcome,
+    name
+  );
+
+/**
+ * How far the transition after the insertion may start from `before.x` (Issue #65). Chromium and
+ * Firefox hold animation time within a task, so the seed is `before.x` itself. WebKit advances it,
+ * so the renderer's own read of X, later in the task, may already be further along the snap-back:
+ * by no more than that transition's fastest motion (its distance times its timing function's
+ * steepest slope over its duration) over the task, plus one clock tick.
+ */
+function insertionStartTolerance(measured: Measured, browserName: string): number {
+  const settle = measured.before.transition;
+  if (browserName !== 'webkit' || !settle) return PX;
+  const slope = maxSlopeOf(settle.easing);
+  expect(slope, `precondition: the snap-back's timing function (${settle.easing})`).toBeGreaterThan(
+    0
+  );
+  const maxSpeed = (Math.abs(settle.endX - settle.startX) * slope) / settle.duration;
+  return PX + maxSpeed * (measured.after.time - measured.before.time + WEBKIT_CLOCK_TICK_MS);
+}
 
 /**
  * X kept across the insertion: no more change than the settle's own speed explains over the task.
@@ -502,6 +615,8 @@ test.describe('CF-35: swipe and repositioning compose with no jump', () => {
           transformY: activation!.before.transformY,
           swiping: null,
           connected: true,
+          transition: null,
+          progress: null,
         },
       ];
       const allowance =
@@ -604,10 +719,28 @@ test.describe('CF-35: swipe and repositioning compose with no jump', () => {
       settling.filter(sample => !sample.mutation),
       browserName
     );
-    expectInterpolatedMove(
-      settling.map(sample => sample.x),
+    // Judged on the transition's own evidence on every run, and on the frames whenever one falls
+    // inside the motion; WebKit can deliver none for longer than the snap-back (Issue #65).
+    const name = insertedTransition('n');
+    const result = expectContinuousTransition(
+      {
+        fromX: measured.before.x,
+        toX: 0,
+        duration: REPOSITION_MS,
+        started: measured.after.transition?.id === name ? measured.after.transition : undefined,
+        outcome: await transitionOutcome(page, name),
+        frames: samples.filter(sample => sample.time >= measured.after.time),
+        path: settling.map(sample => sample.x),
+        startTolerance: insertionStartTolerance(measured, browserName),
+      },
       'X back to rest'
     );
+    if (result === 'frame-starvation') {
+      test.info().annotations.push({
+        type: 'frame-starvation',
+        description: 'no frame inside the snap-back after the insertion; judged on its transition',
+      });
+    }
     expect(settling[settling.length - 1]!.x).toBeCloseTo(0, 0);
   });
 

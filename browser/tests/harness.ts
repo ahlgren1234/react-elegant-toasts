@@ -74,6 +74,119 @@ export function expectInterpolatedMove(
   expect(between.length, `${what} passes through intermediate values`).toBeGreaterThan(0);
 }
 
+/**
+ * A `transform` CSS transition as the Web Animations API describes it (Issue #65): its identity
+ * (the `id` a spec gives it), its computed duration in ms and timing function, and the X of its
+ * keyframes at offsets 0 and 1. Read in the task that starts it, so the values are the engine's
+ * own and need no frame.
+ */
+export interface TransitionEvidence {
+  readonly id: string;
+  readonly duration: number;
+  readonly easing: string;
+  readonly startX: number;
+  readonly endX: number;
+}
+
+/**
+ * A frame sample during a transition: X, and the transition running on the element then, by
+ * `id`, with its eased progress (`getComputedTiming().progress`), or null when none runs.
+ */
+export interface TransitionFrame {
+  readonly x: number;
+  readonly transition: string | null;
+  readonly progress: number | null;
+}
+
+/** What a transition's `finished` promise settled to, if it settled. */
+export type TransitionOutcome = 'finished' | 'cancelled' | undefined;
+
+/**
+ * Checks that X moves continuously from `fromX` to `toX` through one transform transition, with
+ * or without intermediate frames (Issue #65). The evidence is judged on every run:
+ * - a transition started at the boundary: its absence means a jump;
+ * - its duration is `duration` ms, so a zero or wrong duration fails;
+ * - its first keyframe is at `fromX`, the X just before the boundary, so the motion starts where
+ *   the element was; its last keyframe is at `toX`;
+ * - it finished, never cancelled or left running, and no other transition took over in a frame;
+ * - `frames`, the samples from the boundary on, end at `toX` and never reverse.
+ * A CSS transition interpolates between its own keyframes, so these leave no place for a jump.
+ * The frames are then judged as well: when at least one frame falls where the transition's own
+ * progress puts X strictly between its ends, `expectInterpolatedMove` must pass on `path`, as before.
+ * When none does, the browser delivered no frame inside the motion (frame starvation, #40 and
+ * #65): the evidence above stands alone, and the result says so, for the caller to annotate.
+ */
+export function expectContinuousTransition(
+  {
+    fromX,
+    toX,
+    duration,
+    started,
+    outcome,
+    frames,
+    path = [fromX, ...frames.map(frame => frame.x)],
+    startTolerance,
+  }: {
+    readonly fromX: number;
+    readonly toX: number;
+    readonly duration: number;
+    readonly started: TransitionEvidence | undefined;
+    readonly outcome: TransitionOutcome;
+    readonly frames: readonly TransitionFrame[];
+    /** The series `expectInterpolatedMove` judges: by default `fromX`, then the frames. */
+    readonly path?: readonly number[];
+    /**
+     * How far the first keyframe may be from `fromX`: by default `tolerance`. Only an engine that
+     * advances animation time within a task needs more, bounded by the motion it explains.
+     */
+    readonly startTolerance?: number;
+  },
+  what: string,
+  tolerance: number = PX
+): 'interpolated' | 'frame-starvation' {
+  expect(started, `${what}: a transform transition starts at the boundary`).toBeDefined();
+  const transition = started!;
+  expect(transition.duration, `${what}: the transition's duration`).toBeCloseTo(duration, 1);
+  expect(
+    Math.abs(transition.startX - fromX),
+    `${what}: the transition starts at the X before the boundary (${transition.startX} against ${fromX})`
+  ).toBeLessThanOrEqual(startTolerance ?? tolerance);
+  expect(
+    Math.abs(transition.endX - toX),
+    `${what}: the transition ends at the target X (${transition.endX} against ${toX})`
+  ).toBeLessThanOrEqual(tolerance);
+  expect(outcome, `${what}: the transition finished`).toBe('finished');
+  const others = frames.filter(
+    frame => frame.transition !== null && frame.transition !== transition.id
+  );
+  expect(others.length, `${what}: no other transition takes over`).toBe(0);
+  const last = frames[frames.length - 1];
+  expect(last, `${what}: frames sampled`).toBeDefined();
+  expect(Math.abs(last!.x - toX), `${what}: at rest at the target X`).toBeLessThanOrEqual(
+    tolerance
+  );
+  const direction = Math.sign(toX - fromX);
+  expect(direction, `${what} moves`).not.toBe(0);
+  frames.forEach((frame, index) => {
+    const previous = index === 0 ? fromX : frames[index - 1]!.x;
+    expect(
+      (frame.x - previous) * direction,
+      `${what} never reverses (sample ${index})`
+    ).toBeGreaterThan(-tolerance);
+  });
+  const inside = frames.filter(frame => {
+    if (frame.transition !== transition.id || frame.progress === null) return false;
+    const expected = transition.startX + (transition.endX - transition.startX) * frame.progress;
+    return (
+      (expected - transition.startX) * direction > tolerance &&
+      (transition.endX - expected) * direction > tolerance
+    );
+  });
+  if (inside.length === 0) return 'frame-starvation';
+  expectInterpolatedMove(path, what, tolerance);
+  return 'interpolated';
+}
+
 /** A computed time token of the Toaster, in ms. */
 export async function timeToken(page: Page, name: string): Promise<number> {
   const value = await page.evaluate(
