@@ -7249,6 +7249,45 @@ Each phase is one reviewable PR, or a small series of PRs, into `v2`, and must l
   - **Remaining:** S11 (the manual audit and release documentation) and S12 (stable 2.0.0) are pending; P-29 is not complete. Each later `next.N` repeats S9 and S10, each with its own approval.
   - **Tracking:** this record changes none. Issue #23 stays open and In Progress, and Project #8 and Roadmap #28 are unchanged.
   - **Validation:** plan only: `format:check` on this plan and `check-docs.js`. No package, version, Changesets, workflow, script or other document change; no GitHub or npm setting changed by this record; and no publication, tag or GitHub release.
+- **S11, manual audit and release documentation** (in progress; started 2026-10-20). Each part below is recorded as it is done. S11 needs the maintainer's audit sign-off (S1), and none of this record is that sign-off.
+  - **S11-B, README links and notice:** PR #103 merged into `main` as `a36218e`. The README's 11 GitHub links, including both LICENSE links, point to `blob/main/`, and its notice says that `2.0.0-next.0` is a pre-release on `next` while `latest` is still 0.1.2. The notice stays until S12.
+  - **Windows record: reduced motion and keyboard in desktop Chrome and Firefox (maintainer-reported PASS).** The maintainer ran the manual QA page (`browser/MANUAL_QA.md`) in real Chrome and Firefox on Windows. Every result below is the maintainer's **visual and interaction observation**. It is not automated evidence or screen-reader evidence, and no JSON log, screenshot or recording is part of it. Nothing here is inferred beyond what was reported. `src/`, the harness and the tests are unchanged.
+    - **Environment:** Windows 11 Home, version 26H2, build 26300.9711; Chrome 155.0.8059.84 (64-bit); Firefox 158.0; the manual QA page at `4afe63f` (S11-B's branch head, whose tree is identical to `main` at `a36218e`), served from WSL at `http://127.0.0.1:4180/manual.html`; reduced motion through Settings → Accessibility → Visual effects → Animation effects off; all cases on 2026-10-20.
+    - **Results** ("PASS" as reported by the maintainer):
+
+      | Case                                                                                   | Chrome | Firefox |
+      | -------------------------------------------------------------------------------------- | ------ | ------- |
+      | 1. With Windows' reduced-motion setting on, toasts appear and disappear without motion | PASS   | PASS    |
+      | 2. The same setting: the stack takes its new places without visible motion             | PASS   | PASS    |
+      | 3. The same setting: the loading spinner is static                                     | PASS   | PASS    |
+      | 4. The same setting: the progress bar keeps depleting                                  | PASS   | PASS    |
+      | 5. Alt+T moves focus to the toasts, with a visible focus indicator                     | PASS   | PASS    |
+      | 6. Tab reaches the close buttons, and Enter closes the toast                           | PASS   | PASS    |
+      | 7. Escape returns focus                                                                | PASS   | PASS    |
+      | 8. After a middle toast is closed, focus stays on a relevant visible element           | PASS   | PASS    |
+
+    - **Against the carry-forwards:**
+      - Cases 1 to 4 are the Windows Chrome and Firefox layer of the operating-system reduced-motion checks carried over from P-18 (enter and exit, the spinner), P-19 (instant repositioning) and P-20 (progress keeps depleting). Until now these had emulation evidence only (Playwright).
+      - Cases 5 to 8 recheck §18 on the current code in real browsers, beside the automated AC-KB-1 and AC-KB-2 evidence and P-22's MC-5 and MC-8.
+    - **Limitations, recorded with the evidence:**
+      - **Not recorded:** which element received focus after Alt+T (§18: the first toast shown); the element Escape returned focus to (§18: the one that had focus before Alt+T); and the element that received focus after a middle toast was closed (§18: the same control in the next toast). Each case is recorded as a reported outcome only.
+      - **Keyboard close only:** case 8 used Enter on a close button. A mouse close, and how either feels with a screen reader, are not covered (the pointer-triggered close question, P-22 D0-2).
+      - **CF-12:** whether the pointer had been used before Alt+T was not recorded, so case 5 neither confirms nor contradicts the engine behaviour recorded under P-22 (no ring after pointer-only use).
+      - **Visual, not measured:** reduced motion was judged by eye. Whether the browsers reported `prefers-reduced-motion: reduce` was not checked separately.
+      - **Desktop only:** the P-21 items (a swipe with no fly-out, a cancelled swipe with no snap-back travel) need touch, and are not covered.
+    - **Assessment:** all eight cases were reported PASS in both browsers, and the environment is complete. No production defect was reported. This is evidence towards S11's sign-off, not the sign-off.
+  - **Not tested yet** (required unless the maintainer decides otherwise; no waiver is recorded):
+    - NVDA with Firefox and with Chrome (§17.6): announcements by type, prefixes, one announcement per toast and per replacement, the 7000 ms retention (P-16), the progress strip never announced (P-20), the shortcut's discoverability (CF-11), and focus after a mouse close (P-22 D0-2).
+    - VoiceOver with iOS Safari (§17.6): the same, plus touch exploration (P-17, P-21) and swiping a focused toast.
+    - The operating-system reduced-motion setting on iOS Safari and on Android Chrome and Firefox, including the P-21 swipe items.
+    - The demo's custom toast with a screen reader (P-25 S5b), and the demo on a real phone with the `swipe` reason in the Lifecycle log (P-25 S7).
+    - TalkBack with Android Chrome (P-21, "where possible"; optional).
+  - **Blocked:**
+    - **macOS Safari and VoiceOver: no Mac is available.** This blocks VoiceOver with Safari (§17.6) and MC-1 (Option+T, Safari's Tab setting, the rings, click without focus, genuine blur and hidden documents, AC-PR-1's Safari layer, and reduced motion). If no Mac becomes available, the gap is recorded and the maintainer decides (S1).
+    - **CSP manual verification: the test harness is missing.** P-17's check (announcements with the live regions hidden by the class, the stylesheet loaded and inline `style` blocked by a Content Security Policy) has no test page in the harness, the demo or the fixtures, and one needs its own approved design first. This is a gap in the test set-up, not a known defect: nothing indicates that the behaviour under a CSP is broken.
+  - **Acceptance criteria:** AC-A11Y-8 stays open until the §17.6 checklist is completed and recorded. AC-REL-1 and AC-REL-2 stay open (S10, S12).
+  - **Tracking:** this record changes none. Issue #23 stays open and In Progress, and Project #8 and Roadmap #28 are unchanged.
+  - **Validation:** plan only: `format:check` on this plan and `check-docs.js`.
 
 ## 36. Acceptance criteria for v2.0
 
