@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a concrete improvement to react-elegant-toasts.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. If your idea is still at an early stage, or you would like feedback first, please start in [Discussions, Ideas](https://github.com/ahlgren1234/react-elegant-toasts/discussions/categories/ideas).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what makes it difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour or API
+      description: How should it work? A short code example helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Other approaches or workarounds you have considered.
+  - type: textarea
+    id: accessibility
+    attributes:
+      label: Accessibility implications
+      description: Optional. How the change could affect screen readers, keyboard users, focus or motion.
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched the existing issues and Discussions for a similar request.
+          required: true

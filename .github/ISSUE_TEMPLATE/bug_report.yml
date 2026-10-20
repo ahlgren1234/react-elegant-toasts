@@ -1,0 +1,102 @@
+name: Bug report
+description: Report something in react-elegant-toasts that does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. For questions, please use [Discussions](https://github.com/ahlgren1234/react-elegant-toasts/discussions/categories/q-a) instead.
+
+        **Security vulnerabilities must not be reported here.** See the [security policy](https://github.com/ahlgren1234/react-elegant-toasts/security/policy).
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      description: The installed version of react-elegant-toasts.
+      placeholder: '2.0.0'
+    validations:
+      required: true
+  - type: input
+    id: react-version
+    attributes:
+      label: React version
+      description: The installed versions of react and react-dom.
+      placeholder: '19.2.0'
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment or framework
+      description: For example Vite, Next.js App Router, Next.js Pages Router or Jest, with its version.
+      placeholder: 'Next.js 16, App Router'
+    validations:
+      required: true
+  - type: input
+    id: browser-os
+    attributes:
+      label: Browser and operating system
+      description: Include any assistive technology involved, such as a screen reader.
+      placeholder: 'Firefox 145 on Windows 11'
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The steps or code that reproduce the problem.
+      placeholder: |
+        1. Render `<Toaster />` with …
+        2. Call `toast.success(…)`
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include any error messages or console output.
+    validations:
+      required: true
+  - type: input
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Optional. A link to a repository or an online sandbox that shows the problem.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Optional. Choose all that apply.
+      multiple: true
+      options:
+        - Toast behaviour (timers, queue, dismissal)
+        - Styling and theming
+        - Accessibility
+        - Motion and gestures
+        - TypeScript types
+        - Server rendering or Next.js
+        - Documentation
+        - Other
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched the existing issues and found no report of this bug.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
