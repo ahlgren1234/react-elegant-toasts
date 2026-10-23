@@ -8,14 +8,14 @@
     "test:render": "vite build --ssr render-check.mjs --outDir dist-render --emptyOutDir && node dist-render/render-check.js"
   },
   "dependencies": {
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@types/react": "19.0.12",
-    "@types/react-dom": "19.0.4",
-    "jsdom": "30.1.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "jsdom": "30.1.3",
     "typescript": "5.0.4",
-    "vite": "8.3.2"
+    "vite": "8.3.4"
   }
 }
